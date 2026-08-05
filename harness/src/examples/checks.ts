@@ -16,12 +16,14 @@ import assert from "node:assert/strict";
 import * as path from "node:path";
 import { promises as fs } from "node:fs";
 import { spawn, type ChildProcess } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { type ToothContext } from "../teeth/registry.ts";
 import { ArtifactFactory, type Behavior } from "../artifact-factory/factory.ts";
 import { runCommand } from "../artifact-factory/run.ts";
 import { FakeServer } from "../fake-server/server.ts";
 import { sha256Hex } from "../fake-server/manifest.ts";
 import { processAlive } from "../fake-host/daemon.ts";
+import { currentPlatformKey } from "../../../core/src/artifact/staticManifestSource.ts";
 import {
   checkLedgerEquivalence,
   checkLedgerEquivalenceAfterRollback,
@@ -53,6 +55,7 @@ async function buildDemoBinary(
       version: opts.version,
       behavior: opts.behavior,
       store: server.store,
+      platform: currentPlatformKey(),
     });
     const binDir = path.join(ctx.sandboxDir, "app");
     await fs.mkdir(binDir, { recursive: true });
@@ -66,6 +69,11 @@ async function buildDemoBinary(
 
 async function fileSha256(p: string): Promise<string> {
   return sha256Hex(new Uint8Array(await fs.readFile(p)));
+}
+
+/** The swap-tool demo's @k-carrier/core wiring (createUpgrader module URL). */
+function coreUpgraderUrl(): string {
+  return pathToFileURL(path.join(import.meta.dirname, "../../../core/src/createUpgrader.ts")).href;
 }
 
 // ---------------------------------------------------------------------------
@@ -93,7 +101,7 @@ export async function checkCliToolBlackbox(
   });
   try {
     const targetVersion = opts.serveSameVersion ? "1.0.0" : "2.0.0";
-    await factory.makeRelease({ version: targetVersion, behavior: "ok", store: server.store });
+    await factory.makeRelease({ version: targetVersion, behavior: "ok", store: server.store, platform: currentPlatformKey() });
 
     const before = await fileSha256(binPath);
     const v1 = await runCommand(binPath, ["--version"]);
@@ -101,7 +109,10 @@ export async function checkCliToolBlackbox(
     assert.equal(v1.stdout.trim(), "1.0.0");
 
     const up = await runCommand(binPath, ["self", "upgrade"], {
-      env: { [RELEASE_BASE_ENV]: server.url },
+      env: {
+        [RELEASE_BASE_ENV]: server.url,
+        K_CORE_UPGRADER: coreUpgraderUrl(),
+      },
     });
     assert.equal(up.code, 0, `self upgrade must exit 0 (${up.stderr.trim()})`);
     const after = await fileSha256(binPath);
