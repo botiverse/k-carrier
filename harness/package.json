@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "K acceptance harness: teeth registry, sandbox, fake-server, fake-host, crash enumerator, self-verification.",
+  "bin": { "k-harness": "src/cli.ts" },
   "engines": { "node": ">=24" },
   "scripts": {
     "test": "node --test src/**/*.test.ts"

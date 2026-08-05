@@ -16,7 +16,6 @@ import {
   checkProbeBindsCurrentIncarnation,
   checkStartCompletes,
 } from "../fake-host/checks.ts";
-import type { FakeHostFaults } from "../fake-host/inproc.ts";
 
 const TOOTH_IDS = new Set([
   "fake-host.ledger-equivalence",
@@ -58,23 +57,22 @@ test("known-green: every fake-host tooth passes with faults off", async () => {
 
 const FAULT_SWITCHES: Array<{
   id: string;
-  run: (ctx: ToothContext, faults: FakeHostFaults) => Promise<void>;
-  faults: FakeHostFaults;
+  run: (ctx: ToothContext) => Promise<void>;
 }> = [
-  { id: "fault-fail-on-quiesce", run: checkQuiesceCompletes, faults: { failOnQuiesce: true } },
-  { id: "fault-hang-on-stop", run: checkStopCompletes, faults: { hangOnStop: true } },
-  { id: "fault-wrong-version-probe", run: checkProbeVersionMatchesSlot, faults: { wrongVersionProbe: true } },
-  { id: "fault-stale-startid-probe", run: checkProbeBindsCurrentIncarnation, faults: { staleStartIdProbe: true } },
-  { id: "fault-crash-during-start", run: checkStartCompletes, faults: { crashDuringStart: true } },
+  { id: "fault-fail-on-quiesce", run: (ctx) => checkQuiesceCompletes(ctx, { faults: { failOnQuiesce: true } }) },
+  { id: "fault-hang-on-stop", run: (ctx) => checkStopCompletes(ctx, { faults: { hangOnStop: true } }) },
+  { id: "fault-wrong-version-probe", run: (ctx) => checkProbeVersionMatchesSlot(ctx, { faults: { wrongVersionProbe: true } }) },
+  { id: "fault-stale-startid-probe", run: (ctx) => checkProbeBindsCurrentIncarnation(ctx, { faults: { staleStartIdProbe: true } }) },
+  { id: "fault-crash-during-start", run: (ctx) => checkStartCompletes(ctx, { faults: { crashDuringStart: true } }) },
 ];
 
 test("known-red: every fault switch turns its tooth red", async () => {
-  for (const { id, run, faults } of FAULT_SWITCHES) {
+  for (const { id, run } of FAULT_SWITCHES) {
     const { ctx, teardown } = await ctxFor(id.replaceAll(".", "-"));
     try {
       let red = false;
       try {
-        await run(ctx, faults);
+        await run(ctx);
       } catch {
         red = true;
       }
@@ -89,7 +87,7 @@ test("known-red: the ledger teeth catch a broken quiesce/resume path", async () 
   const q = await ctxFor("red-quiesce");
   try {
     await assert.rejects(
-      checkLedgerEquivalence(q.ctx, { failOnQuiesce: true }),
+      checkLedgerEquivalence(q.ctx, { faults: { failOnQuiesce: true } }),
       /fail-on-quiesce/,
     );
   } finally {
@@ -99,7 +97,7 @@ test("known-red: the ledger teeth catch a broken quiesce/resume path", async () 
   try {
     // a lying probe mid-handover must break the rollback equivalence flow
     await assert.rejects(
-      checkLedgerEquivalenceAfterRollback(r.ctx, { wrongVersionProbe: true }),
+      checkLedgerEquivalenceAfterRollback(r.ctx, { faults: { wrongVersionProbe: true } }),
       /its own version/,
     );
   } finally {
