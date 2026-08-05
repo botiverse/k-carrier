@@ -1,0 +1,8 @@
+{
+  "name": "@carrier/core",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Upgrade framework core: transactional two-slot upgrades, host handoff, convergence readback, consent-aware drive. Zero host-specific concepts.",
+  "main": "src/upgrader.ts"
+}
