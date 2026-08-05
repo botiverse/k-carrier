@@ -1,6 +1,6 @@
-# K (k-carrier) 升级框架 设计文档 v1.1（通用核 + Raft 壳）
+# K (k-carrier) 升级框架 设计文档 v1.2（通用核 + Raft 壳）
 
-作者 archer · 2026-08-05 (v1.1: 定名 k-carrier、决定记录、接口落码后的衔接更新) · 基于 xxchan DM 收敛的方向（开源 forcing-function / 并集定位 / 边做开源边做自己的）+ 源码调研（`k-updater-research-tailscale-datadog.md`）+ #395 冻结 spec + #376 载体无关不变式。
+作者 archer · 2026-08-05 (v1.2: +§2.5 三档 profile 与 install-ownership 检测、双真实壳[raft-shell managed 档 + raft CLI cli 档 `raft self upgrade`]、examples 每档一 demo 入架构图；v1.1: 定名 k-carrier、决定记录、接口落码衔接) · 基于 xxchan DM 收敛的方向（开源 forcing-function / 并集定位 / 边做开源边做自己的）+ 源码调研（`k-updater-research-tailscale-datadog.md`）+ #395 冻结 spec + #376 载体无关不变式。
 
 ---
 
@@ -84,10 +84,18 @@ idle → staged（experiment 槽已下载+验签）
 │   └─ platform/      mac(launchd/login-item)·linux(systemd/    │
 │                     detached)·windows(service/自拷贝) 适配器   │
 │  harness/           通用验收床：fake-host daemon + 全套齿      │
-│  raft-shell/        第一个宿主：Raft Computer 的 HostAdapter   │
-│                     实现 + upgradeSea/upgradeCli/install.sh    │
-│                     三入口全部委托 core（#395 canonical        │
-│                     executor —— 单包多入口，抄 TS 形状）        │
+│                     （按 profile 分档跑；managed 假宿主与       │
+│                      examples/managed-host 共用）              │
+│  examples/          每档一个可跑 demo（cli-tool /              │
+│                     plain-daemon / managed-host）——            │
+│                     哪档没绿 demo，那档的支持 claim 不存在      │
+│  raft-shell/        壳1（managed 档）：Raft Computer 的        │
+│                     HostAdapter + upgradeSea/upgradeCli/       │
+│                     install.sh 三入口全委托 core（#395         │
+│                     canonical executor —— 单包多入口）          │
+│  （壳2 = raft CLI，cli 档：standalone 装的 `raft self          │
+│    upgrade`；Computer 注入份被 ownership 检测 held —— 落在      │
+│    raft 侧仓库，消费 core）                                    │
 └──────────────────────────────────────────────────────────────┘
 server 侧最小要求 = 静态文件（manifest+工件+签名）；drive 为可选增量。
 ```
