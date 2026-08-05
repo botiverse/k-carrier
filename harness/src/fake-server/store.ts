@@ -31,6 +31,8 @@ export interface PublishReleaseSpec {
   binary?: string;
   /** Default true: the new release becomes the active (served) one. */
   makeActive?: boolean;
+  /** chmod +x every artifact file (real binaries need to be runnable). */
+  executable?: boolean;
 }
 
 export interface PublishedRelease {
@@ -54,6 +56,11 @@ export class ReleaseStore {
 
   get active(): string | null {
     return this.activeVersion;
+  }
+
+  /** Whether a release with this version has been published. */
+  has(version: string): boolean {
+    return this.pristine.has(version);
   }
 
   /**
@@ -83,6 +90,11 @@ export class ReleaseStore {
       const data = typeof content === "string" ? new TextEncoder().encode(content) : content;
       bytes.set(name, data);
       await fs.writeFile(path.join(releaseDir, name), data);
+    }
+    if (spec.executable) {
+      for (const name of artifactNames) {
+        await fs.chmod(path.join(releaseDir, name), 0o755);
+      }
     }
     const binaryData = bytes.get(binary);
     if (!binaryData) throw new Error(`missing bytes for binary ${binary}`);
