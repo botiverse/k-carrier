@@ -15,6 +15,7 @@ import {
   SIGNING_PUB_FILE,
   SIGNING_PUB_SIG_FILE,
   sigFileFor,
+  sigBundleFileFor,
   buildManifest,
   sha256Hex,
   compareVersions,
@@ -34,6 +35,9 @@ export interface PublishReleaseSpec {
   /** chmod +x every artifact file (real binaries need to be runnable). */
   executable?: boolean;
   /** Track the release is published under (latest | alpha). Optional. */
+  channel?: "latest" | "alpha";
+  /** Explicit opt-out of the signature chain (never a silent default). */
+  unsigned?: boolean;
 }
 
 export interface PublishedRelease {
@@ -104,7 +108,7 @@ export class ReleaseStore {
       sha256: sha256Hex(binaryData),
       size: binaryData.length,
     };
-    const manifest = buildManifest(version, targets);
+    const manifest = buildManifest(version, targets, spec.channel, spec.unsigned);
     const manifestJson = new TextEncoder().encode(JSON.stringify(manifest, null, 2));
 
     // Signature chain files.
@@ -123,6 +127,13 @@ export class ReleaseStore {
       const data = bytes.get(name);
       if (!data) throw new Error(`missing bytes for ${name}`);
       await fs.writeFile(path.join(releaseDir, sigFileFor(name)), signData(this.keychain.signing, data));
+      // Machine-readable signature bundle the release source consumes.
+      const bundle = {
+        signingKeyPem: this.keychain.signing.publicKeyPem,
+        signingKeySignatureB64: Buffer.from(signData(this.keychain.root, signingPub)).toString("base64"),
+        artifactSignatureB64: Buffer.from(signData(this.keychain.signing, data)).toString("base64"),
+      };
+      await fs.writeFile(path.join(releaseDir, sigBundleFileFor(name)), JSON.stringify(bundle));
     }
 
     // Pristine copy for restore().
@@ -145,6 +156,10 @@ export class ReleaseStore {
       pristineFiles.set(
         sigFileFor(name),
         new Uint8Array(await fs.readFile(path.join(releaseDir, sigFileFor(name)))),
+      );
+      pristineFiles.set(
+        sigBundleFileFor(name),
+        new Uint8Array(await fs.readFile(path.join(releaseDir, sigBundleFileFor(name)))),
       );
     }
     this.pristine.set(version, pristineFiles);

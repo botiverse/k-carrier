@@ -21,6 +21,10 @@ export const SIGNING_PUB_SIG_FILE = "signing.pub.sig";
 export function sigFileFor(file: string): string {
   return `${file}.sig`;
 }
+/** Machine-readable signature bundle per artifact (consumed by the source). */
+export function sigBundleFileFor(file: string): string {
+  return `${file}.k-sig.json`;
+}
 
 /** One platform's binary target inside a manifest. */
 export interface ManifestTarget {
@@ -35,13 +39,20 @@ export interface Manifest {
   /** Platform tag (e.g. "darwin-arm64") -> binary target. */
   targets: Record<string, ManifestTarget>;
   /** Track the release was published under (latest | alpha). Optional. */
+  channel?: "latest" | "alpha";
+  /** Explicit opt-out of the signature chain (never a silent default). */
+  unsigned?: boolean;
 }
 
 export function buildManifest(
   version: string,
   targets: Record<string, ManifestTarget>,
+  channel?: "latest" | "alpha",
+  unsigned?: boolean,
 ): Manifest {
   const manifest: Manifest = { version, targets };
+  if (channel !== undefined) manifest.channel = channel;
+  if (unsigned !== undefined) manifest.unsigned = unsigned;
   return manifest;
 }
 

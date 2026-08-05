@@ -36,6 +36,8 @@ export interface Manifest {
   /** Platform tag (e.g. "darwin-arm64") -> binary target. */
   targets: Record<string, ManifestTarget>;
   /** Track the release was published under (latest | alpha). Optional. */
+  /** Explicit opt-out of the signature chain (never a silent default). */
+  unsigned?: boolean;
 }
 
 const SHA256_RE = /^[0-9a-f]{64}$/;
@@ -79,7 +81,16 @@ export function parseManifest(text: string): Manifest {
     throw new ArtifactError("MANIFEST_INVALID", "manifest.targets must contain at least one platform");
   }
 
+  let unsigned: boolean | undefined;
+  if (o.unsigned !== undefined) {
+    if (typeof o.unsigned !== "boolean") {
+      throw new ArtifactError("MANIFEST_INVALID", "manifest.unsigned must be a boolean");
+    }
+    unsigned = o.unsigned;
+  }
+
   const out: Manifest = { version: o.version, targets };
+  if (unsigned !== undefined) out.unsigned = unsigned;
   return out;
 }
 
@@ -112,7 +123,21 @@ function compareSemver(a: string, b: string): number {
   return 0;
 }
 
-function releaseFrom(manifest: Manifest, baseUrl: string, platformKey: string): Release {
+/** The machine-readable signature bundle sidecar served next to an artifact. */
+const SIG_BUNDLE_SUFFIX = ".k-sig.json";
+
+interface SignatureBundleWire {
+  signingKeyPem: string;
+  signingKeySignatureB64: string;
+  artifactSignatureB64: string;
+}
+
+async function releaseFrom(
+  manifest: Manifest,
+  baseUrl: string,
+  platformKey: string,
+  doFetch: typeof fetch,
+): Promise<Release> {
   const target = manifest.targets[platformKey];
   if (!target) {
     throw new ArtifactError(
@@ -120,12 +145,41 @@ function releaseFrom(manifest: Manifest, baseUrl: string, platformKey: string): 
       `manifest has no target for ${platformKey} (have: ${Object.keys(manifest.targets).join(", ") || "none"})`,
     );
   }
-  return {
+  const base = baseUrl.replace(/\/$/u, "");
+  const release: Release = {
     version: manifest.version,
-    url: `${baseUrl.replace(/\/$/u, "")}/${target.file}`,
+    url: `${base}/${target.file}`,
     sha256: target.sha256,
     size: target.size,
   };
+
+  if (manifest.unsigned === true) {
+    // The publisher explicitly declared no signing story: record it, never
+    // pretend the artifact was verified.
+    release.unsigned = true;
+    return release;
+  }
+
+  // A signed release carries a per-artifact signature bundle. Absent =
+  // neither signed nor declared unsigned: the upgrader refuses such bytes.
+  const res = await doFetch(`${base}/${target.file}${SIG_BUNDLE_SUFFIX}`);
+  if (res.ok) {
+    const wire = (await res.json()) as SignatureBundleWire;
+    if (
+      typeof wire.signingKeyPem !== "string" ||
+      typeof wire.signingKeySignatureB64 !== "string" ||
+      typeof wire.artifactSignatureB64 !== "string"
+    ) {
+      throw new ArtifactError("DOWNLOAD_FAILED", `signature bundle for ${target.file} is malformed`);
+    }
+    release.signature = wire;
+  } else if (res.status !== 404) {
+    throw new ArtifactError(
+      "DOWNLOAD_FAILED",
+      `signature bundle fetch for ${target.file} failed: HTTP ${res.status}`,
+    );
+  }
+  return release;
 }
 
 export function staticManifestSource(opts: StaticManifestSourceOptions): ReleaseSource {
@@ -146,7 +200,7 @@ export function staticManifestSource(opts: StaticManifestSourceOptions): Release
       // POLICY: only move forward. A served version older than ours is not an
       // "update" — taking it silently would be an automatic downgrade.
       if (compareSemver(manifest.version, ctx.currentVersion) <= 0) return null;
-      return releaseFrom(manifest, base, ctx.platformKey);
+      return releaseFrom(manifest, base, ctx.platformKey, doFetch);
     },
 
     async fetchRelease(version: string, ctx: ReleaseContext): Promise<Release> {
@@ -157,7 +211,7 @@ export function staticManifestSource(opts: StaticManifestSourceOptions): Release
           `asked for ${version} but this source serves ${manifest.version}`,
         );
       }
-      return releaseFrom(manifest, base, ctx.platformKey);
+      return releaseFrom(manifest, base, ctx.platformKey, doFetch);
     },
   };
 }

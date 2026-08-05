@@ -14,6 +14,11 @@ import {
   checkSwapToolUpgradeLoop,
   checkSwapToolRollback,
 } from "../artifact/m1.ts";
+import {
+  checkM2UntrustedSignerRefused,
+  checkM2TamperedArtifactRefused,
+  checkM2UnsignedExplicitAccepted,
+} from "../artifact/m2.ts";
 
 registerTooth({
   id: "artifact.tamper-refuses-install",
@@ -95,4 +100,54 @@ registerTooth({
     },
   ],
   run: checkSwapToolRollback,
+});
+
+registerTooth({
+  id: "m2.untrusted-signer-refused",
+  profiles: ["swap"],
+  layers: ["L0", "L0.5"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "verifyChain accepts any self-consistent signature chain (no root endorsement needed)",
+      caughtOnlyBy: {
+        alsoCaughtBy: "core/src/distsign verify unit tests (SIGNING_KEY_NOT_ROOT_SIGNED)",
+        whyStillNeeded:
+          "the unit tests use in-memory keys; this tooth runs the full black-box plane — a compromised publisher's release through the real demo upgrade",
+      },
+    },
+  ],
+  run: checkM2UntrustedSignerRefused,
+});
+
+registerTooth({
+  id: "m2.tampered-artifact-refused",
+  profiles: ["swap"],
+  layers: ["L0", "L0.5"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "the signature check is skipped when the digest matches (authenticity degenerates to integrity)",
+      caughtOnlyBy: {
+        alsoCaughtBy: "core/src/distsign verify unit tests (ARTIFACT_SIGNATURE_INVALID)",
+        whyStillNeeded:
+          "this tooth constructs the consistent-digest attack end to end (tamper + re-manifest over the real server)",
+      },
+    },
+  ],
+  run: checkM2TamperedArtifactRefused,
+});
+
+registerTooth({
+  id: "m2.unsigned-explicit-accepted",
+  profiles: ["swap"],
+  layers: ["L0", "L0.5"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "an absent signature is silently treated as unsigned (no recorded opt-out)",
+      caughtOnlyBy: "this", // only this tooth pins that unsigned must be explicit AND recorded
+    },
+  ],
+  run: checkM2UnsignedExplicitAccepted,
 });

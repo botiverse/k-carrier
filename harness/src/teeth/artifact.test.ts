@@ -20,6 +20,11 @@ import {
   checkSwapToolUpgradeLoop,
   checkSwapToolRollback,
 } from "../artifact/m1.ts";
+import {
+  checkM2UntrustedSignerRefused,
+  checkM2TamperedArtifactRefused,
+  checkM2UnsignedExplicitAccepted,
+} from "../artifact/m2.ts";
 
 const TOOTH_IDS = new Set([
   "artifact.tamper-refuses-install",
@@ -27,6 +32,9 @@ const TOOTH_IDS = new Set([
   "artifact.source-fails-closed",
   "m1.swap-tool-upgrade",
   "m1.swap-tool-rollback",
+  "m2.untrusted-signer-refused",
+  "m2.tampered-artifact-refused",
+  "m2.unsigned-explicit-accepted",
 ]);
 
 async function ctxFor(prefix: string): Promise<{ ctx: ToothContext; teardown: () => Promise<void> }> {
@@ -36,7 +44,7 @@ async function ctxFor(prefix: string): Promise<{ ctx: ToothContext; teardown: ()
 
 test("known-green: every M1 artifact tooth passes on a clean sandbox", async () => {
   const teeth = allTeeth().filter((t) => TOOTH_IDS.has(t.id));
-  assert.equal(teeth.length, 5, "all five artifact teeth must be registered");
+  assert.equal(teeth.length, 8, "all eight artifact teeth must be registered");
   for (const tooth of teeth) {
     const { ctx, teardown } = await ctxFor(tooth.id.replaceAll(".", "-"));
     try {
@@ -106,6 +114,38 @@ test("known-red: m1.swap-tool-rollback catches a promoted bad version", async ()
   }
 });
 
+test("known-red: m2.untrusted-signer-refused catches a trusted attacker root", async () => {
+  const { ctx, teardown } = await ctxFor("red-m2-signer");
+  try {
+    // mutation: the attacker's root is added to the trusted set — the
+    // compromised release installs, so the refusal assertion goes RED
+    await assert.rejects(checkM2UntrustedSignerRefused(ctx, { trustAttacker: true }), /must not land/);
+  } finally {
+    await teardown();
+  }
+});
+
+test("known-red: m2.tampered-artifact-refused catches an untouched artifact", async () => {
+  const { ctx, teardown } = await ctxFor("red-m2-tamper");
+  try {
+    // mutation: no tamper — the 2.0.0 installs, so the refusal goes RED
+    await assert.rejects(checkM2TamperedArtifactRefused(ctx, { skipTamper: true }), /must not land/);
+  } finally {
+    await teardown();
+  }
+});
+
+test("known-red: m2.unsigned-explicit-accepted catches a signed release", async () => {
+  const { ctx, teardown } = await ctxFor("red-m2-unsigned");
+  try {
+    // mutation: a SIGNED release is served — no unsigned record, so the
+    // unverified-notification assertion goes RED
+    await assert.rejects(checkM2UnsignedExplicitAccepted(ctx, { serveSigned: true }));
+  } finally {
+    await teardown();
+  }
+});
+
 test("registration discipline: profiles/layers/kind/mustRed all answered", () => {
   const teeth = allTeeth().filter((t) => TOOTH_IDS.has(t.id));
   for (const tooth of teeth) {
@@ -135,4 +175,7 @@ test("tooth run functions are the exported checks (single source of truth)", () 
   assert.equal(byId.get("artifact.source-fails-closed")!.run, checkSourceFailsClosed);
   assert.equal(byId.get("m1.swap-tool-upgrade")!.run, checkSwapToolUpgradeLoop);
   assert.equal(byId.get("m1.swap-tool-rollback")!.run, checkSwapToolRollback);
+  assert.equal(byId.get("m2.untrusted-signer-refused")!.run, checkM2UntrustedSignerRefused);
+  assert.equal(byId.get("m2.tampered-artifact-refused")!.run, checkM2TamperedArtifactRefused);
+  assert.equal(byId.get("m2.unsigned-explicit-accepted")!.run, checkM2UnsignedExplicitAccepted);
 });

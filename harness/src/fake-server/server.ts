@@ -41,13 +41,20 @@ const CONTENT_TYPES: Record<string, string> = {
 export class FakeServer {
   /** The release store backing this server (the factory's publish target). */
   readonly store: ReleaseStore;
+  private readonly keychain: TestKeychain;
   private readonly requestedPort: number | undefined;
   private server: Server | null = null;
   private actualPort = 0;
 
   constructor(opts: FakeServerOptions) {
-    this.store = new ReleaseStore(opts.storeDir, opts.keychain ?? createKeychain());
+    this.keychain = opts.keychain ?? createKeychain();
+    this.store = new ReleaseStore(opts.storeDir, this.keychain);
     this.requestedPort = opts.port;
+  }
+
+  /** The trusted root public key (the client's compiled-in trust anchor). */
+  get rootKeyPem(): string {
+    return this.keychain.root.publicKeyPem;
   }
 
   get url(): string {

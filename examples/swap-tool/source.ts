@@ -35,6 +35,9 @@ const { spawnSync } = require("node:child_process");
 const RELEASE_BASE = process.env.K_RELEASE_BASE;
 const STATE_DIR = process.env.K_STATE_DIR ?? path.join(path.dirname(process.argv[1]), "state");
 const CORE_UPGRADER = process.env.K_CORE_UPGRADER;
+// Trust anchor: the app compiles root public keys in; the demo (not
+// packaged) gets them via K_ROOT_KEYS (JSON array of PEMs).
+const ROOT_KEYS = process.env.K_ROOT_KEYS ? JSON.parse(process.env.K_ROOT_KEYS) : [];
 const args = process.argv.slice(2);
 const startId = process.pid + "-" + process.hrtime.bigint().toString(36);
 // Synchronous writes: process.exit() can truncate buffered pipe writes,
@@ -98,8 +101,11 @@ async function selfUpgrade() {
     host,
     source: staticManifestSource({ baseUrl: RELEASE_BASE }),
     policy: "auto",
-    notificationSink: async (ev) => { fs.writeSync(2, "notify " + ev.kind + "\\n"); },
-    rootKeys: [],
+    notificationSink: async (ev) => {
+      const reason = ev.detail.reason !== undefined ? ": " + ev.detail.reason : "";
+      fs.writeSync(2, "notify " + ev.kind + reason + "\\n");
+    },
+    rootKeys: ROOT_KEYS,
     stateDir: STATE_DIR,
   });
 
