@@ -63,6 +63,7 @@
 |---|---|---|
 | mac/linux/windows 适配器 | 各平台读回面 allowlist 注册齐 + CI 矩阵跑（linux 真跑；mac/win 至少接口级+Testbed 真机轮） | 未注册面被引用 ⇒ 拒 |
 | managed 端到端 | managed-host demo：带活"会话"的完整升级→会话保留断言→回滚路径同样保留 | 升级后会话丢失/回滚后会话丢失 ⇒ 红 |
+| ownership 迁移场景（借 Datadog e2e） | PM/别的管理器装的 → K 接管（adopt）→ 状态/谓词正确 | 接管后旧管理器仍认为自己拥有 ⇒ 红 |
 
 ## M6 — L5 drive（可选层，最后）
 
@@ -78,6 +79,7 @@
 - **mutation-runner**（Lincan 工具就绪即接）：对本计划全部齿跑变异；换说法+整段删两变体默认；杀不掉先排除"没杀对"再删守卫。
 - **断言纪律标注**：每个测试文件头标 `@invariant` 或 `@baseline(failure-condition: ...)`；CI 检查无标注的 implementation-locking 断言（#395 二分的机械化）。
 - **真机轮**（Testbed）：每里程碑收口跑一轮真机抽样；个人真机仅 consent 后读回抽样。
+- **时间戳锚定断言**（借 Datadog）：scenario receipt 的事件断言一律"标记之后发生了 X"（取 marker → assert-since），防旧事件/上一场景残留冒充新证据。
 
 ## 完成定义
 计划本身的验收 = **三个 example demo 全绿 + M0 harness 自验含对抗样例 + 崩溃矩阵零人工枚举**。任何"支持 X"的 README claim 若无对应绿齿，按"没绿 demo 就没 claim"规则视为未支持。

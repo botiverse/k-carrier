@@ -49,3 +49,23 @@ Sources 全部一手（当日 fetch main 分支）：
 - **CLI 自升级这层已解决**（核过 repo）：rust `jaemk/self_update`(954★) / Go `minio/selfupdate`(926★) / `creativeprojects/go-selfupdate` —— 查 release→下载→校验→原子自替换（含 Windows 换运行中 exe trick），库形态。**claude code / codex 的 updater = 此形态活例**（渠道查→下载→自替换、重启生效、无常驻服务要交接所以能这么简单）。
 - **精确子集关系**：CLI 自升级 ≈ 只做 `binary_at_target` 一个谓词 = 我们 `upgradeSea` 换二进制 lane 的通用化；CC-updater 与 Raft Computer 需求之差 = 恰好那张清单（服务交接/会话保留/自启收敛/回读/fleet/同意通知）。
 - **通用核分层结论**：**Layer 0（取/验/换字节）= 商品层，不差异化**（API 长得像 self_update 熟悉形状、甚至可吃现成库）；**价值全在上层**。**缺口边界**：下界 = self_update/CC-updater（个人 CLI，已解决），上界 = Datadog fleet（org 服务器，已解决），**中间「个人设备上的受管服务」整段无人做** —— 市场图完成。
+
+
+## 附：两家的测试怎么设计（08-05 二次调研，xxchan 指令）
+
+**Tailscale（`clientupdate_test.go` 1084L + `distsign_test.go` 585L）：纯单元层，零 e2e**
+- 覆盖全是**纯函数/文件操作**：apt sources.list 改写（bytes-in/bytes-out 表驱动）、yum repo track、alpine/synology 版本解析、tarball 解包、文件覆盖/symlink、Confirm 回调；distsign 有像样的 key 轮换测试（TestRotateRoot/TestRotateSigning）+ 本地 server 的 TestDownload。
+- **没有**：升级 e2e、进程交接、崩溃、回滚测试——**测试形状精确镜像设计缺口**（没有回滚/回读，自然没有需要 e2e 的东西）。
+- 可借技术：把平台适配器的解析/改写逻辑做成纯函数表驱动测试（我们 platform/ 的 parser 部分照抄这个形态）。
+
+**Datadog（in-package 单元 + `test/new-e2e/tests/installer/{host,script,unix,windows}` 真 VM e2e）：两层**
+- e2e 跑在 **pulumi 现开的真云 VM**（真 systemd/包管理器）。技术亮点：
+  - `host.` 助手 API：`AssertPackageInstalledByInstaller/ByPackageManager`、`WaitForUnitActive`、`WaitForFileExists(installer.sock)`、**`host.State()` 全快照断言**；
+  - **journald 时间戳锚定**：`LastJournaldTimestamp()` 取标记 → 断言"标记之后发生了 X"（事件式 oracle，防旧事件冒充新证据）；
+  - 场景含 **ownership 迁移**（deb/RPM 装的 → installer 接管）和**失败套件**（TestBackendFailure 等）；start/promote experiment 逐步断言版本。
+- 成本：org 级 VM 基建，慢且贵。
+
+**对我们 harness 的映射**：
+1. 我们的 沙箱+真进程 本地层 ≈ Datadog 需要 VM 才能做的大部分（更便宜、决定性）；Testbed 只留真机轮。
+2. **借**：时间戳锚定断言（scenario receipt 加 "events since marker"，防旧证据）；ownership-迁移场景（PM 装的→K 接管）进 test-plan；Tailscale 纯函数表驱动进 platform 适配器测试。
+3. **两家都没有（验证我们 harness 的差异化）**：崩溃注入矩阵、对抗自验、mutation 契约、黑盒零集成模式、齿注册表纪律。Tailscale 的单元-only 再次说明：**测试形状跟着设计走——设计里没有回滚/回读，测试就永远不会要求它们**。
