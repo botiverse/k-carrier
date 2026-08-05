@@ -37,14 +37,23 @@
  */
 export type Profile = "swap" | "service";
 
-/** Opt-in capabilities, declared separately from the process model. */
+/**
+ * Opt-in capabilities, declared separately from the process model.
+ *
+ * A capability only belongs here once at least one tooth declares it.
+ * Selecting a capability that no tooth answers adds ZERO checks while looking
+ * like added assurance -- the empty-suite false-green this harness exists to
+ * prevent. `workload-preservation` was removed on those grounds (08-05): no
+ * tooth claimed it, and raft-computer, the host it was imagined for, restarts
+ * its workloads rather than preserving them (xxchan: resume is enough).
+ * `core/src/invariants.ts` still exports `workloadPreserved` for a host that
+ * genuinely has continuity; it just is not a capability you can select yet.
+ */
 export type Capability =
-  | "workload-preservation" // quiesce/resume must round-trip (L4-ish host duty)
   | "lifecycle-convergence" // OS lifecycle surfaces must read back (L3 platform)
   | "fleet-drive";          // server-pushed commands, policy-gated (L5)
 
 export const ALL_CAPABILITIES: readonly Capability[] = [
-  "workload-preservation",
   "lifecycle-convergence",
   "fleet-drive",
 ];
