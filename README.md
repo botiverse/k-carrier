@@ -1,4 +1,4 @@
-# K
+# K (k-carrier)
 
 **Upgrade framework for managed resident services on personal devices.** (private while incubating)
 
