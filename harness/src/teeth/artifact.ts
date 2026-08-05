@@ -23,6 +23,7 @@ import {
 import {
   checkM3ServiceUpgrade,
   checkM3ServiceRollback,
+  checkM3StuckDriverEvidence,
 } from "../artifact/m3.ts";
 
 registerTooth({
@@ -206,4 +207,18 @@ registerTooth({
     },
   ],
   run: checkM3ServiceRollback,
+});
+
+registerTooth({
+  id: "m3.stuck-driver-evidence-recovery",
+  profiles: ["service"],
+  layers: ["L0", "L0.5", "L1", "L2", "L3"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "the successor decides the handover by a flag, not by evidence (or never recovers at all)",
+      caughtOnlyBy: "this", // only this tooth wedges the driver and demands evidence-based recovery
+    },
+  ],
+  run: checkM3StuckDriverEvidence,
 });

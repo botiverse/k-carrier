@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as path from "node:path";
 import { promises as fs } from "node:fs";
-import { createSandbox, allocatePort } from "./sandbox.ts";
+import { createSandbox, allocatePort, sandboxMarkerFor } from "./sandbox.ts";
 
 test("two live sandboxes get distinct dirs and distinct ports", async () => {
   const a = await createSandbox({ prefix: "a" });
@@ -161,4 +161,21 @@ test("DaemonFakeHost incarnations carry the sandbox marker; teardown proves them
   assert.ok(findPidsByEnv(MARKER_ENV, sb.id).includes(evidence.pid));
   await host.teardownVerifyDead();
   assert.deepEqual(findPidsByEnv(MARKER_ENV, sb.id), [], "daemon teardown must clear the marker");
+});
+
+test("THE POINT: a nested tooth context still resolves to the SANDBOX's marker", async () => {
+  // Teeth derive per-shape contexts like <sandbox>/respawn. Marking spawned
+  // processes with basename() of THAT yields "respawn" -- a value no teardown
+  // scan matches, so the scan finds zero, the teardown reports success, and
+  // the leaked process keeps running. A zero that means "the query matched
+  // nothing" is the most convincing kind of false green.
+  const sb = await createSandbox({ prefix: "nested" });
+  try {
+    assert.equal(sandboxMarkerFor(sb.dir), path.basename(sb.dir));
+    assert.equal(sandboxMarkerFor(path.join(sb.dir, "respawn")), path.basename(sb.dir));
+    assert.equal(sandboxMarkerFor(path.join(sb.dir, "spawn", "deeper")), path.basename(sb.dir));
+    assert.notEqual(sandboxMarkerFor(path.join(sb.dir, "respawn")), "respawn");
+  } finally {
+    await sb.teardown();
+  }
 });

@@ -12,7 +12,8 @@ import { FakeServer } from "./fake-server/server.ts";
 const CLI_PATH = path.join(import.meta.dirname, "cli.ts");
 
 async function runCli(args: string[]): Promise<{ code: number | null; stdout: string; stderr: string }> {
-  const r = await runCommand(process.execPath, [CLI_PATH, ...args], { timeoutMs: 30000 });
+  // The service tier runs real-process upgrades (m3 teeth) — generous.
+  const r = await runCommand(process.execPath, [CLI_PATH, ...args], { timeoutMs: 120000 });
   return { code: r.code, stdout: r.stdout, stderr: r.stderr };
 }
 
