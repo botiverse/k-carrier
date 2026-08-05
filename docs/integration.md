@@ -228,6 +228,42 @@ API, date-stamped paths, or an OCI registry means writing your own
 parses a manifest itself. Multiple streams are usually one base URL each
 (`.../stable`, `.../nightly`), which also keeps their blast radius separate.
 
+### The trust boundary, and the mistake it is easy to make
+
+A digest is not a signature. `sha256` proves the bytes you received are the
+bytes the manifest described — but the manifest comes from the same place the
+bytes do, so a source serving you malicious bytes will happily serve a matching
+digest for them. Only the signature chain answers *who made this*, and its
+whole purpose is to hold up **when the release source itself is compromised**.
+
+That has one consequence worth stating plainly, because it is the mistake we
+made and caught during development:
+
+> **Nothing the source says may weaken the check the source is being checked by.**
+
+So K will refuse a release that carries no signature — and the way to say
+"install it anyway" is in **your** code, next to your compiled-in root keys:
+
+```ts
+// your code, not K's: you are taking responsibility for these bytes
+const published = staticManifestSource({ baseUrl: RELEASE_BASE });
+const source = {
+  checkForUpdate: async (ctx) => {
+    const r = await published.checkForUpdate(ctx);
+    return r === null ? null : { ...r, unsigned: true };
+  },
+  fetchRelease: async (v, ctx) => ({ ...(await published.fetchRelease(v, ctx)), unsigned: true }),
+};
+```
+
+There is deliberately **no** `allowUnsigned` option on the source and **no**
+`unsigned` field in the manifest. Either one would let whoever controls the
+release source disable signature verification for every client by adding a
+field — no crypto broken, root keys still in place. Writing those six lines
+yourself is the intended friction. K reports the result under its own
+notification kind (`installed-unverified`), so an install you accepted without
+attribution is visible rather than indistinguishable from a verified one.
+
 ## 6. Testing your integration
 
 Three beliefs shape how K is tested — knowing them explains what the harness
