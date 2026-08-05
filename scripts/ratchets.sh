@@ -67,5 +67,24 @@ then
   say "tooth is registered but no known-green TOOTH_IDS names it"
 fi
 
+# 7) docs/test-plan.md may not cite a tooth that does not exist.
+#    A document naming a tooth nobody registered is worse than an omission: it
+#    is more credible and equally false, and it is exactly how a test plan
+#    becomes a convincing inventory of guarantees we do not have.
+if ! node --experimental-strip-types -e '
+import { readFileSync } from "node:fs";
+const doc = readFileSync("docs/test-plan.md", "utf8");
+const { allTeeth } = await import("./harness/src/teeth/registry.ts");
+await import("./harness/src/teeth/index.ts");
+const registered = new Set(allTeeth().map((t) => t.id));
+const cited = [...doc.matchAll(/`([a-z0-9]+(?:\.[a-z0-9-]+)+)`/g)].map((m) => m[1]);
+const prefixes = /^(artifact|m0|m1|m2|m3|m4|m5|m6|fake-server|fake-host|scenario|harness|examples|blackbox|artifact-factory|converge|txn)\./;
+const ghosts = [...new Set(cited.filter((c) => prefixes.test(c)))].filter((c) => !registered.has(c));
+if (ghosts.length) { console.log("ghost tooth ids in docs/test-plan.md: " + ghosts.join(", ")); process.exit(1); }
+' 2>/dev/null
+then
+  say "docs/test-plan.md cites a tooth that is not registered"
+fi
+
 [ $fail -eq 0 ] && echo "ratchets: all green"
 exit $fail
