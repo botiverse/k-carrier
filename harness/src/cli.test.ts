@@ -106,7 +106,32 @@ test("--adapter mode runs the contract subset against an external adapter", asyn
   const ids = receipt.checks.map((c) => c.id);
   assert.ok(ids.includes("adapter.ledger-equivalence"));
   assert.ok(ids.includes("adapter.probe-binds-current-incarnation"));
-  assert.ok(receipt.checks.every((c) => c.status === "pass"));
+  // the contract subset passes; the service-tier checks are na (this
+  // adapter declares no lifecycle surfaces)
+  for (const c of receipt.checks) {
+    if (c.id.startsWith("adapter.service-") || c.id.startsWith("adapter.lifecycle-")) {
+      assert.equal(c.status, "na", `${c.id} must be na for a contract-only adapter`);
+    } else {
+      assert.equal(c.status, "pass", `${c.id} must pass`);
+    }
+  }
+});
+
+test("--adapter runs the service-tier teeth against a process-semantics adapter", async () => {
+  const fixture = path.join(import.meta.dirname, "fixtures", "service-adapter.ts");
+  const { code, stdout } = await runCli(["--adapter", fixture, "--json"]);
+  assert.equal(code, 0, stdout);
+  const receipt = JSON.parse(stdout) as {
+    checks: Array<{ id: string; status: string }>;
+    result: string;
+  };
+  assert.equal(receipt.result, "pass");
+  const byId = new Map(receipt.checks.map((c) => [c.id, c] as const));
+  assert.equal(byId.get("adapter.service-upgrade")!.status, "pass");
+  assert.equal(byId.get("adapter.service-rollback")!.status, "pass");
+  assert.equal(byId.get("adapter.lifecycle-converged")!.status, "pass");
+  // the contract subset (inproc-driver checks) is skipped for this shape
+  assert.equal(byId.get("adapter.probe-version-matches-slot")!.status, "na");
 });
 
 test("--help prints usage and exits 0; bad flags exit 2", async () => {
