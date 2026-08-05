@@ -25,7 +25,7 @@ harness/
 ```
 
 ### 1.1 fake-host（假宿主）
-- **两形态**：`inproc`（进程内实现，跑快速逻辑齿）+ `daemon`（编译成真二进制、真 spawn、真 PID/startId —— kill -9、双跑检测、probe 活性都必须在真进程上验，mock 验不了崩溃）。
+- **两形态**：`inproc`（进程内实现，跑快速逻辑齿）+ `process`（编译成真二进制、真 spawn、真 PID/startId —— kill -9、双跑检测、probe 活性都必须在真进程上验，mock 验不了崩溃）。
 - **故障注入开关**（per 方法）：`fail-on-quiesce / hang-on-stop / wrong-version-probe / stale-startId-probe / crash-during-start ...`——每颗齿测"故障被抓"，开关关掉齿必须转绿（证明齿测的是故障不是常态）。
 - **虚拟负载账本**：假宿主维护一个确定性"会话状态"文件（计数器+校验和）；`quiesce↔resume` 等价断言 = 账本逐字节比对（**含 rolled-back 后 resume**）。这是"会话保留"的可机械判定形态。
 
@@ -58,7 +58,7 @@ harness/
 ```ts
 registerTooth({
   id: "txn.no-dual-run",
-  profiles: ["daemon", "managed"],          // 分档
+  profiles: ["service", "hosted"],          // 分档
   kind: "invariant",                        // 或 { kind: "baseline", failureCondition: "..." }
   mustRed: [                                // mutation 契约：≥1 条，且答得出"不被我抓还会被谁抓"
     { mutate: "skip journal fsync before handover", caughtOnlyBy: "this" },
