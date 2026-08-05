@@ -30,6 +30,8 @@
 | L0 校验+原子换 | sha256 不符拒装；换字节原子（半写不可见）；Windows 运行中自替换 | 篡改工件 ⇒ 拒；swap 中途 kill ⇒ 旧字节完好 |
 | cli 档端到端 | swap-tool demo：升级→下次运行是新版；`held/rolled-back/up-to-date` 四态出口都可构造 | — |
 
+**已落地齿**（`pnpm check` 实际注册）：`artifact.tamper-refuses-install`（篡改工件 ⇒ SHA256_MISMATCH 拒装；must-red：跳过 sha256 校验）、`artifact.atomic-swap-crash-safe`（64MiB 真进程中途 SIGKILL ⇒ 旧字节完好 + 恢复；must-red：就地写无 tmp+rename）、`artifact.source-fails-closed`（未知平台/指名版本 ⇒ 拒）、`m1.swap-tool-upgrade`（`k-harness --bin` 等价黑盒闭环：真升级 → 下次运行新版本 → state promoted；must-red：升级不到 stable 槽）、`m1.swap-tool-rollback`（crash-on-start 坏版本 ⇒ 自动回滚 + 旧可用 + experiment 清空；must-red：坏版本被 promote）、`m1.download-resumes-after-kill`（下载中途 SIGKILL ⇒ Range 续传 + 全量验证；must-red：从头重下无 Range）。core 单测：`core/src/artifact/{manifest,channel,download,downloadResume,swap}.test.ts`。
+
 ## M2 — L0.5 供应链
 
 | 测什么 | 怎么算过 | must-red |
@@ -37,6 +39,8 @@
 | 两级签名链 | root→signing.pub→file 全链验过才装 | 篡改 file/sig/signing.pub 任一 ⇒ 拒；无签名 ⇒ 拒（**无 AllowUnsigned 后门——测试恒用完整测试签名链**，透明性原则） |
 | root 轮换 | 多 root 并存期新旧 root 签的 signing.pub 都可验 | 已移除 root 签的 ⇒ 拒 |
 | 防回滚 | manifest 版本低于当前且非 pinned ⇒ 默认拒（显式降级需 typed 确认） | 静默接受更低版本 ⇒ 红 |
+
+**已落地齿**：`m2.untrusted-signer-refused`（未被 root 背书的签名密钥 ⇒ 拒装；must-red：信任攻击者 root）、`m2.tampered-artifact-refused`（篡改字节 + 自洽 digest ⇒ 签名门拒；must-red：只查 digest 不查签名）、`m2.unsigned-refused-by-default`（无签名且未显式 `unsigned:true` ⇒ 默认拒；must-red：客户端接受即红）、`m2.unsigned-explicit-accepted`（客户端显式接受 ⇒ 装但记 `installed-unverified`；must-red：静默当 unsigned）。core 对抗驻留：`core/src/artifact/sourceTrust.test.ts`（**发布源不能自我授予信任**——manifest 声明的 `unsigned:true` 被无视）、`core/src/distsign/verify.test.ts`（SIGNING_KEY_NOT_ROOT_SIGNED / ARTIFACT_SIGNATURE_INVALID / NO_ROOT_KEYS）。
 
 ## M3 — L2 生命周期 + L3 收敛（出口：`examples/service-daemon` 绿 = daemon 档成立）
 
@@ -50,12 +54,16 @@
 | fail-closed 退役序 | 未过 host_lifecycle_converged 前退旧管理器 ⇒ 拒 + typed HOLD | 强行退役路径存在 ⇒ 红 |
 | ownership 检测 | 受管标记存在 ⇒ `held: managed-elsewhere`（typed、指向管理者） | 受管副本完成自升 ⇒ 红 |
 
+**已落地齿**：`fake-host.ledger-equivalence` / `fake-host.ledger-equivalence-after-rollback`（quiesce↔resume 账本逐字节等价，含回滚后 resume；must-red：resume 重写不同账本）、`fake-host.fault-wrong-version-probe` / `fake-host.fault-stale-startid-probe`（probe 证据绑定活化身；must-red：探针说谎/报旧 startId）、`fake-host.fault-fail-on-quiesce` / `fake-host.fault-hang-on-stop` / `fake-host.fault-crash-during-start`（每开关关掉齿必须绿）、`m3.service-upgrade`（两种宿主形状：spawn 自起 / respawn 交给 owner——真停旧、真起新、旧 pid 验证死、新化身 fresh startId；must-red：startId 复用 / stop 只发信号不验证）、`m3.service-rollback`（坏版本 ⇒ 旧版**真的拉回来在跑**，不是槽位回退；must-red：回滚不拉回旧版）、`m3.stuck-driver-evidence-recovery`（卡死 driver ⇒ 宿主调用预算超时 → 锁释放 → successor 凭**证据**（v2 + fresh startId）判交接完成；must-red：凭标志/不恢复）、`examples.service-daemon-contract`（真进程 spawn/probe/stop/升级）。`host_lifecycle_converged` / 禁投影 / 退役序 → M5 齿。
+
 ## M4 — L4 同意与通知
 
 | 测什么 | 怎么算过 | must-red |
 |---|---|---|
 | 策略门 | confirm 未答 ⇒ 零副作用；notify-only ⇒ 只通知不动 | confirm 前有任何盘面写 ⇒ 红 |
 | **通知可验齿**（Hipp 判据原样） | 构造真实失败（迁移写失败/readback 不一致）⇒ sink **真收到**结构化事件 | 删通知调用 ⇒ 此齿必须红；"代码调用了通知"但 sink 没收到 ⇒ 红 |
+
+**已落地齿**：`m4.confirm-no-consent-zero-side-effects`（confirm 未答 ⇒ **磁盘零副作用**——无 journal/slots/incoming，不是"没 promote"是"没 staged"；must-red：策略门移到 staging 之后）、`m4.consent-binds-version`（同意续传只装**当初同意的那个版本**；中途服务器换版 ⇒ 拒装；must-red：装当前版）、`m4.notify-only-reports-installable-version`（通知带**真能装的那个版本** + 零副作用；must-red：通知版本与实际不可装）。
 
 ## M5 — platform 适配器 + managed 档（出口：`examples/hosted-service` 绿）
 
@@ -64,6 +72,8 @@
 | mac/linux/windows 适配器 | 各平台读回面 allowlist 注册齐 + CI 矩阵跑（linux 真跑；mac/win 至少接口级+Testbed 真机轮） | 未注册面被引用 ⇒ 拒 |
 | managed 端到端 | hosted-service demo：带活"会话"的完整升级→会话保留断言→回滚路径同样保留 | 升级后会话丢失/回滚后会话丢失 ⇒ 红 |
 | ownership 迁移场景 | **DEFERRED（xxchan 08-05 范围裁定：v0 只假设官方 installer 安装，不做 deb/RPM 接管）**——PM 装的副本走 ownership 检测 → `held: managed-elsewhere` 即为正确终态（有齿，M3）；接管(adopt)留给将来需要时再立项 | —（deferred） |
+
+**已落地齿**：`m5.lifecycle-surface-allowlist`（**面在 allowlist 才可作证**——未注册面被引用 ⇒ typed UNREGISTERED_SURFACE 拒；must-red：未注册面被接受）、`m5.lifecycle-converged-promotes`（读回新工件路径 ⇒ promote + 报告带真谓词；must-red：读回旧路径仍 promote）、`m5.lifecycle-projection-ban`（**禁投影**——版本串/元数据永远不能绿收敛谓词；must-red：投影被接受）、`m5.lifecycle-fail-closed-retirement`（**退役序**——未过收敛前 `retireLegacyManager()` 是 typed HOLD；must-red：无条件退役）。`ConvergenceReport.hostLifecycleConverged` 为 `PredicateResult | null`——**未声明面 = null = 从未被观测 = 不等于通过**（沉默不能当证据花）。`examples.hosted-service-adapter`（managed 档 adapter 契约子集）。
 
 ## M6 — L5 drive（可选层，最后）
 
