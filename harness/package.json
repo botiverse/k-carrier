@@ -1,0 +1,11 @@
+{
+  "name": "@k-carrier/harness",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "K acceptance harness: teeth registry, sandbox, fake-server, fake-host, crash enumerator, self-verification.",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "test": "node --test src/**/*.test.ts"
+  }
+}
