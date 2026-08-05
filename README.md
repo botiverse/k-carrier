@@ -10,6 +10,21 @@ Existing tools solve the two easy ends: CLI self-update libraries (`self_update`
 - consent & notification on personal devices (`auto | confirm | notify-only`; the notification path itself is test-verified)
 - optional fleet drive & observation (server-pushed stage/promote/rollback gated by local policy; install-provenance journal, honest `NOT_OBSERVED` for pre-existing machines)
 
+## Goals
+
+1. **Serve every application form, from day one.** A bare CLI tool, a plain
+   daemon, and a fully managed host are all first-class adopters (three
+   profiles — see `docs/design-v1.md` §2.5). Proof is executable, not prose:
+   [`examples/`](examples/README.md) ships one runnable demo per profile and
+   CI runs the profile-tiered harness against all three.
+2. **Upgrades must prove themselves.** Transactional two-slot upgrades with
+   rollback, and convergence predicates read back from live processes and
+   named OS surfaces — version strings are never accepted as proof.
+3. **The device owner always wins.** Consent/notification are built in and
+   test-verified; remote drive is optional and policy-gated.
+4. **Generic core, zero host concepts.** Raft is the first shell, not a
+   dependency.
+
 ## Layers
 
 | Layer | What | Provenance |
