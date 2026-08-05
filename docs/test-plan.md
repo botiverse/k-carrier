@@ -34,7 +34,7 @@
 
 | 测什么 | 怎么算过 | must-red |
 |---|---|---|
-| 两级签名链 | root→signing.pub→file 全链验过才装 | 篡改 file/sig/signing.pub 任一 ⇒ 拒；无签名 ⇒ 拒（除非显式 AllowUnsigned 测试门） |
+| 两级签名链 | root→signing.pub→file 全链验过才装 | 篡改 file/sig/signing.pub 任一 ⇒ 拒；无签名 ⇒ 拒（**无 AllowUnsigned 后门——测试恒用完整测试签名链**，透明性原则） |
 | root 轮换 | 多 root 并存期新旧 root 签的 signing.pub 都可验 | 已移除 root 签的 ⇒ 拒 |
 | 防回滚 | manifest 版本低于当前且非 pinned ⇒ 默认拒（显式降级需 typed 确认） | 静默接受更低版本 ⇒ 红 |
 

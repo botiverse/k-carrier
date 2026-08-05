@@ -69,6 +69,19 @@ harness 判定别人之前先判自己，三样本缺一不可：
 ### 1.7 接入方模式（`k-harness --profile X --adapter path`）
 同一套齿对**外部真 adapter** 跑合规子集（不跑需要故障开关的齿，跑契约齿：quiesce↔resume 等价、probe 活性、ownership 响应）。绿 = 接入方契约达标；这也是 examples 三 demo 的验收方式——**demo 和接入方走同一道门**。
 
+## 1.8 透明性原则（xxchan 08-05：测试框架对升级框架透明）
+
+**core 对 harness 零感知，机械强制**：
+- **禁 test-conditional**：core 内不得存在 "if under test" 任何形态（环境变量开关/测试模式 flag/AllowUnsigned 之类后门）。CI ratchet 扫 core 源码（同我们 clock-ratchet 手法），出现即红。
+- harness 需要的一切必须走**产品级注入面**——这些面是产品本来就需要的，不是为测试开的：
+  - `HostAdapter`：产品 API 本体，fake-host 只是又一个 adapter；
+  - `releaseBase`：指向 localhost 是配置，不是测试感知；
+  - `rootKeys`：注入是产品需求（每个 app 编译自己的根），测试链只是另一组真钥匙——**签名验证永不可关**；
+  - `clock`：时钟 seam 是正当的生产抽象（默认真时钟），不是测试后门；
+  - `stateDir`：本就按 app 配置。
+- 崩溃注入 = 对真进程 kill -9，零 core 配合；故障注入全在 fake-host（harness 侧代码）；对抗样本 = 假 adapter——全部外部。
+- **反向信号**：若某颗齿写不出来、除非给 core 开后门 ⇒ 判定为**公共 API 不足**（dogfood 信号），修 API 而不是开门。透明性由此与 forcing-function 同构：测试框架也只能是 core 的一个普通消费者。
+
 ## 2. 关键设计决定（为什么这样）
 1. **真进程优先**：崩溃/双跑/probe 活性只在真 spawn 的假 daemon 上验——mock 崩溃 = 没测崩溃。inproc 只服务快速逻辑齿。
 2. **枚举生成覆盖面**：kill 矩阵、齿-档对账、断言标注扫描全由代码生成/校验，**人列清单在这三处非法**（人会漏，且漏的方向总是"看起来覆盖够了"）。
