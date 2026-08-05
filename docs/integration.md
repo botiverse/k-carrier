@@ -173,6 +173,34 @@ class MyHost implements HostAdapter {
   (`compatibility: "undeclared"`), so nobody mistakes silence for a
   guarantee.
 
+### Invariants are shipped, not hidden
+
+K's guarantees exist as an **exported invariant library** (`core/src/invariants.ts`),
+not as private test assertions. One definition, three consumers: K's own
+teeth, the deterministic simulator (checked after *every* effect, on every
+seed), and **your** tests — plus any app invariants you write in the same
+shape:
+
+```ts
+import { BUILT_IN_INVARIANTS, checkInvariants, type Invariant } from "@k-carrier/core";
+
+const myAppInvariant: Invariant = {
+  id: "myapp.no-orphaned-jobs",
+  description: "no job is left claimed by a dead worker",
+  check: (s) => (orphanCount(s) > 0 ? `${orphanCount(s)} orphaned jobs` : null),
+};
+
+const violations = checkInvariants(snapshot, [...BUILT_IN_INVARIANTS, myAppInvariant]);
+```
+
+An invariant is a pure predicate over an observable snapshot (the same
+shape `status --json` emits), so the identical check runs in-process, in
+simulation, and black-box against a real binary. Violations return a
+*reason*, so a failure explains itself even when a simulator replays it
+from a seed hours later. Your invariants ride the simulator's seeded fault
+injection for free — that is the practical answer to "who guarantees my
+semantics": **you state them, K's machinery exercises them.**
+
 Rule of thumb: **K owns the mechanics of the transition; you own the meaning
 of the versions.** Where you can express the meaning as a predicate, hand it
 to K and it becomes enforced rather than hoped for.
