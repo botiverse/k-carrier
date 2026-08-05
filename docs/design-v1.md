@@ -53,6 +53,21 @@ idle → staged（experiment 槽已下载+验签）
 - 自替换顺序显式化（Datadog 的教训直接抄）：先落盘 journal 意图 → 交接进程树（detached owner 模式，= 我们 direction-B）→ 新进程自证（见 L3）→ 才清旧。
 - 会话保留 = 宿主契约的一部分：`quiesce` 前后负载状态等价（Raft 壳里 = agent 的 MEMORY/工作区/连接恢复；核心层只保证调用时序与回滚时的对称恢复）。
 
+**⭐ 一等模型（08-05 提升，原本按边角情况处理）：升级事务可以比发起它的进程活得久。**
+很多宿主**起不动自己**——它们通过**退出**被替换，由外部的东西（supervisor / OS 安装器）按新字节把它拉起来：
+- **raft-computer**（我们第一个真实 service 档用户）= 退出后由 detached owner 拉起；
+- **electron-updater**（08-05 读源码核实）= 把安装交给 Squirrel.Mac / NSIS / dpkg，安装器替换并重启 app。
+⇒ **所以这不是怪癖，是这个领域的主流形状。**
+```
+后果   成功路径上，驱动事务的那个进程【死在 handover 中间】
+       ⇒ 后继者看到的 journal 与"崩溃"完全一样
+判定   只能靠【证据】：活进程报 experiment 版本，且 startId ≠ handover 时记下的那个
+       ⇒ 后继者接着跑谓词 → promote / rollback
+⚠️ 绝不用"这次重启是计划内的"标志位：崩溃路径同样能设这个标志。
+   标志是一句声明，incarnation 不同是一件发生过的事。
+```
+⇒ `start()` 的语义随之收紧：**只表示"已请求后继者"，不表示"后继者在跑"**——后者只有 `healthProbe()` 能回答。
+
 ### L3 收敛与回读层（#395 直接平移，两家都没有）
 **要**：升级"说做到了"必须可机械证明。
 **设计**：两谓词 + 同源回读（#395 冻结 spec 原样）：
@@ -151,6 +166,21 @@ server 侧最小要求 = 静态文件（manifest+工件+签名）；drive 为可
 6. **断言纪律**：承重齿 = invariant；锁当前实现的辅助断言 = baseline-带失效条件（#395 已入 spec 的二分）。
 7. **跨版本矩阵**：old-core 读 new-state = fail-closed；new-core 收养 old 布局 = 无损迁移；混合版本窗口显式建模。
 8. **真机验收协议**：Testbed 床跑全矩阵；个人真机只做 consent 后的读回抽样（1.0.15 建立的惯例）；in-env 复现构建核发布字节。
+
+## 3.5 与 electron-updater 的对照（08-05 读源码，v6.8.9 ≈4200 行）
+
+**两个互相独立的轴**（此前混为一谈的"复杂度"）：**交付**（把字节放到位有多难）与**保证**（放完之后承诺什么）。
+```
+rustup self update  交付低 / 保证低    换一个文件、退出
+electron-updater    交付高 / 保证低    4200 行几乎全在交付：feed 源 ~800 · 增量下载 ~800
+                                     · 各平台安装 ~800（mac 起本地 HTTP 服务器把 zip 喂给
+                                       Squirrel.Mac，因为它只肯接 URL）· 编排 ~730
+K                   交付低 / 保证高    单二进制；事务 + 回读 + 回滚
+```
+- **核实**：全包**零 rollback / 零 revert / 零装后健康检查**；签名靠**系统代码签名**（Windows Authenticode 发布者名 / mac codesign），不是自己的链。⇒ **"这一类没人做事务回滚与回读"成立。**
+- **不长成它**：`.app` / MSI / deb 的安装脏活是平台特有的，交给那些工具；K 只管事务与回滚，通过 `PlatformOps` / `HostAdapter` 调它们。
+- **灰度百分比不进核心**：按 K 自己的边界，"我该升到哪个版本"是 `ReleaseSource` 的问题 ⇒ 灰度天然属于那一层。**（这条算边界划对了的证据。）**
+- ⚠️ **已知真差距（记录，暂不做）**：**下载不可续**——进程死了要重下，而 computer 的 SEA ≈150MB，这个代价是真的。
 
 ## 4. 边界（不做什么）
 - 不替代 OS 包管理器：PM 拥有的安装交给 PM（TS 矩阵思路），core 的主 lane 是自有安装（SEA 类）。**v0 范围裁定（xxchan 08-05）：只假设官方 installer 安装；deb/RPM 等 PM 装的副本 = ownership 检测 → `held: managed-elsewhere` 即正确终态，不做接管/收编**；
