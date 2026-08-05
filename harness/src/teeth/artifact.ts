@@ -8,7 +8,7 @@ import { registerTooth } from "./registry.ts";
 import {
   checkTamperedArtifactRefused,
   checkKillMidSwapPreservesOld,
-  checkChannelFailClosed,
+  checkSourceFailsClosed,
 } from "../artifact/checks.ts";
 
 registerTooth({
@@ -44,19 +44,19 @@ registerTooth({
 });
 
 registerTooth({
-  id: "artifact.channel-fail-closed",
+  id: "artifact.source-fails-closed",
   profiles: ["cli", "daemon", "managed"],
   layers: ["L0"],
   kind: { kind: "invariant" },
   mustRed: [
     {
-      mutate: "resolveSelector falls back when the channel name is not in the manifest",
+      mutate: "the release source guesses a target instead of refusing (unknown platform / unservable version)",
       caughtOnlyBy: {
-        alsoCaughtBy: "core/src/artifact channel unit tests",
+        alsoCaughtBy: "core/src/artifact source unit tests",
         whyStillNeeded:
-          "the tooth pins the full resolution path (pinned/alpha/platform semantics), not just the literal parser",
+          "the tooth pins refusal at the real source boundary (platform + named-version), not just one helper",
       },
     },
   ],
-  run: checkChannelFailClosed,
+  run: checkSourceFailsClosed,
 });

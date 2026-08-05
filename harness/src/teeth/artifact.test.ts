@@ -1,6 +1,12 @@
 // @invariant — M1 artifact teeth self-verification: known-green on a clean
 // world, known-red under each declared mutation.
 import { test } from "node:test";
+
+/** A source that serves ANY platform and ANY version asked for: it guesses. */
+const lenientSource = (version: string) => ({
+  checkForUpdate: async () => ({ version, url: "https://x/a.bin", sha256: "a".repeat(64), size: 1 }),
+  fetchRelease: async (v: string) => ({ version: v, url: "https://x/a.bin", sha256: "a".repeat(64), size: 1 }),
+});
 import assert from "node:assert/strict";
 import "./index.ts"; // registers all teeth
 import { allTeeth, exportForMutationRunner, type ToothContext } from "./registry.ts";
@@ -8,13 +14,13 @@ import { createSandbox } from "../scenario/sandbox.ts";
 import {
   checkTamperedArtifactRefused,
   checkKillMidSwapPreservesOld,
-  checkChannelFailClosed,
+  checkSourceFailsClosed,
 } from "../artifact/checks.ts";
 
 const TOOTH_IDS = new Set([
   "artifact.tamper-refuses-install",
   "artifact.atomic-swap-crash-safe",
-  "artifact.channel-fail-closed",
+  "artifact.source-fails-closed",
 ]);
 
 async function ctxFor(prefix: string): Promise<{ ctx: ToothContext; teardown: () => Promise<void> }> {
@@ -61,11 +67,12 @@ test("known-red: atomic-swap-crash-safe catches a swap that completes (no kill)"
   }
 });
 
-test("known-red: channel-fail-closed catches a lenient parser", async () => {
-  const { ctx, teardown } = await ctxFor("red-channel");
+test("known-red: source-fails-closed catches a source that guesses instead of refusing", async () => {
+  const { ctx, teardown } = await ctxFor("red-source");
   try {
-    // mutation: a lenient parser accepts "nonsense" -> the tooth must go red
-    await assert.rejects(checkChannelFailClosed(ctx, { lenient: true }));
+    // mutation: a source that serves ANY platform and ANY version it is asked
+    // for — i.e. it guesses rather than refusing. The tooth must go red.
+    await assert.rejects(checkSourceFailsClosed(ctx, lenientSource));
   } finally {
     await teardown();
   }
@@ -97,5 +104,5 @@ test("tooth run functions are the exported checks (single source of truth)", () 
   const byId = new Map(allTeeth().map((t) => [t.id, t] as const));
   assert.equal(byId.get("artifact.tamper-refuses-install")!.run, checkTamperedArtifactRefused);
   assert.equal(byId.get("artifact.atomic-swap-crash-safe")!.run, checkKillMidSwapPreservesOld);
-  assert.equal(byId.get("artifact.channel-fail-closed")!.run, checkChannelFailClosed);
+  assert.equal(byId.get("artifact.source-fails-closed")!.run, checkSourceFailsClosed);
 });

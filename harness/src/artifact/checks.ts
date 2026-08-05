@@ -16,8 +16,9 @@ import { promises as fs } from "node:fs";
 import { spawn, type ChildProcess } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { type ToothContext } from "../teeth/registry.ts";
-import { parseSelector, resolveSelector, type ReleaseSelector } from "../../../core/src/artifact/selector.ts";
-import { parseManifest, currentPlatformKey, type Manifest } from "../../../core/src/artifact/manifest.ts";
+import { staticManifestSource } from "../../../core/src/artifact/staticManifestSource.ts";
+import type { ReleaseContext, ReleaseSource } from "../../../core/src/artifact/source.ts";
+import { parseManifest, currentPlatformKey } from "../../../core/src/artifact/manifest.ts";
 import { downloadVerified } from "../../../core/src/artifact/download.ts";
 import { atomicWriteFile } from "../../../core/src/artifact/swap.ts";
 import { FakeServer } from "../fake-server/server.ts";
@@ -134,52 +135,44 @@ export async function checkKillMidSwapPreservesOld(
 // unknown channel => fail-closed
 // ---------------------------------------------------------------------------
 
-/** channelName is the PUBLISHER's own vocabulary — any string is legitimate. */
-function buildTestManifest(version: string, platform: string, channelName?: string): Manifest {
-  const o: Record<string, unknown> = {
-    version,
-    targets: { [platform]: { file: "app.bin", sha256: "a".repeat(64), size: 1 } },
-  };
-  if (channelName !== undefined) o.channels = { [channelName]: version };
-  return parseManifest(JSON.stringify(o));
-}
 
-/** Mutation stand-in: a parser that accepts any string as a channel. */
-const lenientParse = (s: string): ReleaseSelector => ({ kind: "channel", name: s });
-
-export async function checkChannelFailClosed(
+/**
+ * The source boundary must FAIL CLOSED rather than guess: an unsupported
+ * platform, and a named version this source cannot serve, are both refusals.
+ * (Version ORDER policy lives in the source, not in K — so this tooth pins
+ * refusal behaviour, not a versioning scheme.)
+ */
+export async function checkSourceFailsClosed(
   _ctx: ToothContext,
-  opts: { lenient?: boolean } = {},
+  makeSource: (served: string) => ReleaseSource = (served) =>
+    staticManifestSource({
+      baseUrl: "https://cdn.example/app",
+      fetchImpl: (async () =>
+        new Response(
+          JSON.stringify({
+            version: served,
+            targets: { "linux-x64": { file: `app-${served}.bin`, sha256: "a".repeat(64), size: 1 } },
+          }),
+          { status: 200 },
+        )) as unknown as typeof fetch,
+    }),
 ): Promise<void> {
-  const platform = currentPlatformKey();
-  const manifest = buildTestManifest("1.0.0", platform, "stable");
-  if (opts.lenient) {
-    // mutation: a parser that accepts anything — the fail-closed
-    // assertions must go RED against it
-    assert.throws(() => lenientParse("nonsense"), /CHANNEL_INVALID/);
-    return;
-  }
-  // An adopter-owned name is accepted as a NAME (K invents no vocabulary),
-  // but must be published by the manifest or it fails closed.
-  assert.throws(() => parseSelector("   "), /CHANNEL_INVALID/);
-  assert.throws(() => parseSelector("pinned:"), /CHANNEL_INVALID/);
-  assert.throws(
-    () => resolveSelector(manifest, parseSelector("nightly"), platform),
-    /CHANNEL_NOT_IN_MANIFEST/,
+  const ctx: ReleaseContext = { currentVersion: "1.0.0", platformKey: "linux-x64" };
+  const source = makeSource("1.2.0");
+
+  // unknown platform => refusal, never a guessed target
+  await assert.rejects(
+    () => source.checkForUpdate({ ...ctx, platformKey: "sparc-solaris" }),
+    /UNSUPPORTED_PLATFORM/u,
   );
-  assert.throws(
-    () => resolveSelector(manifest, parseSelector("pinned:2.0.0"), platform),
-    /PINNED_VERSION_MISMATCH/,
-  );
-  assert.throws(() => resolveSelector(manifest, parseSelector("stable"), "windows-arm64"), /UNSUPPORTED_PLATFORM/);
-  const resolved = resolveSelector(manifest, parseSelector("stable"), platform);
-  assert.equal(resolved.version, "1.0.0");
-  // a publisher-declared stream resolves under ITS OWN name — any name.
-  const streamManifest = buildTestManifest("2.0.0-rc.1", platform, "canary");
-  assert.equal(
-    resolveSelector(streamManifest, parseSelector("canary"), platform).version,
-    "2.0.0-rc.1",
-  );
+
+  // a named version this source does not serve => refusal
+  await assert.rejects(() => source.fetchRelease("9.9.9", ctx), /PINNED_VERSION_MISMATCH/u);
+
+  // and the happy path still resolves completely
+  const release = await source.checkForUpdate(ctx);
+  assert.ok(release, "a newer served version must produce a release");
+  assert.equal(release.version, "1.2.0");
 }
 
 // ---------------------------------------------------------------------------
