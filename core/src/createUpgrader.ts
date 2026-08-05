@@ -24,6 +24,7 @@ import { UpgradeEngine } from "./txn/engine.ts";
 import { fileEffects, materializeArtifact } from "./txn/fileEffects.ts";
 import { acquireUpgradeLock } from "./txn/lock.ts";
 import { downloadVerified } from "./artifact/download.ts";
+import { verifyChain } from "./distsign/verify.ts";
 import { systemClock, type Clock } from "./clock.ts";
 import { platformOpsFor } from "./platform/index.ts";
 
@@ -58,7 +59,10 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
     await opts.notificationSink({ kind, detail });
   }
 
-  /** Gates 1-6, then the transaction. `pick` chooses which release to run. */
+  /** Whether the artifact now in the experiment slot passed the chain. */
+  let signatureVerified = false;
+
+  /** Gates 1-7. `pick` chooses which release to run. */
   async function run(pick: (current: string) => Promise<Release | null>): Promise<UpgradeOutcome> {
     const owner = ownership();
     if (owner === "managed-elsewhere") {
@@ -92,6 +96,34 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
       }
 
       const bytes = await downloadVerified(release, { clock });
+
+      // AUTHENTICITY gate. The digest above only proves the bytes arrived
+      // intact from wherever the source pointed; it cannot prove who made
+      // them. Nothing unverified may reach a slot, and "unsigned" must be an
+      // explicit, recorded choice rather than an absent field.
+      if (release.signature !== undefined) {
+        verifyChain(
+          bytes,
+          {
+            signingKeyPem: release.signature.signingKeyPem,
+            signingKeySignature: Buffer.from(release.signature.signingKeySignatureB64, "base64"),
+            artifactSignature: Buffer.from(release.signature.artifactSignatureB64, "base64"),
+          },
+          opts.rootKeys,
+        );
+        signatureVerified = true;
+      } else if (release.unsigned === true) {
+        signatureVerified = false; // declared, surfaced in status, not hidden
+        await notify("held", { reason: "unsigned-release-accepted", version: release.version });
+      } else {
+        return {
+          result: "held",
+          reason:
+            `release ${release.version} carries no signature and did not declare unsigned:true — ` +
+            `K will not install bytes it cannot attribute`,
+        };
+      }
+
       const bytesRef = await materializeArtifact(opts.stateDir, bytes);
 
       const outcome = await engine.upgrade({ version: release.version, bytesRef });
@@ -153,6 +185,7 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
         stableVersion: slots.stable ?? "0.0.0",
         experimentVersion: slots.experiment,
         rollbackReason: null,
+        ...(slots.experiment === null ? {} : { experimentSignatureVerified: signatureVerified }),
       };
     },
   };

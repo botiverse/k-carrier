@@ -33,6 +33,20 @@ export interface Release {
   url: string;
   sha256: string;
   size: number;
+  /**
+   * Signature material for this artifact. A digest proves the bytes did not
+   * corrupt in transit; it cannot prove WHO produced them, because it comes
+   * from the same place they do. Sources that genuinely have no signing story
+   * set `unsigned: true` and K records that in status rather than pretending
+   * the artifact was verified.
+   */
+  signature?: {
+    signingKeyPem: string;
+    signingKeySignatureB64: string;
+    artifactSignatureB64: string;
+  };
+  /** Explicit opt-out, visible in code and in status. Never a silent default. */
+  unsigned?: boolean;
 }
 
 export interface ReleaseSource {
