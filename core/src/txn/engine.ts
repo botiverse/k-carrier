@@ -64,9 +64,18 @@ export class UpgradeEngine {
     const version = (await this.deps.effects.slots.slotVersions()).experiment;
     switch (last.intent) {
       case "idle":
+        return;
       case "promoted":
+        // WAL redo: the intent is durable but its action may not have run
+        // (crash in the after-journal window). Completing it is idempotent —
+        // promoteExperiment on an already-promoted world is a no-op because
+        // the experiment slot is empty.
+        if (version !== null) await this.deps.effects.slots.promoteExperiment();
+        return;
       case "rolled-back":
-        return; // terminal states; nothing in flight
+        // Same redo obligation: clearing an already-cleared slot is a no-op.
+        if (version !== null) await this.deps.effects.slots.clearExperiment();
+        return;
       case "staged":
         // Download completed but handover never started: cheap undo.
         await this.rollbackTo("crash before handover", { skipHostRestart: true });
