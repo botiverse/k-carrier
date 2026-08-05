@@ -1,6 +1,6 @@
-# K 升级框架 设计文档 v1（通用核 + Raft 壳）
+# K (k-carrier) 升级框架 设计文档 v1.1（通用核 + Raft 壳）
 
-作者 archer · 2026-08-05 · 基于 xxchan DM 收敛的方向（开源 forcing-function / 并集定位 / 边做开源边做自己的）+ 源码调研（`k-updater-research-tailscale-datadog.md`）+ #395 冻结 spec + #376 载体无关不变式。
+作者 archer · 2026-08-05 (v1.1: 定名 k-carrier、决定记录、接口落码后的衔接更新) · 基于 xxchan DM 收敛的方向（开源 forcing-function / 并集定位 / 边做开源边做自己的）+ 源码调研（`k-updater-research-tailscale-datadog.md`）+ #395 冻结 spec + #376 载体无关不变式。
 
 ---
 
@@ -8,7 +8,7 @@
 
 **「个人设备上的受管常驻服务」的升级框架** —— 需求 = 并集：Datadog 级的管理能力（事务/回滚/读回/远程驱动/fleet 观测）**全要** + Tailscale 级的个人设备恭敬（同意/通知/安装所有权）**也全要** + 独有的宿主负载（agent 会话）保留。市场图两头有界（下界 self_update/CC-updater 已解决、上界 Datadog fleet 已解决），中间整段无人做。
 
-**形态**：一个仓库、两层 —— `core`（通用框架，按开源标准写，任何 daemon 可用）+ `raft-shell`（Raft Computer 作为第一个宿主/用户）。发布时机独立决定，不挡开工。
+**形态**：一个仓库（= 本仓库 `botiverse/k-carrier`）、两层 —— `core`（通用框架，按开源标准写，任何 daemon 可用）+ `raft-shell`（Raft Computer 作为第一个宿主/用户）。发布时机独立决定，不挡开工。
 
 ---
 
@@ -106,7 +106,7 @@ server 侧最小要求 = 静态文件（manifest+工件+签名）；drive 为可
 3. **谓词齿**（L3）：删任一"入口→core 委托" ⇒ RED；删回读 ⇒ RED；version/channel 字段灌真值而谓词面造假 ⇒ 必须不绿（禁投影齿）。
 4. **通知可验齿**（L4）：真实失败 → 用户面真收到 → 去掉通知 ⇒ RED（Hipp 判据）。
 5. **mutation-runner 契约**（Lincan 工具直接用）：未变异 baseline 0 失败；每颗齿带 must-red 清单；"这条不被此齿抓还会被谁抓"判据；全红也不发结论。
-6. **断言纪律**：carrier 齿 = invariant；锁当前实现的辅助断言 = baseline-带失效条件（#395 已入 spec 的二分）。
+6. **断言纪律**：承重齿 = invariant；锁当前实现的辅助断言 = baseline-带失效条件（#395 已入 spec 的二分）。
 7. **跨版本矩阵**：old-core 读 new-state = fail-closed；new-core 收养 old 布局 = 无损迁移；混合版本窗口显式建模。
 8. **真机验收协议**：Testbed 床跑全矩阵；个人真机只做 consent 后的读回抽样（1.0.15 建立的惯例）；in-env 复现构建核发布字节。
 
@@ -117,12 +117,13 @@ server 侧最小要求 = 静态文件（manifest+工件+签名）；drive 为可
 - `host_lifecycle_converged` 作为**发布字段**上报 fleet = 另立任务（#395 边界原样）。
 
 ## 5. 与现状的衔接（Raft 壳落地顺序）
-1. 1.0.16（已冻 #395）= L2/L3 在 Raft 壳内的第一次真实现（upgrade 入口接线 + 自启迁移 + 谓词回读）——**不等 core 仓库成型，但按本架构的接口形状写**，之后平移进 core；
-2. K carrier 既有产物直接归位：dark policy-row fixture（已建验）→ L5 drive 的门；channel file → L0；distsign → L0.5 新建；
-3. core 仓库骨架 + harness 假宿主 = 我欠的 release/publish 侧 spec 的替代物（本文档即其上位）。
+1. 1.0.16（已冻 #395）= L2/L3 在 Raft 壳内的第一次真实现（upgrade 入口接线 + 自启迁移 + 谓词回读）——**不等 core 成型，按本仓库已落的接口形状写**（`core/src/lifecycle/hostAdapter.ts` / `txn/state.ts` / `converge/predicates.ts` / `upgrader.ts`），之后平移进 core；
+2. K 既有产物直接归位：dark policy-row fixture（已建验）→ L5 drive 的门；channel file → L0；distsign → L0.5 新建；
+3. 本仓库 = 原"release/publish 侧 spec"的上位替代；接入方视角见 `docs/integration.md`。
 
-## 6. 开放问题（要人拍的）
-1. core 实现语言：TS（与 daemon 同栈、复用最快）vs Go（单二进制、目标域惯例）——**我倾向 TS 起步**（Raft 壳复用 + 我们测试教义全在 TS 生态），留 FFI/重写门；
-2. 名字与仓库位置（开源视角的命名）；
-3. 1.0.16 与 core 骨架是否同期并行（我建议：1.0.16 先行、按接口形状写，core 骨架随后收编）；
-4. drive 协议要不要对齐某个现有远程配置生态（还是自定义最小集）。
+## 6. 决定记录（原开放问题，已拍部分）
+1. **名字/仓库 ✅（xxchan 08-05）**：公开名 **k-carrier**（`github.com/botiverse/k-carrier`，private 孵化），口头名 **K**。理由：单字母不可检索 + kframework/k 撞名；k-carrier 自解释。
+2. **core 语言 = TS 起步 ✅（默认成立，未被否）**：与 daemon 同栈、Raft 壳复用最快、测试教义全在 TS 生态；留 FFI/重写门。
+3. **并行方式 = 1.0.16 先行 ✅（默认成立）**：按本仓库接口形状写，core 骨架随后收编。
+4. **drive 协议（仍开放）**：对齐现有远程配置生态 vs 自定义最小集 —— 到 L5 动工时拍。
+5. **License（仍开放，倾向 Apache-2.0）**：开源发布那步定。
