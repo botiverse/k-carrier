@@ -128,6 +128,55 @@ plus OS state (launch-at-login, supervisors) that must converge:
 - optionally attach `drive` for server-pushed upgrades and fleet state
   readout — every remote command still passes the local policy gate.
 
+## 3.5 Responsibility boundary: what K guarantees vs what you must
+
+K guarantees **mechanical** properties. It cannot guarantee your
+application's **semantic** compatibility across versions — and being clear
+about that line is part of the contract.
+
+| K guarantees (mechanically, with teeth) | You must guarantee (K can't see it) |
+|---|---|
+| the transition itself: never two incarnations live, never an unbootable host, crash at any step recovers | that version N+1 can *read* what version N wrote (your data, DB schema, caches) |
+| the artifact is authentic (signature chain) and byte-complete | that N+1 speaks a protocol your server still accepts (and N does too, if you may roll back) |
+| the *binary* is restorable — rollback returns the exact bytes that were running | that rolling the binary back is *meaningful* — **K restores your binary, not your data**. If N+1 migrated the user's database, rolling back to N leaves N facing N+1-shaped data |
+| proof the new version is actually live and OS lifecycle converged | what `quiesce`/`resume` must preserve for *your* workloads to be intact |
+| the owner's consent policy is honored | whether this upgrade is *safe to offer* at all (feature flags, in-flight work, licence state) |
+
+**The sharpest case is rollback**, and it is the same trap as downgrade:
+a rollback that restores the binary while leaving forward-migrated data
+behind is not a rollback, it's a new failure. K refuses to pretend
+otherwise — which is why it gives you a place to say so:
+
+### Declare it, and K enforces it for you
+
+Rather than leaving compatibility as a documentation promise, declare it —
+K turns your declaration into a mechanical gate:
+
+```ts
+class MyHost implements HostAdapter {
+  // Optional. Called BEFORE staging and BEFORE promote.
+  // Return a refusal string to stop the transition; null to allow.
+  async checkCompatibility(from: string, to: string): Promise<string | null> {
+    if (schemaGeneration(to) > schemaGeneration(from) && !hasDownMigration(to, from)) {
+      return `no down-migration from schema ${to} to ${from}`;
+    }
+    return null;
+  }
+}
+```
+
+- Refusing at **stage** time means the upgrade never starts (typed
+  `held: incompatible`).
+- Refusing at **promote** time means K rolls back instead of committing.
+- Not implementing it is allowed — then compatibility is entirely your
+  out-of-band responsibility, and K says so in `status --json`
+  (`compatibility: "undeclared"`), so nobody mistakes silence for a
+  guarantee.
+
+Rule of thumb: **K owns the mechanics of the transition; you own the meaning
+of the versions.** Where you can express the meaning as a predicate, hand it
+to K and it becomes enforced rather than hoped for.
+
 ## 4. The boundary in one picture
 
 ```
