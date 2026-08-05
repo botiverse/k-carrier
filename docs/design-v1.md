@@ -97,6 +97,18 @@ server 侧最小要求 = 静态文件（manifest+工件+签名）；drive 为可
 2. **core 不含任何 Raft 概念**（无 SLOCK_HOME/机器身份/server 协议）—— 全部经 HostAdapter/配置注入；这是开源 forcing-function 的机械落点。
 3. **每层可单独关**：不用 drive = 纯本地；不用 L2 = 退化成 CLI 自升级（= 向下兼容到商品层，路径清晰）。
 
+## 2.5 组合性：三档接入 profile（能力可组合，不要求 Raft Computer 级复杂度）
+
+**任何 CLI 应用都能用**，从最小档起步、按需长上去；每层都有退化实现，缺哪层就自动降到哪档：
+
+| Profile | 适用 | 用哪些层 | 要写什么 | 得到什么 |
+|---|---|---|---|---|
+| **cli** | 随便一个 CLI 工具（无常驻进程） | L0 + L0.5 + L1'（简化槽：换字节即 promote，下次运行生效）| **零 HostAdapter**（内置 `NoResidentHost` 空适配器）；只给 releaseBase/channel/rootKeys | self_update 同款体验 + 白送签名链/journal/provenance；`binary_at_target` 下次运行自证 |
+| **daemon** | 有常驻进程、无托管负载（如普通 agent/服务） | + 完整 L1 两槽 + L2（quiesce/resume 可为 no-op，stop/start/probe 实做）+ L3 binary 谓词 | HostAdapter 三个真方法 | 事务/回滚/crash-safe + 进程级收敛证明 |
+| **managed** | Raft Computer 级（托管负载、OS 生命周期面、fleet） | 全部六层 | HostAdapter 五方法 + 平台读回面注册 + （可选）drive | 全套：会话保留、lifecycle 收敛、同意/通知、fleet 观测 |
+
+机制保证：`UpgraderConfig.host` 缺省 = `NoResidentHost`；harness 按 profile 分档跑（cli 档只跑 L0/L1' 齿）。**这同时是开源的 adoption funnel**：简单应用从 cli 档零成本进来，长成 daemon/managed 档不换框架。
+
 ## 3. 怎么测试（QA 面 = 框架的一半价值）
 
 按我们的 QA 教义（un-fakeable、失效条件、named-surface）：
