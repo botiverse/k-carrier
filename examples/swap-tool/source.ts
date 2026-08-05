@@ -56,7 +56,9 @@ if (args[0] === "--version") {
   fs.writeSync(1, VERSION + "\\n");
   process.exit(0);
 }
-if (args[0] === "self" && args[1] === "upgrade") {
+if (args[0] === "confirm" && args[1] === "upgrade") {
+  confirmUpgrade(args[2]).catch((e) => { fs.writeSync(2, String(e) + "\\n"); process.exit(5); });
+} else if (args[0] === "self" && args[1] === "upgrade") {
   selfUpgrade().catch((e) => { fs.writeSync(2, String(e) + "\\n"); process.exit(5); });
 } else {
   switch (BEHAVIOR) {
@@ -117,20 +119,67 @@ async function selfUpgrade() {
   const upgrader = createUpgrader({
     host,
     source,
-    policy: "auto",
+    policy: process.env.K_POLICY ?? "auto",
     notificationSink: async (ev) => {
+      const ver = ev.detail.version !== undefined ? " v" + ev.detail.version : "";
       const reason = ev.detail.reason !== undefined ? ": " + ev.detail.reason : "";
-      fs.writeSync(2, "notify " + ev.kind + reason + "\\n");
+      fs.writeSync(2, "notify " + ev.kind + ver + reason + "\\n");
     },
     rootKeys: ROOT_KEYS,
     stateDir: STATE_DIR,
   });
 
   const outcome = await upgrader.upgrade();
+  await finish(outcome, upgrader, { slotArtifactPath, atomicWriteFile });
+}
+
+/** Continue a policy=confirm flow AFTER the user approved the offered
+ * version: the consent WAS the gate; the version stays bound (the source
+ * must still serve it, or the continuation refuses). */
+async function confirmUpgrade(version) {
+  if (!version) { fs.writeSync(2, "confirm upgrade <version>\\n"); process.exit(2); }
+  if (!RELEASE_BASE) { fs.writeSync(2, "K_RELEASE_BASE not set\\n"); process.exit(2); }
+  if (!CORE_UPGRADER) { fs.writeSync(2, "K_CORE_UPGRADER not set (the example's @k-carrier/core wiring)\\n"); process.exit(2); }
+  const coreSrcUrl = new URL(".", CORE_UPGRADER).href;
+  const { createUpgrader } = await import(CORE_UPGRADER);
+  const { staticManifestSource } = await import(new URL("artifact/staticManifestSource.ts", coreSrcUrl).href);
+  const { atomicWriteFile } = await import(new URL("artifact/swap.ts", coreSrcUrl).href);
+  const { slotArtifactPath } = await import(new URL("txn/fileEffects.ts", coreSrcUrl).href);
+  const host = {
+    async quiesce() {},
+    async stop() {},
+    async start() {},
+    async healthProbe() {
+      const experiment = path.join(STATE_DIR, "slots", "experiment", "artifact.bin");
+      if (fs.existsSync(experiment)) {
+        const r = spawnSync(process.execPath, [experiment, "--probe"], { encoding: "utf8", timeout: 5000 });
+        if (r.status !== 0) throw new Error("experiment artifact failed to start");
+        return { version: r.stdout.trim(), pid: process.pid, startId };
+      }
+      return { version: VERSION, pid: process.pid, startId };
+    },
+    async resume() {},
+  };
+  const upgrader = createUpgrader({
+    host,
+    source: staticManifestSource({ baseUrl: RELEASE_BASE }),
+    policy: "confirm",
+    notificationSink: async (ev) => {
+      const ver = ev.detail.version !== undefined ? " v" + ev.detail.version : "";
+      fs.writeSync(2, "notify " + ev.kind + ver + "\\n");
+    },
+    rootKeys: ROOT_KEYS,
+    stateDir: STATE_DIR,
+  });
+  const outcome = await upgrader.upgradeTo(version, { consented: true });
+  await finish(outcome, upgrader, { slotArtifactPath, atomicWriteFile });
+}
+
+async function finish(outcome, upgrader, helpers) {
   if (outcome.result === "promoted") {
     // install step: swap the promoted slot's bytes over ourselves
-    const promoted = fs.readFileSync(slotArtifactPath(STATE_DIR, "stable"));
-    await atomicWriteFile(process.argv[1], promoted);
+    const promoted = fs.readFileSync(helpers.slotArtifactPath(STATE_DIR, "stable"));
+    await helpers.atomicWriteFile(process.argv[1], promoted);
     const st = await upgrader.state();
     fs.writeSync(1, "upgraded to " + st.stableVersion + "\\n");
     process.exit(0);

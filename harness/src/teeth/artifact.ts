@@ -26,6 +26,11 @@ import {
   checkM3StuckDriverEvidence,
 } from "../artifact/m3.ts";
 import { checkDownloadResumesAfterKill } from "../artifact/m1Resume.ts";
+import {
+  checkM4ConfirmNoConsentZeroSideEffects,
+  checkM4ConsentBindsVersion,
+  checkM4NotifyOnlyReportsInstallableVersion,
+} from "../artifact/m4.ts";
 
 registerTooth({
   id: "artifact.tamper-refuses-install",
@@ -236,4 +241,46 @@ registerTooth({
     },
   ],
   run: checkDownloadResumesAfterKill,
+});
+
+registerTooth({
+  id: "m4.confirm-no-consent-zero-side-effects",
+  profiles: ["service"],
+  layers: ["L0", "L0.5", "L1", "L4"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "the confirm gate moves after staging (unapproved bytes reach the disk)",
+      caughtOnlyBy: "this", // only this tooth asserts the stateDir is untouched under unapproved confirm
+    },
+  ],
+  run: checkM4ConfirmNoConsentZeroSideEffects,
+});
+
+registerTooth({
+  id: "m4.consent-binds-version",
+  profiles: ["service"],
+  layers: ["L0", "L0.5", "L1", "L4"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "the continuation installs whatever the server serves now, not the approved version",
+      caughtOnlyBy: "this", // only this tooth binds consent to the specific offered version
+    },
+  ],
+  run: checkM4ConsentBindsVersion,
+});
+
+registerTooth({
+  id: "m4.notify-only-reports-installable-version",
+  profiles: ["service"],
+  layers: ["L0", "L0.5", "L1", "L4"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "the notification names a version that is not the installable one",
+      caughtOnlyBy: "this", // only this tooth pins the notification to the actual pick
+    },
+  ],
+  run: checkM4NotifyOnlyReportsInstallableVersion,
 });

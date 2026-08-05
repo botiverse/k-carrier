@@ -24,6 +24,7 @@ import { UpgradeEngine } from "./txn/engine.ts";
 import { fileEffects, materializeArtifact } from "./txn/fileEffects.ts";
 import { acquireUpgradeLock } from "./txn/lock.ts";
 import { downloadVerified } from "./artifact/download.ts";
+import { ArtifactError } from "./artifact/errors.ts";
 import * as path from "node:path";
 import { verifyChain } from "./distsign/verify.ts";
 import { systemClock, type Clock } from "./clock.ts";
@@ -63,8 +64,13 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
   /** Whether the artifact now in the experiment slot passed the chain. */
   let signatureVerified = false;
 
-  /** Gates 1-7. `pick` chooses which release to run. */
-  async function run(pick: (current: string) => Promise<Release | null>): Promise<UpgradeOutcome> {
+  /** Gates 1-7. `pick` chooses which release to run. `consented` means the
+   * user approved THIS SPECIFIC release (a confirm-request was shown and
+   * answered for it) — the policy gate is skipped, everything else stands. */
+  async function run(
+    pick: (current: string) => Promise<Release | null>,
+    consented = false,
+  ): Promise<UpgradeOutcome> {
     const owner = ownership();
     if (owner === "managed-elsewhere") {
       await notify("held", { reason: "managed-elsewhere" });
@@ -76,14 +82,29 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
       await engine.recover(); // finish or undo anything a previous crash left
 
       const current = await currentVersion();
-      const release = await pick(current);
+      let release: Release | null;
+      try {
+        release = await pick(current);
+      } catch (err) {
+        // Consent is to a SPECIFIC version: if the source can no longer
+        // serve it (the publisher moved on), the approval is void — a typed
+        // refusal, never a silent switch to whatever is current now.
+        if (consented && err instanceof ArtifactError && err.code === "PINNED_VERSION_MISMATCH") {
+          await notify("held", { reason: "consented-version-unavailable", version: current });
+          return {
+            result: "held",
+            reason: `the approved version is no longer served; nothing was installed`,
+          };
+        }
+        throw err;
+      }
       if (release === null) return { result: "up-to-date" };
 
-      if (opts.policy === "notify-only") {
+      if (!consented && opts.policy === "notify-only") {
         await notify("held", { reason: "notify-only", version: release.version });
         return { result: "held", reason: `policy is notify-only; ${release.version} is available` };
       }
-      if (opts.policy === "confirm") {
+      if (!consented && opts.policy === "confirm") {
         await notify("confirm-request", { version: release.version, current });
         return { result: "held", reason: `policy requires confirmation before upgrading to ${release.version}` };
       }
@@ -168,12 +189,14 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
       );
     },
 
-    async upgradeTo(version: string): Promise<UpgradeOutcome> {
-      return run(async (current) =>
-        opts.source.fetchRelease(version, {
-          currentVersion: current,
-          platformKey: platformOpsFor().platformKey(),
-        }),
+    async upgradeTo(version: string, opts2?: { consented?: boolean }): Promise<UpgradeOutcome> {
+      return run(
+        async (current) =>
+          opts.source.fetchRelease(version, {
+            currentVersion: current,
+            platformKey: platformOpsFor().platformKey(),
+          }),
+        opts2?.consented === true,
       );
     },
 

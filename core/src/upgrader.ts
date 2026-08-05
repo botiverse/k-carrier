@@ -30,8 +30,15 @@ export interface Upgrader {
    * sanctioned DOWNGRADE path — downgrade is always explicit, never
    * automatic, and still subject to the same predicates and compatibility
    * checks.
+   *
+   * `{ consented: true }` continues a policy=confirm flow AFTER the user
+   * approved the offered version: the policy gate is skipped (the consent
+   * WAS the gate), but the version is bound — if the source can no longer
+   * serve the approved version, the continuation refuses instead of
+   * silently installing whatever is current now. Consent is to a SPECIFIC
+   * version, never to "the upgrade" as an event.
    */
-  upgradeTo(version: string): Promise<UpgradeOutcome>;
+  upgradeTo(version: string, opts?: { consented?: boolean }): Promise<UpgradeOutcome>;
 
   /** Explicit rollback while an experiment is live (pre-promote). */
   rollback(reason: string): Promise<void>;
