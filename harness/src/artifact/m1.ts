@@ -86,13 +86,20 @@ export async function readState(env: Record<string, string>): Promise<TxnState> 
 /** Serve a release on a fresh fake-server (seed or target). */
 export async function serveRelease(
   ctx: ToothContext,
-  opts: { version: string; behavior: "ok" | "crash-on-start"; name: string; unsigned?: boolean },
+  opts: {
+    version: string;
+    behavior: "ok" | "crash-on-start";
+    name: string;
+    unsigned?: boolean;
+    /** The demo source the release is stamped from. Default: swap-tool. */
+    source?: string;
+  },
 ): Promise<FakeServer> {
   const server = new FakeServer({ storeDir: path.join(ctx.sandboxDir, `serve-${opts.name}`) });
   await server.start();
   const factory = new ArtifactFactory({
     cacheDir: path.join(ctx.sandboxDir, `cache-${opts.name}`),
-    demoSource: CLI_TOOL_SOURCE,
+    demoSource: opts.source ?? CLI_TOOL_SOURCE,
   });
   const release = {
     version: opts.version,

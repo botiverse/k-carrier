@@ -7,7 +7,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "test": "node --test \"core/src/**/*.test.ts\" \"harness/src/**/*.test.ts\"",
+    "test": "node --test --test-timeout=180000 --test-force-exit \"core/src/**/*.test.ts\" \"harness/src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint --deny-warnings core harness examples",
     "ratchet": "bash scripts/ratchets.sh",

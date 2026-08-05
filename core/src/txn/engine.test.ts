@@ -139,9 +139,19 @@ test("THE POINT: a host that HANGS fails the upgrade instead of hanging it", asy
     },
   });
   const engine = new UpgradeEngine({ ...w.deps, hostCallBudgetMs: 5_000 });
-  const outcome = await engine.upgrade({ version: "2.0.0", bytesRef: "ref" });
-  assert.equal(outcome.result, "rolled-back");
-  assert.match((outcome as { reason: string }).reason, /healthProbe\(\) did not return within 5000ms/);
+  await assert.rejects(
+    engine.upgrade({ version: "2.0.0", bytesRef: "ref" }),
+    /healthProbe\(\) did not return within 5000ms/,
+    "a wedge must end the attempt, not hang it",
+  );
+  // ...and it must NOT have gone on to drive a host it just declared wedged:
+  // stop/start/resume against a host that never answered is how one stuck
+  // upgrade becomes two live incarnations.
+  assert.deepEqual(
+    w.trace.filter((t) => t.startsWith("host:")),
+    ["host:quiesce", "host:stop:stable", "host:start:experiment"],
+    "no host calls after the wedge",
+  );
 });
 
 test("a handover that outlived its driver is FINISHED by the successor", async () => {
