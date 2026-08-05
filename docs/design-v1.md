@@ -112,6 +112,11 @@ server 侧最小要求 = 静态文件（manifest+工件+签名）；drive 为可
 2. **core 不含任何 Raft 概念**（无 SLOCK_HOME/机器身份/server 协议）—— 全部经 HostAdapter/配置注入；这是开源 forcing-function 的机械落点。
 3. **每层可单独关**：不用 drive = 纯本地；不用 L2 = 退化成 CLI 自升级（= 向下兼容到商品层，路径清晰）。
 
+## 2.35 lint 强度与 type-aware 的诚实结论（xxchan 08-05 要求"开更强"）
+**已开**：correctness/suspicious = error，pedantic = warn 且 `--deny-warnings`（等于 error）；`no-explicit-any` error；**import 插件**（`no-cycle` / `no-self-import`）；**`no-console` 在 core 是 error**（库不许打印；harness CLI 和 examples 例外，它们的职责就是打印——用 path override 而不是全局关掉）。
+**故意不开**：`restriction` 类（`no-async-await` 直接禁 async、`no-optional-chaining` 等，是给特定代码库的风格禁令，与我们的设计冲突）。
+**type-aware（`--tsgolint`）：装了、跑了、暂不开**——因为**它现在解析不到 `@types/node`**（`path.join` 都被判成 unsafe），2800+ 条里绝大多数是解析假阳性；更危险的是 **`no-floating-promises` 这类高价值规则报 0**——**一个瞎了的检查器的"沉默"不是通过**（同 empty-suite 假绿）。⇒ 等 tsgolint 类型解析可用再开，届时优先 `no-floating-promises`/`no-misused-promises`/`await-thenable`。**这条写下来，免得以后有人看见"type-aware 装了"就以为在生效。**
+
 ## 2.4 类型与接口设计原则（xxchan 08-05："写出来就是对的，问题发生在静态检查阶段"）
 - **非法状态不可表示**：discriminated union 优先（`ToothKind`/`CaughtOnlyBy`/`EngineOutcome`/`UpgradeOutcome` 已示范）——"baseline 没有失效条件"这类状态在类型上就不存在，不靠运行时查。
 - **证据绑定进类型**：`ProcessEvidence{version,pid,startId}` 三件一体——不能只传 version（谓词函数签名逼你带上进程身份）。
