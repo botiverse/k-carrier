@@ -5,7 +5,14 @@ on:
 permissions: { contents: read }
 jobs:
   check:
-    runs-on: ubuntu-latest
+    # Multi-platform from day 1: a POSIX assumption that leaks into core
+    # should turn CI red the day it lands, not months later when the
+    # abstraction has already grown around it.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -1,31 +1,21 @@
 /**
- * L0 atomic byte swap (test-plan M1: 换字节原子；半写不可见). The new
- * bytes are written to a temp file, fsynced, then renamed over the target —
- * a reader (or a kill mid-swap) only ever sees the OLD complete bytes or
- * the NEW complete bytes, never a partial write. A failed swap leaves the
- * target untouched and cleans up the temp file.
+ * L0 byte swap — delegates the OS-shaped sequence to the platform seam and
+ * keeps the artifact layer's typed-error contract.
  *
- * (Windows in-place self-replace is a later platform concern; the
- * tmp→rename primitive is the portable core.)
+ * The seam decides HOW bytes get replaced (POSIX rename vs the Windows
+ * move-the-running-image dance); this layer guarantees that a failure is a
+ * typed SWAP_FAILED rather than a raw errno leaking to callers.
  */
-import { promises as fs } from "node:fs";
+import { platformOpsFor } from "../platform/index.ts";
 import { ArtifactError } from "./errors.ts";
 
 export async function atomicWriteFile(filePath: string, data: Uint8Array): Promise<void> {
-  const tmpPath = `${filePath}.tmp`;
   try {
-    const fh = await fs.open(tmpPath, "w");
-    try {
-      await fh.writeFile(data);
-      await fh.sync(); // durable before the rename becomes visible
-    } finally {
-      await fh.close();
-    }
-    await fs.rename(tmpPath, filePath); // atomic on POSIX: half-write invisible
+    await platformOpsFor().swapExecutable(filePath, data);
   } catch (err) {
-    await fs.unlink(tmpPath).catch(() => {
-      // nothing to clean
-    });
-    throw new ArtifactError("SWAP_FAILED", `atomic write to ${filePath} failed`, { cause: err });
+    throw new ArtifactError(
+      "SWAP_FAILED",
+      `could not replace ${filePath}: ${(err as Error).message}`,
+    );
   }
 }

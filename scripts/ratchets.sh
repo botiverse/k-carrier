@@ -23,5 +23,10 @@ missing=$(for f in $(find core harness examples -name '*.test.ts' 2>/dev/null); 
 done)
 [ -n "$missing" ] && { echo "$missing"; say "test file missing @invariant/@baseline header tag"; }
 
+# 5) Platform assumptions stay behind the platform seam: core must not name
+#    signals, process-kill, or rename-based swap outside core/src/platform/.
+hits=$(grep -rnE "process\.kill|SIGKILL|SIGTERM|SIGSTOP|fs\.rename|\brename\(" core/src --include='*.ts' | grep -v "core/src/platform/" | grep -v "\.test\.ts" | grep -vE ':[0-9]+:[[:space:]]*(\*|//)')
+[ -n "$hits" ] && { echo "$hits"; say "POSIX-shaped call outside core/src/platform/ (use the PlatformOps seam)"; }
+
 [ $fail -eq 0 ] && echo "ratchets: all green"
 exit $fail
