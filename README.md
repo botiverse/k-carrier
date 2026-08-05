@@ -4,7 +4,7 @@
 
 CLI self-update libraries solve the easy end; org-fleet updaters solve the server end. **Nobody covers the middle — a resident service on a machine a *person* owns, hosting live workloads.** K is that union: transactional two-slot upgrades with rollback, host handoff with session preservation, *proven* convergence (live-process + named-surface readback; version strings are never proof), owner consent/notification, and optional policy-gated fleet drive.
 
-**Serves every application form, from day one** — three adoption profiles (`cli` → `daemon` → `managed`), each a superset of the last; start with a 5-minute CLI integration and grow without switching frameworks. Proof is executable: one runnable example per profile, and a profile without a green example has no support claim.
+**Serves every application form, from day one** — three adoption profiles named after PROCESS MODELS, each a superset of the last: `swap` (no live process to hand over — bytes land, next start uses them) → `service` (one live incarnation, stopped and restarted under proof) → `hosted` (a service that also holds others' work and OS lifecycle state). Start with a 5-minute integration and grow without switching frameworks. Proof is executable: one runnable example per profile, and a profile without a green example has no support claim.
 
 ## Start here
 
