@@ -4,6 +4,7 @@
  * machine-readable code, never a silent pass).
  */
 export type ArtifactErrorCode =
+  | "UNREGISTERED_SURFACE"
   | "MANIFEST_INVALID"
   | "PINNED_VERSION_MISMATCH"
   | "UNSUPPORTED_PLATFORM"

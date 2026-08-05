@@ -28,7 +28,11 @@ import { ArtifactError } from "./artifact/errors.ts";
 import * as path from "node:path";
 import { verifyChain } from "./distsign/verify.ts";
 import { systemClock, type Clock } from "./clock.ts";
+import { buildSurfaceAllowlist, evaluateLifecycleConvergence } from "./converge/lifecycle.ts";
+import type { ReadbackSurface, ConvergenceReport, PredicateResult } from "./converge/predicates.ts";
 import { platformOpsFor } from "./platform/index.ts";
+import { buildConvergenceReport } from "./converge/report.ts";
+import { slotArtifactPath } from "./txn/fileEffects.ts";
 
 export interface CreateUpgraderOptions extends UpgraderConfig {
   clock?: Clock;
@@ -36,6 +40,14 @@ export interface CreateUpgraderOptions extends UpgraderConfig {
   installOwnership?: () => "self" | "managed-elsewhere";
   /** Optional host semantic gate; a string result refuses the transition. */
   checkCompatibility?: (from: string, to: string) => Promise<string | null>;
+  /**
+   * The OS-lifecycle read-back surfaces the app's platform adapter
+   * declares (host_lifecycle_converged, design-v1 §L3). Each surface is
+   * read during readback; convergence requires it to reference the
+   * artifact being promoted. Surfaces NOT declared here are refused —
+   * an app can only vouch for surfaces it actually ships.
+   */
+  lifecycleSurfaces?: ReadbackSurface[];
 }
 
 export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
@@ -43,14 +55,39 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
   const effects = fileEffects(opts.stateDir);
   const ownership = opts.installOwnership ?? ((): "self" => "self");
 
+  // The last predicate evidence, captured for the promote report (the
+  // engine only carries pass/fail; the report needs the real results).
+  let lastEvidence: ProcessEvidence | null = null;
+  let lastLifecycle: PredicateResult | null = null;
+  /** The report of the last promote (the retirement gate reads it). */
+  let lastReport: ConvergenceReport | null = null;
+
   const engine = new UpgradeEngine({
     effects,
     host: opts.host,
     clock,
-    evaluatePredicates: async (evidence: ProcessEvidence, targetVersion: string) =>
-      evidence.version === targetVersion
-        ? null
-        : `live process reports ${evidence.version}, expected ${targetVersion}`,
+    evaluatePredicates: async (evidence: ProcessEvidence, targetVersion: string) => {
+      lastEvidence = evidence;
+      if (evidence.version !== targetVersion) {
+        return `live process reports ${evidence.version}, expected ${targetVersion}`;
+      }
+      if (opts.lifecycleSurfaces && opts.lifecycleSurfaces.length > 0) {
+        // host_lifecycle_converged: every declared surface must read back
+        // the artifact being promoted (projection ban: metadata cannot).
+        const allowlist = buildSurfaceAllowlist(
+          opts.lifecycleSurfaces.map((surface) => ({
+            surface,
+            expectedTarget: slotArtifactPath(opts.stateDir, "experiment"),
+          })),
+        );
+        const result = await evaluateLifecycleConvergence(allowlist, clock.nowMs());
+        lastLifecycle = result;
+        if (!result.passed) {
+          return `lifecycle surface ${result.source} did not converge: ${JSON.stringify(result.detail)}`;
+        }
+      }
+      return null;
+    },
   });
 
   async function currentVersion(): Promise<string> {
@@ -161,7 +198,14 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
       const outcome = await engine.upgrade({ version: release.version, bytesRef });
       if (outcome.result === "promoted") {
         await notify("promoted", { version: outcome.version });
-        return { result: "promoted", report: emptyReport(outcome.version) };
+        lastReport = buildConvergenceReport({
+          version: outcome.version,
+          evidence: lastEvidence,
+          lifecycle: lastLifecycle,
+          declaredSurfaces: (opts.lifecycleSurfaces ?? []).length,
+          nowMs: clock.nowMs(),
+        });
+        return { result: "promoted", report: lastReport };
       }
       if (outcome.result === "rolled-back") {
         await notify("rolled-back", { reason: outcome.reason });
@@ -200,6 +244,29 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
       );
     },
 
+    async retireLegacyManager(): Promise<"retired" | { held: string }> {
+      // Retire the legacy lifecycle manager ONLY after convergence passed;
+      // otherwise the machine would be left with no supervisor — a HOLD.
+      const report = lastReport;
+      const lifecycle = report?.hostLifecycleConverged ?? null;
+      if (lifecycle === null) {
+        return {
+          held:
+            "cannot retire the legacy lifecycle manager before host_lifecycle_converged passed" +
+            (report === null
+              ? " (no upgrade has converged yet)"
+              : " (this app declared no OS-lifecycle read-back surface, so it was never observed)"),
+        };
+      }
+      if (!lifecycle.passed) {
+        return {
+          held:
+            "cannot retire the legacy lifecycle manager before host_lifecycle_converged passed",
+        };
+      }
+      return "retired";
+    },
+
     async rollback(reason: string): Promise<void> {
       const lock = await acquireUpgradeLock(opts.stateDir, clock.nowMs());
       try {
@@ -221,29 +288,6 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
         rollbackReason: null,
         ...(slots.experiment === null ? {} : { experimentSignatureVerified: signatureVerified }),
       };
-    },
-  };
-}
-
-/**
- * The full ConvergenceReport lands with the converge/ wiring; until then a
- * promote reports the predicate that actually ran (binary_at_target via the
- * live-process probe) rather than inventing evidence it does not have.
- */
-function emptyReport(version: string): import("./converge/predicates.ts").ConvergenceReport {
-  const now = 0;
-  return {
-    binaryAtTarget: {
-      passed: true,
-      source: "host.healthProbe",
-      observedAtMs: now,
-      detail: { version },
-    },
-    hostLifecycleConverged: {
-      passed: true,
-      source: "not-yet-wired",
-      observedAtMs: now,
-      detail: { note: "lifecycle convergence lands with the platform surfaces (M3)" },
     },
   };
 }

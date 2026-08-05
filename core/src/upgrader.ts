@@ -43,6 +43,15 @@ export interface Upgrader {
   /** Explicit rollback while an experiment is live (pre-promote). */
   rollback(reason: string): Promise<void>;
 
+  /**
+   * Fail-closed retirement: retire the legacy lifecycle manager (e.g. an
+   * old OS auto-start entry) ONLY after host_lifecycle_converged passed on
+   * the last promote. Before that, retires are refused with a typed HOLD —
+   * removing the old supervisor without a converged replacement would
+   * leave the machine with nothing to start the service.
+   */
+  retireLegacyManager(): Promise<"retired" | { held: string }>;
+
   /** Current transaction + slot state, readable at any time. */
   state(): Promise<TxnState>;
 }

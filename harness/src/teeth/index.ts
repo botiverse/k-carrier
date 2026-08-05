@@ -10,3 +10,4 @@ import "./selfCheck.ts";
 import "./examples.ts";
 import "./blackbox.ts";
 import "./artifact.ts";
+import "./artifactM5.ts";

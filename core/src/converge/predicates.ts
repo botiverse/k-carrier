@@ -26,7 +26,18 @@ export interface PredicateResult {
 
 export interface ConvergenceReport {
   binaryAtTarget: PredicateResult;
-  hostLifecycleConverged: PredicateResult;
+  /**
+   * null = the app declared no OS-lifecycle read-back surface, so this was
+   * never observed. NOT the same as passing.
+   *
+   * It used to be reported as `{passed: true, source:
+   * "no-lifecycle-surfaces-configured"}`, which reads like a checked property
+   * and unlocked `retireLegacyManager()` -- retiring the machine's supervisor
+   * on the strength of something nobody looked at. Silence must never be
+   * spendable as evidence, so the absence has its own value in the type and
+   * every consumer has to handle it.
+   */
+  hostLifecycleConverged: PredicateResult | null;
 }
 
 /**

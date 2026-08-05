@@ -88,7 +88,11 @@ export function validateStatusOutput(text: string): string | null {
   const converge = o.ConvergenceReport as Record<string, unknown> | undefined;
   if (!converge) return "missing ConvergenceReport";
   for (const key of ["binaryAtTarget", "hostLifecycleConverged"] as const) {
-    const pred = converge[key] as Record<string, unknown> | undefined;
+    const pred = converge[key] as Record<string, unknown> | null | undefined;
+    // null is a legal, meaningful value for hostLifecycleConverged: the app
+    // declared no OS-lifecycle surface, so nothing was observed. Distinct from
+    // a missing field, which means the status shape itself is wrong.
+    if (pred === null && key === "hostLifecycleConverged") continue;
     if (!pred) return `ConvergenceReport.${key} missing`;
     if (typeof pred.passed !== "boolean") return `${key}.passed must be a boolean`;
     if (typeof pred.source !== "string") return `${key}.source must be a string`;
