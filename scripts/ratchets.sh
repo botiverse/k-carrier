@@ -28,5 +28,44 @@ done)
 hits=$(grep -rnE "process\.kill|SIGKILL|SIGTERM|SIGSTOP|fs\.rename|\brename\(" core/src --include='*.ts' | grep -v "core/src/platform/" | grep -v "\.test\.ts" | grep -vE ':[0-9]+:[[:space:]]*(\*|//)')
 [ -n "$hits" ] && { echo "$hits"; say "POSIX-shaped call outside core/src/platform/ (use the PlatformOps seam)"; }
 
+# 6) Every registered tooth must be in the TOOTH_IDS of a file that runs a
+#    known-green loop. The per-file COVERED_ELSEWHERE list is a CLAIM that some
+#    other file exercises the tooth, and nothing verified it -- so a tooth could
+#    be exempted everywhere and executed nowhere: registered, never run on a
+#    clean world, free to be permanently red.
+#
+#    Checking "the id appears in a file that has a known-green test" is NOT
+#    enough, and this was the first version's bug: the exemption list lives in
+#    such a file, so every exempted tooth looked covered by its own exemption.
+#    The id must be in the set that FEEDS the green loop.
+if ! python3 - <<'PYCHECK'
+import re, pathlib, sys
+
+teeth_src = [p for p in pathlib.Path("harness/src/teeth").glob("*.ts") if not p.name.endswith(".test.ts")]
+registered = set()
+for p in teeth_src:
+    registered |= set(re.findall(r'id:\s*"([a-z0-9.-]+)"', p.read_text()))
+
+covered = set()
+for p in pathlib.Path("harness/src").rglob("*.test.ts"):
+    text = p.read_text()
+    if "known-green" not in text:
+        continue
+    # any *TOOTH_IDS set in the file (m0.test.ts names its own M0_TOOTH_IDS)
+    for block in re.findall(r"const \w*TOOTH_IDS\w* = new Set\(\[(.*?)\]\)", text, re.S):
+        covered |= set(re.findall(r'"([a-z0-9.-]+)"', block))
+    # single-tooth files declare `const TOOTH_ID = "..."` instead of a Set
+    for one in re.findall(r'const \w*TOOTH_ID\w* = "([a-z0-9.-]+)"', text):
+        covered.add(one)
+
+missing = sorted(registered - covered)
+if missing:
+    print("uncovered: " + " ".join(missing))
+    sys.exit(1)
+PYCHECK
+then
+  say "tooth is registered but no known-green TOOTH_IDS names it"
+fi
+
 [ $fail -eq 0 ] && echo "ratchets: all green"
 exit $fail

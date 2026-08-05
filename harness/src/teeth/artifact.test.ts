@@ -38,6 +38,10 @@ import { checkDownloadResumesAfterKill } from "../artifact/m1Resume.ts";
  * that it IS exercised there -- not a way to skip it.
  */
 const COVERED_ELSEWHERE = new Set([
+  // m4 teeth run green in artifactM4.test.ts (split out for file size)
+  "m4.confirm-no-consent-zero-side-effects",
+  "m4.consent-binds-version",
+  "m4.notify-only-reports-installable-version",
   "fake-server.serves-verifiable-release",
   "fake-server.tamper-corrupt-byte",
   "fake-server.tamper-swap-sig",
@@ -78,10 +82,10 @@ const TOOTH_IDS = new Set([
   "m1.download-resumes-after-kill",
 ]);
 
-async function ctxFor(prefix: string): Promise<{ ctx: ToothContext; teardown: () => Promise<void> }> {
+const ctxFor = async (prefix: string): Promise<{ ctx: ToothContext; teardown: () => Promise<void> }> => {
   const sb = await createSandbox({ prefix });
   return { ctx: { profile: "service", sandboxDir: sb.dir }, teardown: sb.teardown };
-}
+};
 
 test("known-green: every artifact/milestone tooth passes on a clean sandbox", async () => {
   const teeth = allTeeth().filter((t) => TOOTH_IDS.has(t.id));
@@ -203,8 +207,7 @@ test("known-red: m3.service-upgrade catches an upgrade that never lands (both ho
 test("known-red: m3.service-rollback catches a promoted good version (both host shapes)", async () => {
   const { ctx, teardown } = await ctxFor("red-m3-rollback");
   try {
-    // mutation: a GOOD version is served — it promotes, so the rollback
-    // expectation goes RED on both host shapes
+    // mutation: a GOOD version is served — it promotes
     await assert.rejects(checkM3ServiceRollback(ctx, { serveGoodVersion: true }), /must roll back/);
   } finally {
     await teardown();
@@ -269,17 +272,12 @@ test("registration discipline: profiles/layers/kind/mustRed all answered", () =>
     assert.ok(tooth.mustRed.length > 0, `${tooth.id}: must-red`);
     for (const mr of tooth.mustRed) {
       assert.ok(mr.mutate.trim(), `${tooth.id}: mutation text`);
-      assert.ok(
-        mr.caughtOnlyBy === "this" ||
-          (mr.caughtOnlyBy.alsoCaughtBy.trim() && mr.caughtOnlyBy.whyStillNeeded.trim()),
-        `${tooth.id}: caughtOnlyBy answered`,
-      );
+      const answered = mr.caughtOnlyBy === "this" || (mr.caughtOnlyBy.alsoCaughtBy.trim() && mr.caughtOnlyBy.whyStillNeeded.trim());
+      assert.ok(answered, `${tooth.id}: caughtOnlyBy answered`);
     }
   }
   const exported = new Map(exportForMutationRunner().map((e) => [e.id, e]));
-  for (const id of TOOTH_IDS) {
-    assert.ok(exported.has(id), `${id} must be in the mutation-runner export`);
-  }
+  for (const id of TOOTH_IDS) assert.ok(exported.has(id), `${id} must be in the mutation-runner export`);
 });
 
 test("tooth run functions are the exported checks (single source of truth)", () => {
