@@ -9,7 +9,7 @@
  *    declared by the platform adapter (e.g. macOS login-item via Electron
  *    `app.getLoginItemSettings().openAtLogin`). A surface that cannot be
  *    read back on a real machine may not claim same-source.
- *  - PROJECTION BAN: version strings, channel names, upgrade counts and
+ *  - PROJECTION BAN: version strings, release metadata, upgrade counts and
  *    any metadata field must NOT satisfy either predicate. The teeth
  *    feed true metadata + false surfaces and require non-green.
  *  - FAIL-CLOSED RETIREMENT: legacy lifecycle managers (e.g. an old OS

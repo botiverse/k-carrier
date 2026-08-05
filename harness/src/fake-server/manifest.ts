@@ -35,16 +35,13 @@ export interface Manifest {
   /** Platform tag (e.g. "darwin-arm64") -> binary target. */
   targets: Record<string, ManifestTarget>;
   /** Track the release was published under (latest | alpha). Optional. */
-  channel?: "latest" | "alpha";
 }
 
 export function buildManifest(
   version: string,
   targets: Record<string, ManifestTarget>,
-  channel?: "latest" | "alpha",
 ): Manifest {
   const manifest: Manifest = { version, targets };
-  if (channel !== undefined) manifest.channel = channel;
   return manifest;
 }
 

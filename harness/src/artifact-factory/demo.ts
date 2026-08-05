@@ -14,12 +14,12 @@
  * teeth, known-red and adversarial samples).
  *
  * K_RELEASE_BASE is the config surface for the fake-server URL — a real
- * app configures its releaseBase; the harness just points it at localhost.
+ * app configures its own release source; the harness points it at localhost.
  */
 export const DEMO_SOURCE = `#!/usr/bin/env node
 // K demo binary — stamped by artifact-factory (harness-design §1.77).
 // Black-box cli contract (§1.76): --version / self upgrade. K_RELEASE_BASE
-// env = releaseBase config (localhost in harness).
+// env = this demo app's own release-source config (localhost in harness).
 "use strict";
 const VERSION = "__K_VERSION__";
 const BEHAVIOR = "__K_BEHAVIOR__";
