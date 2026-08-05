@@ -105,7 +105,7 @@ Root private keys stay offline; root public keys are compiled into your app
 Run the harness suite against YOUR adapter (not just the built-in fake host):
 
 ```
-carrier-harness --adapter ./dist/myHost.js
+k-harness --adapter ./dist/myHost.js
 ```
 
 Same teeth the framework tests itself with: crash-injection per state-machine
