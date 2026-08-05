@@ -49,3 +49,39 @@ test("human receipt lines state the result and the check marks", () => {
   assert.ok(lines.some((l) => l.includes("✖ b") && l.includes("HARNESS_EMPTY_SELECTION")));
   assert.ok(lines.some((l) => l.includes("result: fail")));
 });
+
+test("THE POINT: a receipt where nothing executed is not a pass", () => {
+  // All-`na` is the empty suite in disguise: checks.length looks healthy while
+  // zero of them verified anything. Found while reviewing adapter mode, where
+  // an adapter that declares a marker can drive every check to `na`.
+  const receipt = buildReceipt({
+    mode: "adapter",
+    profile: "service",
+    target: "./somewhere",
+    checks: [
+      { id: "a", status: "na", error: null, durationMs: 0 },
+      { id: "b", status: "na", error: null, durationMs: 0 },
+    ],
+    startedAtMs: 0,
+    durationMs: 0,
+  });
+  assert.equal(receipt.summary.na, 2);
+  assert.equal(receipt.result, "fail", "zero executed checks cannot be green");
+});
+
+test("a receipt with a real pass and some inapplicable checks IS a pass", () => {
+  // The counterpart: `na` is legitimate for checks that do not apply to a
+  // profile, so it must not poison an otherwise real result.
+  const receipt = buildReceipt({
+    mode: "adapter",
+    profile: "service",
+    target: "./somewhere",
+    checks: [
+      { id: "a", status: "pass", error: null, durationMs: 1 },
+      { id: "b", status: "na", error: null, durationMs: 0 },
+    ],
+    startedAtMs: 0,
+    durationMs: 0,
+  });
+  assert.equal(receipt.result, "pass");
+});
