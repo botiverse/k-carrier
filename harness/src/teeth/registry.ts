@@ -19,7 +19,35 @@
  *    rule: a cli-profile tooth exercising L2 is a registration error)
  */
 
-export type Profile = "swap" | "service" | "hosted";
+/**
+ * A profile is a PROCESS MODEL, defined by cardinality: how many live
+ * incarnations K itself manages.
+ *
+ *   swap     0 — K replaces bytes and touches no process. The user may run N
+ *                concurrently at mixed versions; that is normal and invisible
+ *                to K. (A one-shot CLI and a long-running interactive session
+ *                are the SAME here — surprising, but correct: neither has a
+ *                process K hands over.)
+ *   service  1 — K stops one incarnation and starts another, briefly 0.
+ *
+ * There is no third model. Workload preservation, OS lifecycle convergence and
+ * fleet drive are CAPABILITIES an adopter opts into, not another kind of
+ * process — bundling them as a profile confused "what the app does" with "what
+ * K does", which is not K's business.
+ */
+export type Profile = "swap" | "service";
+
+/** Opt-in capabilities, declared separately from the process model. */
+export type Capability =
+  | "workload-preservation" // quiesce/resume must round-trip (L4-ish host duty)
+  | "lifecycle-convergence" // OS lifecycle surfaces must read back (L3 platform)
+  | "fleet-drive";          // server-pushed commands, policy-gated (L5)
+
+export const ALL_CAPABILITIES: readonly Capability[] = [
+  "workload-preservation",
+  "lifecycle-convergence",
+  "fleet-drive",
+];
 
 /** L1p = the simplified cli-profile slot model ("swap is promote"). */
 export type Layer = "L0" | "L0.5" | "L1p" | "L1" | "L2" | "L3" | "L4" | "L5";
@@ -37,8 +65,7 @@ export type Layer = "L0" | "L0.5" | "L1p" | "L1" | "L2" | "L3" | "L4" | "L5";
  */
 export const PROFILE_LAYERS: Record<Profile, ReadonlySet<Layer>> = {
   swap: new Set<Layer>(["L0", "L0.5", "L1p"]),
-  service: new Set<Layer>(["L0", "L0.5", "L1p", "L1", "L2", "L3"]),
-  hosted: new Set<Layer>(["L0", "L0.5", "L1p", "L1", "L2", "L3", "L4", "L5"]),
+  service: new Set<Layer>(["L0", "L0.5", "L1p", "L1", "L2", "L3", "L4", "L5"]),
 };
 
 export type ToothKind =
@@ -65,6 +92,11 @@ export interface ToothContext {
 export interface ToothSpec {
   id: string;
   profiles: Profile[];
+  /**
+   * Only runs when the adopter has opted into this capability. Absent = the
+   * tooth applies to every adopter at these profiles.
+   */
+  requiresCapability?: Capability;
   layers: Layer[];
   kind: ToothKind;
   mustRed: MustRed[];
@@ -151,9 +183,20 @@ export function registerTooth(spec: ToothSpec): void {
   registry.set(spec.id, spec);
 }
 
-/** Teeth that run for a given profile (tier-filtered execution set). */
-export function teethFor(profile: Profile): ToothSpec[] {
-  return [...registry.values()].filter((t) => t.profiles.includes(profile));
+/**
+ * Teeth that run for a profile and a set of opted-in capabilities.
+ * Capabilities default to all, so a caller that does not care gets the
+ * broadest set rather than silently running less than it thinks.
+ */
+export function teethFor(
+  profile: Profile,
+  capabilities: readonly Capability[] = ALL_CAPABILITIES,
+): ToothSpec[] {
+  return [...registry.values()].filter(
+    (t) =>
+      t.profiles.includes(profile) &&
+      (t.requiresCapability === undefined || capabilities.includes(t.requiresCapability)),
+  );
 }
 
 export function allTeeth(): ToothSpec[] {

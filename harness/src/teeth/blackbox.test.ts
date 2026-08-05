@@ -12,7 +12,7 @@ const TOOTH_ID = "blackbox.missing-target-fails";
 
 async function ctxFor(prefix: string): Promise<{ ctx: ToothContext; teardown: () => Promise<void> }> {
   const sb = await createSandbox({ prefix });
-  return { ctx: { profile: "hosted", sandboxDir: sb.dir }, teardown: sb.teardown };
+  return { ctx: { profile: "service", sandboxDir: sb.dir }, teardown: sb.teardown };
 }
 
 test("known-green: a binary without k.target.ts fails with BLACKBOX_TARGET_REQUIRED", async () => {

@@ -22,7 +22,7 @@ import {
 
 registerTooth({
   id: "fake-server.serves-verifiable-release",
-  profiles: ["swap", "service", "hosted"],
+  profiles: ["swap", "service"],
   layers: ["L0", "L0.5"],
   kind: { kind: "invariant" },
   mustRed: [
@@ -44,7 +44,7 @@ registerTooth({
 
 registerTooth({
   id: "fake-server.tamper-corrupt-byte",
-  profiles: ["swap", "service", "hosted"],
+  profiles: ["swap", "service"],
   layers: ["L0", "L0.5"],
   kind: { kind: "invariant" },
   mustRed: [
@@ -58,7 +58,7 @@ registerTooth({
 
 registerTooth({
   id: "fake-server.tamper-swap-sig",
-  profiles: ["swap", "service", "hosted"],
+  profiles: ["swap", "service"],
   layers: ["L0", "L0.5"],
   kind: { kind: "invariant" },
   mustRed: [
@@ -72,7 +72,7 @@ registerTooth({
 
 registerTooth({
   id: "fake-server.tamper-serve-older-version",
-  profiles: ["swap", "service", "hosted"],
+  profiles: ["swap", "service"],
   layers: ["L0", "L0.5"],
   kind: { kind: "invariant" },
   mustRed: [
@@ -86,7 +86,7 @@ registerTooth({
 
 registerTooth({
   id: "fake-server.tamper-drop-file",
-  profiles: ["swap", "service", "hosted"],
+  profiles: ["swap", "service"],
   layers: ["L0", "L0.5"],
   kind: { kind: "invariant" },
   mustRed: [
@@ -100,7 +100,7 @@ registerTooth({
 
 registerTooth({
   id: "scenario.sandbox-verify-dead",
-  profiles: ["swap", "service", "hosted"],
+  profiles: ["swap", "service"],
   layers: ["L0"],
   kind: { kind: "invariant" },
   mustRed: [
@@ -114,7 +114,7 @@ registerTooth({
 
 registerTooth({
   id: "scenario.sandbox-isolation",
-  profiles: ["swap", "service", "hosted"],
+  profiles: ["swap", "service"],
   layers: ["L0"],
   kind: { kind: "invariant" },
   mustRed: [

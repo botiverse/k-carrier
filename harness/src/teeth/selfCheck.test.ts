@@ -14,13 +14,13 @@ import {
 } from "./registry.ts";
 import { checkTierHasTeeth } from "./selfCheck.ts";
 
-const SELF_CHECK_IDS = ["harness.teeth-present-swap", "harness.teeth-present-service", "harness.teeth-present-hosted"];
+const SELF_CHECK_IDS = ["harness.teeth-present-swap", "harness.teeth-present-service"];
 
-const ctx: ToothContext = { profile: "hosted", sandboxDir: "" };
+const ctx: ToothContext = { profile: "service", sandboxDir: "" };
 
 test("known-green: each profile tier has real teeth, self-check teeth pass", async () => {
   const teeth = allTeeth().filter((t) => SELF_CHECK_IDS.includes(t.id));
-  assert.equal(teeth.length, 3, "all three self-check teeth must be registered");
+  assert.equal(teeth.length, 2, "one self-check tooth per process model (swap, service)");
   for (const tooth of teeth) {
     await tooth.run(ctx); // must not throw
     assert.equal(tooth.profiles.length, 1, `${tooth.id}: exactly one profile`);
@@ -28,7 +28,7 @@ test("known-green: each profile tier has real teeth, self-check teeth pass", asy
     assert.ok(tooth.mustRed.length > 0, `${tooth.id}: must-red`);
   }
   // and each tier genuinely has real (non-harness) teeth
-  for (const profile of ["swap", "service", "hosted"] as const) {
+  for (const profile of ["swap", "service"] as const) {
     assert.ok(
       teethFor(profile).some((t) => !t.id.startsWith("harness.")),
       `${profile} tier must contain real teeth`,

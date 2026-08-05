@@ -44,7 +44,7 @@ registerTooth({
 
 registerTooth({
   id: "examples.hosted-service-adapter",
-  profiles: ["hosted"],
+  profiles: ["service"],
   layers: ["L2", "L3"],
   kind: { kind: "invariant" },
   mustRed: [

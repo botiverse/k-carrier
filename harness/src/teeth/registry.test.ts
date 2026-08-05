@@ -14,7 +14,7 @@ import {
 function validSpec(overrides: Partial<ToothSpec> = {}): ToothSpec {
   return {
     id: "txn.no-dual-run",
-    profiles: ["service", "hosted"],
+    profiles: ["service"],
     layers: ["L1", "L2"],
     kind: { kind: "invariant" },
     mustRed: [{ mutate: "skip journal fsync before handover", caughtOnlyBy: "this" }],
@@ -28,7 +28,7 @@ beforeEach(() => clearRegistry());
 test("registers a fully-declared tooth and tier-filters it", () => {
   registerTooth(validSpec());
   assert.equal(teethFor("service").length, 1);
-  assert.equal(teethFor("hosted").length, 1);
+  assert.equal(teethFor("service").length, 1);
   assert.equal(teethFor("swap").length, 0);
 });
 
@@ -104,7 +104,7 @@ test("mutation-runner export carries every tooth's must-red list", () => {
   registerTooth(
     validSpec({
       id: "converge.projection-ban",
-      profiles: ["service", "hosted"],
+      profiles: ["service"],
       layers: ["L3"],
       mustRed: [
         { mutate: "let manifest version green the predicate", caughtOnlyBy: "this" },

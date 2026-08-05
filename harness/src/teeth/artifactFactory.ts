@@ -10,7 +10,7 @@ import { checkDeterministicBuild, checkOkArtifactRuns } from "../artifact-factor
 
 registerTooth({
   id: "artifact-factory.deterministic-build",
-  profiles: ["swap", "service", "hosted"],
+  profiles: ["swap", "service"],
   layers: ["L0", "L0.5"],
   kind: { kind: "invariant" },
   mustRed: [
@@ -24,7 +24,7 @@ registerTooth({
 
 registerTooth({
   id: "artifact-factory.ok-artifact-runs",
-  profiles: ["swap", "service", "hosted"],
+  profiles: ["swap", "service"],
   layers: ["L0", "L0.5"],
   kind: { kind: "invariant" },
   mustRed: [

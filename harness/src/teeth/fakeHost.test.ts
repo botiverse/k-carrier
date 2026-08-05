@@ -29,7 +29,7 @@ const TOOTH_IDS = new Set([
 
 async function ctxFor(prefix: string): Promise<{ ctx: ToothContext; teardown: () => Promise<void> }> {
   const sb = await createSandbox({ prefix });
-  return { ctx: { profile: "hosted", sandboxDir: sb.dir }, teardown: sb.teardown };
+  return { ctx: { profile: "service", sandboxDir: sb.dir }, teardown: sb.teardown };
 }
 
 // ---------------------------------------------------------------------------
@@ -135,7 +135,7 @@ test("fake-host teeth are daemon/managed only (L2/L3 is out of cli tier)", () =>
   const teeth = allTeeth().filter((t) => TOOTH_IDS.has(t.id));
   for (const tooth of teeth) {
     assert.ok(!tooth.profiles.includes("swap"), `${tooth.id} must not tag cli (tier boundary)`);
-    assert.ok(tooth.profiles.includes("service") && tooth.profiles.includes("hosted"));
+    assert.ok(tooth.profiles.includes("service") && tooth.profiles.includes("service"));
   }
 });
 

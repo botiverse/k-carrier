@@ -36,6 +36,9 @@ export const posixOps: PlatformOps = {
   killProcess(pid) {
     process.kill(pid, "SIGKILL");
   },
+  async renamePath(from, to) {
+    await fs.rename(from, to);
+  },
   async makeExecutable(filePath) {
     await fs.chmod(filePath, 0o755);
   },

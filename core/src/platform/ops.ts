@@ -24,6 +24,12 @@ export interface PlatformOps {
   killProcess(pid: number): void;
   /** Mark a file executable where the concept exists; a no-op where it does not. */
   makeExecutable(filePath: string): Promise<void>;
+  /**
+   * Move a path (file or directory) into place. Used to publish a slot
+   * atomically. Separate from swapExecutable because that one is about a
+   * RUNNING image; this one is plain state.
+   */
+  renamePath(from: string, to: string): Promise<void>;
   /** Identifier used to select a manifest target, e.g. "linux-x64". */
   platformKey(): string;
 }

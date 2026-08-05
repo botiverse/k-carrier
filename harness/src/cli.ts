@@ -2,11 +2,11 @@
 /**
  * k-harness — the harness CLI (harness-design §1.75/§1.76).
  *
- *   k-harness --profile <swap|service|hosted>          run the tier-filtered teeth
+ *   k-harness --profile <swap|service>          run the tier-filtered teeth
  *   k-harness --bin ./mytool [--profile swap]          black-box: drive the real
  *                                                     binary through its declared
  *                                                     commands (k.target.ts REQUIRED)
- *   k-harness --adapter <path> [--profile hosted]    run the adopter contract subset
+ *   k-harness --adapter <path> [--profile service]    run the adopter contract subset
  *                                                     against an external adapter
  *   k-harness --json                                  machine-readable receipt
  *   k-harness --target-version <v>                    version served by --bin mode
@@ -25,9 +25,9 @@ import type { Profile } from "./teeth/registry.ts";
 const USAGE = `k-harness — K acceptance harness
 
 Usage:
-  k-harness --profile <swap|service|hosted> [--json]
+  k-harness --profile <swap|service> [--json]
   k-harness --bin <path-to-binary> [--profile swap] [--target-version <v>] [--target <path>] [--json]
-  k-harness --adapter <path-to-module> [--profile hosted] [--json]
+  k-harness --adapter <path-to-module> [--profile service] [--json]
   k-harness --help
 
 Options:
@@ -61,8 +61,8 @@ function parseArgs(argv: string[]): {
     switch (arg) {
       case "--profile": {
         const v = next();
-        if (v !== "swap" && v !== "service" && v !== "hosted") {
-          throw new Error(`--profile must be swap|service|hosted, got ${v}`);
+        if (v !== "swap" && v !== "service" && v !== "service") {
+          throw new Error(`--profile must be swap|service, got ${v}`);
         }
         out.profile = v;
         break;
@@ -101,7 +101,7 @@ async function main(): Promise<number> {
   if (args.binPath && args.adapterPath) throw new Error("--bin and --adapter are mutually exclusive");
   if (!args.binPath && !args.adapterPath && !args.profile) throw new Error("need one of --profile, --bin, --adapter");
 
-  const profile: Profile = args.profile ?? (args.binPath ? "swap" : "hosted");
+  const profile: Profile = args.profile ?? (args.binPath ? "swap" : "service");
 
   let receipt;
   if (args.binPath) {

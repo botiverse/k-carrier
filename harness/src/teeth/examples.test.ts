@@ -22,7 +22,7 @@ const TOOTH_IDS = new Set([
 
 async function ctxFor(prefix: string): Promise<{ ctx: ToothContext; teardown: () => Promise<void> }> {
   const sb = await createSandbox({ prefix });
-  return { ctx: { profile: "hosted", sandboxDir: sb.dir }, teardown: sb.teardown };
+  return { ctx: { profile: "service", sandboxDir: sb.dir }, teardown: sb.teardown };
 }
 
 // ---------------------------------------------------------------------------
@@ -142,7 +142,7 @@ test("each examples tooth is tagged to exactly its own profile tier", () => {
   const byId = new Map(allTeeth().map((t) => [t.id, t] as const));
   assert.deepEqual(byId.get("examples.swap-tool-blackbox")!.profiles, ["swap"]);
   assert.deepEqual(byId.get("examples.service-daemon-contract")!.profiles, ["service"]);
-  assert.deepEqual(byId.get("examples.hosted-service-adapter")!.profiles, ["hosted"]);
+  assert.deepEqual(byId.get("examples.hosted-service-adapter")!.profiles, ["service"]);
 });
 
 test("tooth run functions are the exported checks (single source of truth)", () => {

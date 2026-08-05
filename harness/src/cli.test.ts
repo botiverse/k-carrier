@@ -25,7 +25,7 @@ test("--profile swap runs the cli-tier teeth and exits 0", async () => {
 });
 
 test("--profile hosted runs the daemon/managed teeth too", async () => {
-  const { code, stdout } = await runCli(["--profile", "hosted", "--json"]);
+  const { code, stdout } = await runCli(["--profile", "service", "--json"]);
   assert.equal(code, 0);
   const receipt = JSON.parse(stdout) as {
     checks: Array<{ id: string; status: string }>;

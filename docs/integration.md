@@ -82,77 +82,34 @@ manager owns upgrades. K detects this and refuses to self-upgrade a managed
 copy — returning a typed `held: managed-elsewhere` instead of silently
 creating a version mismatch.
 
-## 3. Tiered adoption: start tiny, grow without switching
+## 3. Adoption: two process models, plus capabilities you opt into
 
-You do **not** need all of that on day one. K has three adoption profiles named after PROCESS MODELS (not program
-types — nobody should have to decide whether their tool 'is a daemon');
-each is a strict superset of the previous, so an app can start at the
-smallest and grow later **without changing framework**.
+A profile is a **process model**, and the model is defined by one number:
+**how many live incarnations K itself manages.**
 
-### Profile `swap` — no live process to hand over (5 minutes)
+| Profile | K-managed live processes | Who hands over | Examples |
+|---|---|---|---|
+| **`swap`** | **0** | nobody — new bytes take effect on the next start | a one-shot CLI, `rustup`, **and a long-running interactive session like Claude Code** |
+| **`service`** | **1** (briefly 0 mid-handover) | K stops the old, starts the new, and proves it | a resident daemon, Raft Computer |
 
-For a program with **no resident process**, most of the hard parts vanish:
-nothing to hand off, nothing to keep alive. You implement **nothing** —
-there is a built-in no-op host (`NoResidentHost`, the default):
+That a quick CLI and an hours-long agent session share a profile is surprising
+at first and correct on reflection: **neither has a process K hands over.**
+Several old-version processes may keep running in the `swap` model — normal,
+and invisible to K.
 
-```ts
-const upgrader = createUpgrader({
-  source: staticManifestSource({ baseUrl: "https://cdn.example.com/mytool/stable" }),
-  rootKeys: EMBEDDED_ROOT_KEYS,
-  stateDir: "~/.mytool/k",
-});
-// wire it to a `mytool self upgrade` subcommand:
-const outcome = await upgrader.upgrade();          // policy: what should I be on?
-// and, if you let users choose a version:
-const pinned  = await upgrader.upgradeTo("1.2.3"); // named: exactly this one
-```
-
-You get what a `self_update`-style library gives you, **plus** the signature
-chain, the crash-safe journal, and an install-provenance record — for free.
-(Naming tip: if your CLI also manages *other* upgradable things, call the
-command `self upgrade`, like `rustup self update` — a bare `upgrade` reads
-as "upgrade the thing I manage".)
-
-> **Process model (v0): exclusive handoff.** At most one live incarnation of
-> the K-managed service exists at a time: quiesce → stop old → start new →
-> prove. The downtime window is by construction; K makes it short rather than
-> pretending it isn't there. Zero-downtime overlap (start new, drain old, stop
-> old) is a *different* model — it has a legitimate "both alive" state, needs a
-> drain contract, and changes which invariants hold — and K does not implement
-> it. In the `swap` profile none of this applies: several old-version processes
-> may keep running, and K neither tracks nor touches them.
-
-### Profile `service` — one live incarnation, handed over
-
-Now there is a live process to replace, so you implement **three real
-methods** (`quiesce`/`resume` may stay no-ops):
+There is **no third model**. Workload preservation, OS lifecycle convergence
+and fleet drive are **capabilities** you opt into on top of `service`; bundling
+them into a "profile" confused *what your app does* with *what K does*, and
+what your app does is none of K's business.
 
 ```ts
-class MyHost implements HostAdapter {
-  async quiesce() {}                    // nothing to park
-  async stop(slot)  { /* stop the service for that slot */ }
-  async start(slot) { /* start from that slot's binaries */ }
-  async healthProbe() { /* ask the LIVE process: {version, pid, startId} */ }
-  async resume() {}
-}
+// a service that also wants its sessions preserved and its OS lifecycle proven
+createUpgrader({ host, source, policy: "auto", /* ... */ });
+// capabilities are declared by implementing the corresponding host duties:
+//   quiesce/resume round-trip      -> workload-preservation
+//   named readback surfaces        -> lifecycle-convergence
+//   attach the drive module        -> fleet-drive
 ```
-
-You get the full two-slot transaction: staged download, trial run,
-promote-or-rollback, crash recovery at any point, and process-level proof
-(`binary_at_target`) that the new version is actually the one running.
-
-### Profile `hosted` — a service that also holds others' work (the full stack)
-
-For hosts like Raft Computer — live sessions that must survive the upgrade,
-plus OS state (launch-at-login, supervisors) that must converge:
-
-- implement all five `HostAdapter` methods; `quiesce`/`resume` must satisfy
-  the equivalence contract (workload state identical before/after — **also
-  when resuming after a rollback**);
-- register your platform's **named readback surfaces** so
-  `host_lifecycle_converged` covers OS lifecycle state;
-- optionally attach `drive` for server-pushed upgrades and fleet state
-  readout — every remote command still passes the local policy gate.
 
 ## 3.5 Responsibility boundary: what K guarantees vs what you must
 

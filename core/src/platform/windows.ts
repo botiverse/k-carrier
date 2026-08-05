@@ -21,6 +21,12 @@ export const windowsOps: PlatformOps = {
   killProcess() {
     throw new PlatformUnsupportedError("killProcess", "win32");
   },
+  async renamePath(from, to) {
+    // Plain state moves DO work on Windows (unlike replacing a running .exe),
+    // so this one is implemented rather than refused.
+    const { promises: fs } = await import("node:fs");
+    await fs.rename(from, to);
+  },
   async makeExecutable() {
     // No executable bit on Windows; nothing to do (this one IS a real no-op).
     await Promise.resolve();
