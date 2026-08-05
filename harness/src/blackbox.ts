@@ -2,16 +2,16 @@
  * Black-box `--bin` mode (harness-design §1.75/§1.76).
  *
  * Given a REAL binary (`k-harness --bin ./mytool`), the harness:
- *  1. reads the binary's `k.json` command declarations (defaults: version
- *     `["--version"]`, selfUpgrade `["self","upgrade"]` when absent);
+ *  1. loads the binary's `k.target.ts` command declarations (REQUIRED —
+ *     missing = typed FAIL, the harness never guesses commands);
  *  2. starts a fake-server and publishes a target release via
  *     artifact-factory (the fixture loop);
  *  3. drives the binary through its declared commands and asserts from
  *     OUTSIDE: exit codes, on-disk bytes, next-run version.
  *
- * Contract checks are typed FAILs (CONTRACT_* codes) — they are mechanical
- * acceptance, NOT tooth-review material (§1.76 ③: k.json commands that
- * don't run / status output that violates the schema fail directly).
+ * Contract checks are typed FAILs (CONTRACT_* / BLACKBOX_* codes) — they
+ * are mechanical acceptance, NOT tooth-review material (§1.76 ③: commands
+ * that don't run / status output that violates the schema fail directly).
  *
  * Config surface: the binary reads its releaseBase from the K_RELEASE_BASE
  * env var (the demo's contract; real apps wire their own config).
@@ -25,9 +25,9 @@ import { FakeServer } from "./fake-server/server.ts";
 import { ArtifactFactory } from "./artifact-factory/factory.ts";
 import { runCommand } from "./artifact-factory/run.ts";
 import { sha256Hex } from "./fake-server/manifest.ts";
-import { loadKJson, type KJson } from "./kjson.ts";
+import { loadTarget, type BlackBoxTarget } from "./target.ts";
 
-export { loadKJson, defaultKJson, type KJson, DEFAULT_VERSION_ARGS, DEFAULT_SELF_UPGRADE_ARGS } from "./kjson.ts";
+export { loadTarget, type BlackBoxTarget, TARGET_FILE } from "./target.ts";
 
 export const DEFAULT_TARGET_VERSION = "2.0.0";
 export const RELEASE_BASE_ENV = "K_RELEASE_BASE";
@@ -104,6 +104,8 @@ export interface BinModeOptions {
   binPath: string;
   profile: Profile;
   targetVersion?: string;
+  /** Explicit --target <path>; defaults to <binDir>/k.target.ts. */
+  targetPath?: string;
   /** Injectable server for tests that want a pre-seeded release store. */
   server?: FakeServer;
 }
@@ -161,22 +163,21 @@ export async function runBinMode(opts: BinModeOptions): Promise<Receipt> {
 
     if (startedServer) await server.start();
 
-    // k.json declaration check — malformed declarations are a typed FAIL.
-    const tKJson = Date.now();
-    let kjson: KJson;
+    // Target declaration check — REQUIRED, no guessing: a missing or
+    // invalid k.target.ts is a typed FAIL that stops the run.
+    const tTarget = Date.now();
+    let target: BlackBoxTarget;
     try {
-      kjson = await loadKJson(binDir);
-      checks.push(passCheck("contract.kjson-declarations", tKJson));
+      const loadOpts: { binDir: string; explicitPath?: string } = { binDir };
+      if (opts.targetPath !== undefined) loadOpts.explicitPath = opts.targetPath;
+      target = (await loadTarget(loadOpts)).target;
+      checks.push(passCheck("contract.target-declarations", tTarget));
     } catch (err) {
-      checks.push(
-        failCheck(
-          "contract.kjson-declarations",
-          "CONTRACT_KJSON_MALFORMED",
-          (err as Error).message.replace(/^CONTRACT_KJSON_MALFORMED: ?/, ""),
-          tKJson,
-        ),
-      );
-      // The declared commands cannot be trusted; stop with the typed failure.
+      const msg = (err as Error).message;
+      const code = msg.startsWith("BLACKBOX_TARGET_REQUIRED")
+        ? "BLACKBOX_TARGET_REQUIRED"
+        : "BLACKBOX_TARGET_INVALID";
+      checks.push(failCheck("contract.target-declarations", code, msg, tTarget));
       return buildReceipt({
         mode: "bin",
         profile: opts.profile,
@@ -195,12 +196,12 @@ export async function runBinMode(opts: BinModeOptions): Promise<Receipt> {
       store: server.store,
     });
 
-    const env = { [RELEASE_BASE_ENV]: server.url };
+    const env = { ...target.env, [RELEASE_BASE_ENV]: server.url };
 
     // Contract 1: the declared version command runs and prints a version.
     {
       const t0 = Date.now();
-      const r = await runDeclared(binPath, kjson.version ?? [], env);
+      const r = await runDeclared(binPath, target.version, env);
       if (r.timedOut) {
         checks.push(failCheck("contract.version-command", "CONTRACT_CMD_TIMEOUT", "version command timed out", t0));
       } else if (r.code !== 0) {
@@ -216,7 +217,7 @@ export async function runBinMode(opts: BinModeOptions): Promise<Receipt> {
     {
       const t0 = Date.now();
       const before = await fileSha256(binPath);
-      const r = await runDeclared(binPath, kjson.selfUpgrade ?? [], env);
+      const r = await runDeclared(binPath, target.selfUpgrade, env);
       const after = await fileSha256(binPath);
       if (r.timedOut) {
         checks.push(failCheck("contract.self-upgrade", "CONTRACT_CMD_TIMEOUT", "self upgrade timed out", t0));
@@ -225,7 +226,7 @@ export async function runBinMode(opts: BinModeOptions): Promise<Receipt> {
       } else if (after === before) {
         checks.push(failCheck("contract.self-upgrade", "CONTRACT_UPGRADE_SELF_UNCHANGED", "binary bytes unchanged after upgrade", t0));
       } else {
-        const v = await runDeclared(binPath, kjson.version ?? [], env);
+        const v = await runDeclared(binPath, target.version, env);
         if (v.timedOut || v.code !== 0) {
           checks.push(failCheck("contract.self-upgrade", "CONTRACT_NEXT_RUN_VERSION", `next-run version command failed (exit ${v.code})`, t0));
         } else if (v.stdout.trim() === targetVersion) {
@@ -237,9 +238,9 @@ export async function runBinMode(opts: BinModeOptions): Promise<Receipt> {
     }
 
     // Contract 3: status schema — only when the binary declares status.
-    if (kjson.status) {
+    if (target.status) {
       const t0 = Date.now();
-      const r = await runDeclared(binPath, kjson.status, env);
+      const r = await runDeclared(binPath, target.status, env);
       const schemaError = r.timedOut
         ? "status command timed out"
         : r.code === 0

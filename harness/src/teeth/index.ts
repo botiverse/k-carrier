@@ -8,3 +8,4 @@ import "./artifactFactory.ts";
 import "./fakeHost.ts";
 import "./selfCheck.ts";
 import "./examples.ts";
+import "./blackbox.ts";

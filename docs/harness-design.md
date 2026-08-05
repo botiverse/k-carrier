@@ -100,15 +100,22 @@ harness 有两个平面，**默认用外面那个**：
 - `statusCommand()` → **问活进程**（走宿主 socket，同 same-PID 纪律）输出机读 JSON：`{ProcessEvidence, TxnState, ConvergenceReport}` —— 就是 core 已有的三个类型，不另造 schema；
 - `selfUpgradeCommand()` → 包装 `upgrader.upgrade()`，outcome 四态按结构化输出。
 
-**② app 声明命令名**（K 不规定你的 CLI 长相，只要能声明怎么调）：仓库放一个 `k.json`：
-```json
-{ "version": ["--version"], "status": ["k-status", "--json"], "selfUpgrade": ["self", "upgrade"] }
+**② app 声明命令名**（K 不规定你的 CLI 长相，但声明是**必须的**——harness 不猜命令，缺声明立即 typed FAIL）：二进制旁边放一个 `k.target.ts`（或 `--target <path>`），default export typed `BlackBoxTarget`，命令名全部显式声明：
+```ts
+import type { BlackBoxTarget } from "@k-carrier/harness";
+
+export default {
+  version: ["--version"],
+  status: ["k-status", "--json"],      // 可选
+  selfUpgrade: ["self", "upgrade"],
+  env: { K_RELEASE_BASE: "..." },       // 可选
+} satisfies BlackBoxTarget;
 ```
-`k-harness --bin ./mytool` 读它来驱动；没有 `k.json` 时按默认约定探测（`--version` / `self upgrade`）。
+`k-harness --bin ./mytool` 动态 import 它来驱动（node 原生跑 TS，不用 build）。**没有 `k.target.ts` = 立即 typed FAIL（`BLACKBOX_TARGET_REQUIRED`），不探测、不猜**——猜对了省一行配置，猜错了给出的是一个可信的错误结论（xxchan 08-05 裁定：不确定时要求显式声明，不替用户发明规矩）。
 
 **③ 与透明性原则自洽**：这些不是测试后门，是**产品本来就该有的面**（用户和 support 一样需要 `status --json`）——harness 只是恰好消费它们。cli 档最小契约 = `version` + `selfUpgrade` 两条；daemon/managed 档 + `status`（活进程 JSON）。
 
-**齿**：契约自身可验 —— `k.json` 声明的命令跑不通 / status 输出不合 schema ⇒ 黑盒验收直接 FAIL（typed，不进齿评审）。
+**齿**：契约自身可验 —— `k.target.ts` 声明的命令跑不通 / status 输出不合 schema ⇒ 黑盒验收直接 FAIL（typed，不进齿评审）；缺 target 文件 ⇒ 必 FAIL 且信息可操作（齿 `blackbox.missing-target-fails`）。
 
 ## 1.77 版本工件工厂 + 清场（xxchan 08-05："准备相应版本的二进制？删除清空？"）
 

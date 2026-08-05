@@ -29,10 +29,14 @@ import {
   checkProbeBindsCurrentIncarnation,
 } from "../fake-host/checks.ts";
 import type { HostDriver } from "../fake-host/inproc.ts";
-import { CLI_TOOL_KJSON, CLI_TOOL_SOURCE } from "../../../examples/cli-tool/source.ts";
+import { CLI_TOOL_SOURCE } from "../../../examples/cli-tool/source.ts";
 import { PLAIN_DAEMON_SOURCE } from "../../../examples/plain-daemon/source.ts";
 
 const RELEASE_BASE_ENV = "K_RELEASE_BASE";
+
+/** The cli-tool's explicit target declaration (mirrors k.target.ts). */
+export const CLI_TOOL_TARGET_TS = `export default { version: ["--version"], selfUpgrade: ["self", "upgrade"] };
+`;
 
 async function buildDemoBinary(
   ctx: ToothContext,
@@ -78,7 +82,7 @@ export async function checkCliToolBlackbox(
     behavior: "ok",
     name: "cli-tool",
   });
-  await fs.writeFile(path.join(ctx.sandboxDir, "app", "k.json"), JSON.stringify(CLI_TOOL_KJSON));
+  await fs.writeFile(path.join(ctx.sandboxDir, "app", "k.target.ts"), CLI_TOOL_TARGET_TS);
 
   // serve the target release
   const server = new FakeServer({ storeDir: path.join(ctx.sandboxDir, "store2") });
