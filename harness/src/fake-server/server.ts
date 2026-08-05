@@ -39,7 +39,8 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 
 export class FakeServer {
-  private readonly store: ReleaseStore;
+  /** The release store backing this server (the factory's publish target). */
+  readonly store: ReleaseStore;
   private readonly requestedPort: number | undefined;
   private server: Server | null = null;
   private actualPort = 0;

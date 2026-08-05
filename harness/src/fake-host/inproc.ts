@@ -60,7 +60,30 @@ export interface LedgerState {
   checksum: Uint8Array;
 }
 
-export class InprocFakeHost implements HostAdapter {
+/**
+ * The harness-side driving surface a fake host (or adopter adapter, in
+ * --adapter mode) can expose beyond the plain HostAdapter contract: the
+ * lifecycle getters the contract checks assert on, and the workload
+ * driver the ledger-equivalence checks need. An adopter adapter that
+ * cannot drive a deterministic workload simply omits doWork/ledger and
+ * the ledger checks are marked na.
+ */
+export interface HostDriver extends HostAdapter {
+  /** Slot currently running, or null. */
+  readonly running: Slot | null;
+  /** Whether the workload is currently parked (quiesced). */
+  readonly parked: boolean;
+  /** StartId of the current incarnation (evidence binding key). */
+  readonly startId: string | null;
+  /** Simulate n units of hosted session activity (deterministic). */
+  doWork?(n: number): Promise<void>;
+  /** Current ledger bytes (durability view). */
+  ledger?(): Promise<Uint8Array>;
+  /** Parsed ledger state. */
+  ledgerState?(): Promise<LedgerState>;
+}
+
+export class InprocFakeHost implements HostDriver {
   private readonly stateDir: string;
   private readonly clock: Clock;
   private readonly faults: FakeHostFaults;
