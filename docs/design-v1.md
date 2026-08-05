@@ -135,7 +135,7 @@ server 侧最小要求 = 静态文件（manifest+工件+签名）；drive 为可
 ## 4. 边界（不做什么）
 - 不替代 OS 包管理器：PM 拥有的安装交给 PM（TS 矩阵思路），core 的主 lane 是自有安装（SEA 类）；
 - 不做 OS 镜像/嵌入式 OTA（Mender/RAUC 领域）；
-- 发布/法务/命名（协议倾向 Apache-2.0）= 开源那步的独立决定；
+- 发布时机/法务 = 开源那步的独立决定（License 已定 Apache-2.0）；
 - `host_lifecycle_converged` 作为**发布字段**上报 fleet = 另立任务（#395 边界原样）。
 
 ## 5. 与现状的衔接（Raft 壳落地顺序）
@@ -148,4 +148,4 @@ server 侧最小要求 = 静态文件（manifest+工件+签名）；drive 为可
 2. **core 语言 = TS 起步 ✅（默认成立，未被否）**：与 daemon 同栈、Raft 壳复用最快、测试教义全在 TS 生态；留 FFI/重写门。
 3. **并行方式 = 1.0.16 先行 ✅（默认成立）**：按本仓库接口形状写，core 骨架随后收编。
 4. **drive 协议（仍开放）**：对齐现有远程配置生态 vs 自定义最小集 —— 到 L5 动工时拍。
-5. **License（仍开放，倾向 Apache-2.0）**：开源发布那步定。
+5. **License = Apache-2.0 ✅（xxchan 08-05）**：LICENSE 已入库。

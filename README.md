@@ -52,4 +52,4 @@ docs/        design-v1.md · research-tailscale-datadog.md
 
 Design doc: [`docs/design-v1.md`](docs/design-v1.md) · Integration guide: [`docs/integration.md`](docs/integration.md). Testing doctrine is half the point: the harness runs against *any* `HostAdapter`, so the test suite itself is the proof of genericity.
 
-Status: incubating. Language: TypeScript to start (first shell shares the stack). License: decided at publish time (leaning Apache-2.0).
+Status: incubating. Language: TypeScript to start (first shell shares the stack). License: **Apache-2.0**.
