@@ -17,6 +17,7 @@ harness/
 │   ├─ inproc.ts     进程内 HostAdapter 实现（快速单元级）
 │   └─ daemon.ts     可 spawn 的真进程假 daemon（kill -9 是真的）
 ├─ fake-server/      本地静态发布服务器 + 篡改 API
+├─ artifact-factory/ 版本工件工厂（一次构建多次盖戳 + behavior 旋钮 + 签名链）
 ├─ scenario/         场景运行器（隔离沙箱 + 虚拟时钟）
 ├─ crash/            崩溃注入编排器（枚举生成，禁手列）
 ├─ teeth/            齿注册表 + 分档 + 自验
@@ -98,6 +99,18 @@ harness 有两个平面，**默认用外面那个**：
 **③ 与透明性原则自洽**：这些不是测试后门，是**产品本来就该有的面**（用户和 support 一样需要 `status --json`）——harness 只是恰好消费它们。cli 档最小契约 = `version` + `selfUpgrade` 两条；daemon/managed 档 + `status`（活进程 JSON）。
 
 **齿**：契约自身可验 —— `k.json` 声明的命令跑不通 / status 输出不合 schema ⇒ 黑盒验收直接 FAIL（typed，不进齿评审）。
+
+## 1.77 版本工件工厂 + 清场（xxchan 08-05："准备相应版本的二进制？删除清空？"）
+
+**① artifact-factory（升级测试需要"同一个 app 的 vX 和 vY"）**：
+- `makeRelease({version, behavior})` → 产出**盖了版本戳的真二进制** + manifest + 完整测试签名链，落到 fake-server。实现 = **一次构建、多次盖戳**（构建 demo 源码一次，post-build 往二进制里注入版本串——与真 SEA 嵌版本同型，快且真实；不用"版本写在旁边文件"那种假形态）。
+- `behavior` 旋钮让某个"新版本"**故意坏**：`crash-on-start / wrong-probe / hang-on-quiesce ...` —— 回滚齿、known-red、对抗样本的 fixture 都从这来（"升到坏版本→自动回滚→stable 完好"整条链可黑盒复现）。
+- 内容寻址缓存（key = demo 源 hash × version × behavior），跨场景复用，不重复构建。
+
+**② 清场（teardown）**：
+- 沙箱边界即清场边界：install dir + stateDir + fake-server 存储全在场景沙箱内。teardown = **杀进程树并确认真死**（按沙箱标记 pgrep 复核零残留——僵尸 `__service` 是我们的真实产线教训，"发了 kill"≠"死了"）→ 删沙箱目录。崩溃场景故意留下的中间态也被同一动作清干净（一切都在沙箱里，所以 rm 恒有效）。
+- **越界写齿**：core 在任何场景中写沙箱外任何路径 ⇒ RED。这颗齿顺带保证了产品级卫生（升级器不污染全局 HOME/系统目录），也让"清空"永远可信——**能一键删干净，是因为先机械保证了它只写在自己地盘**。
+- 顺带的产品映射：沙箱清单 = 将来"干净卸载"要删的东西的权威地图（卸载功能本身另立，不在本期）。
 
 ## 1.8 透明性原则（xxchan 08-05：测试框架对升级框架透明）
 
