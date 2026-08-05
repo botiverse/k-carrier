@@ -42,32 +42,6 @@ export interface HostAdapter {
 
   /** Resume workloads parked by quiesce(). Must also work after rollback. */
   resume(): Promise<void>;
-
-  /**
-   * OPTIONAL, and stronger than stop()+start() when a host can do it.
-   *
-   * Perform the whole exchange yourself and return the successor's evidence.
-   * The incumbent stays alive throughout: it starts the successor, demands
-   * proof, and only then stands down. If the proof does not come, the
-   * incumbent takes its responsibilities back and keeps serving.
-   *
-   * Why this exists (raft-computer does exactly this today, and losing it to
-   * fit stop/start would be a downgrade):
-   *
-   *   stop() -> start() -> probe   there is a window where NOTHING runs, and
-   *                                rolling back means starting the old one
-   *                                again -- which can itself fail
-   *   handOver()                   the old one never stopped, so backing out
-   *                                costs nothing and cannot fail to restart
-   *
-   * This is not the zero-downtime overlap K deliberately does not do. The
-   * overlap here buys REVERSIBILITY, not availability; the two get confused
-   * because they look alike from outside.
-   *
-   * Implementations MUST NOT report success without evidence from the
-   * successor process itself, and MUST leave the incumbent serving on failure.
-   */
-  handOver?(slot: Slot): Promise<ProcessEvidence>;
 }
 
 export type Slot = "stable" | "experiment";
