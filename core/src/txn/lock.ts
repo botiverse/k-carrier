@@ -77,6 +77,7 @@ export async function acquireUpgradeLock(stateDir: string, nowMs: number): Promi
         // typed failure, not a hang. (Hangs hide bugs; failures report them.)
         throw new Error(
           `[UPGRADE_LOCK_UNRESOLVABLE] could not acquire or clear ${lockPath} after ${MAX_ATTEMPTS} attempts`,
+          { cause: err },
         );
       }
       const holder = await readHolder(lockPath);
