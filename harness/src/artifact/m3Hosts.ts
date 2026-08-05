@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import * as path from "node:path";
+import { sandboxMarkerFor } from "../scenario/sandbox.ts";
 import { promises as fs } from "node:fs";
 import { spawn, type ChildProcess } from "node:child_process";
 import { type ToothContext } from "../teeth/registry.ts";
@@ -75,7 +76,10 @@ export function serviceEnv(
     // the driver spawns — carries the sandbox marker, so the sandbox
     // teardown's verifyProcessTreeDead is the backstop for any leak: a "red"
     // can never degrade into a hang.
-    K_SANDBOX_MARKER: path.basename(ctx.sandboxDir),
+    // Resolved back to the SANDBOX id: ctx here is a per-shape NESTED context,
+    // and basename() of that is "spawn"/"respawn" -- a marker no teardown scan
+    // matches, which turns the backstop into a scan that always finds zero.
+    K_SANDBOX_MARKER: sandboxMarkerFor(ctx.sandboxDir),
   };
 }
 

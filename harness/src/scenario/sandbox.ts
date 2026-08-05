@@ -88,7 +88,7 @@ function probeFreePort(): Promise<number> {
 export async function createSandbox(opts: SandboxOptions = {}): Promise<Sandbox> {
   const baseDir = opts.baseDir ?? os.tmpdir();
   const prefix = opts.prefix ?? "scenario";
-  const dir = await fs.mkdtemp(path.join(baseDir, `k-harness-${prefix}-`));
+  const dir = await fs.mkdtemp(path.join(baseDir, `${SANDBOX_DIR_PREFIX}${prefix}-`));
   const id = path.basename(dir);
   const port = await allocatePort();
   // Marker file: future fake-host daemon teardown pgrep's by this id to
@@ -113,6 +113,30 @@ export async function createSandbox(opts: SandboxOptions = {}): Promise<Sandbox>
  * process's environment, so the marker is observable even for processes
  * whose parent has died (orphans/zombies the host no longer tracks).
  */
+/** Prefix every sandbox directory name carries (see createSandbox). */
+const SANDBOX_DIR_PREFIX = "k-harness-";
+
+/**
+ * The marker a process must carry to be found by this sandbox's teardown.
+ *
+ * Teeth often derive a NESTED context (e.g. `<sandbox>/respawn` per host
+ * shape). Taking basename() of that nested dir yields "respawn", which no
+ * teardown scan will ever match -- so the scan returns zero, the tooth reports
+ * a clean teardown, and the leaked process is still running. The zero means
+ * "the query matched nothing", not "nothing leaked". (Found 08-05 by looking
+ * for the surviving pid instead of trusting the count.)
+ *
+ * So the marker is always resolved back to the SANDBOX's own id, however deep
+ * the caller's context is nested.
+ */
+export function sandboxMarkerFor(dir: string): string {
+  for (let cur = path.resolve(dir); ; cur = path.dirname(cur)) {
+    const base = path.basename(cur);
+    if (base.startsWith(SANDBOX_DIR_PREFIX)) return base;
+    if (path.dirname(cur) === cur) return path.basename(path.resolve(dir));
+  }
+}
+
 export function findPidsByEnv(name: string, value: string): number[] {
   const out = execFileSync("ps", ["eaxo", "pid=,command="], { encoding: "utf8" });
   const token = `${name}=${value}`;
