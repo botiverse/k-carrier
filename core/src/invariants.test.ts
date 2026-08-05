@@ -6,9 +6,9 @@ import {
   BUILT_IN_INVARIANTS,
   checkInvariants,
   workloadPreserved,
-  reachesTerminalWithin,
   type WorldSnapshot,
 } from "./invariants.ts";
+import { serviceSettlesLive, reachesTerminalWithin } from "./liveness.ts";
 
 function healthy(overrides: Partial<WorldSnapshot> = {}): WorldSnapshot {
   return {
@@ -123,6 +123,59 @@ test("every built-in is exercised by this suite", () => {
   for (const inv of BUILT_IN_INVARIANTS) {
     assert.ok(covered.has(inv.id), `built-in ${inv.id} has no violation test`);
   }
+});
+
+test("THE POINT: a service that never comes back passes every SAFETY invariant", () => {
+  // The doing-nothing hole, demonstrated against our own set: dead service,
+  // no violations. This is why liveness is judged separately.
+  const dead = healthy({
+    phase: "promoted",
+    slots: { stable: "2.0.0", experiment: null },
+    journalIntents: ["staged", "handing-over", "promoted"],
+    liveProcesses: [],
+  });
+  assert.deepEqual(checkInvariants(dead), []);
+  assert.match(
+    serviceSettlesLive([dead, dead, dead], 3)!,
+    /no live process reports the stable version 2\.0\.0/,
+  );
+});
+
+test("serviceSettlesLive accepts a service that takes a moment to come back", () => {
+  // Starting is not instantaneous. Judging the instant of the terminal phase
+  // would redden a perfectly healthy upgrade.
+  const settled = {
+    phase: "promoted" as const,
+    slots: { stable: "2.0.0", experiment: null },
+    journalIntents: ["staged" as const, "promoted" as const],
+  };
+  const observations = [
+    { ...settled, liveProcesses: [] },
+    { ...settled, liveProcesses: [] },
+    { ...settled, liveProcesses: [{ slot: "stable" as const, pid: 9, startId: "s2", version: "2.0.0" }] },
+  ];
+  assert.equal(serviceSettlesLive(observations, 3), null);
+  // ...but not one that takes longer than the budget allows
+  assert.match(serviceSettlesLive(observations, 2)!, /within 2 observations/);
+});
+
+test("serviceSettlesLive is silent while the transaction is still in flight", () => {
+  // Progress toward a terminal phase is reachesTerminalWithin's job; this one
+  // must not double-report it.
+  const inFlight = healthy({ phase: "handing-over", liveProcesses: [] });
+  assert.equal(serviceSettlesLive([inFlight, inFlight], 2), null);
+});
+
+test("coming back on the OLD version after a rollback counts as settled", () => {
+  // Rollback is a success for this property: the promise is that you come
+  // back, not that you moved forward.
+  const rolledBack = {
+    phase: "rolled-back" as const,
+    slots: { stable: "1.0.0", experiment: null },
+    journalIntents: ["staged" as const, "rolled-back" as const],
+    liveProcesses: [{ slot: "stable" as const, pid: 3, startId: "s3", version: "1.0.0" }],
+  };
+  assert.equal(serviceSettlesLive([rolledBack], 2), null);
 });
 
 test("workloadPreserved compares digests and ignores hosts that declare none", () => {
