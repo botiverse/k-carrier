@@ -29,6 +29,12 @@ export interface WorldSnapshot {
    * Hosts that preserve workloads across upgrade emit a stable digest.
    */
   workloadDigest?: string;
+  /**
+   * startId of the incarnation that was live BEFORE the current transition.
+   * Present in real status readbacks; lets oracles prove a restart actually
+   * happened rather than trusting a version string (Raft #5245 family).
+   */
+  priorIncarnationStartId?: string;
 }
 
 /** null = holds; string = why it was violated (shown to humans and in seed replays). */
