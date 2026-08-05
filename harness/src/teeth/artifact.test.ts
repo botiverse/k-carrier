@@ -38,10 +38,14 @@ import { checkDownloadResumesAfterKill } from "../artifact/m1Resume.ts";
  * that it IS exercised there -- not a way to skip it.
  */
 const COVERED_ELSEWHERE = new Set([
-  // m4 teeth run green in artifactM4.test.ts (split out for file size)
+  // m4 teeth run green in artifactM4.test.ts; m5 in artifactM5.test.ts
   "m4.confirm-no-consent-zero-side-effects",
   "m4.consent-binds-version",
   "m4.notify-only-reports-installable-version",
+  "m5.lifecycle-surface-allowlist",
+  "m5.lifecycle-converged-promotes",
+  "m5.lifecycle-projection-ban",
+  "m5.lifecycle-fail-closed-retirement",
   "fake-server.serves-verifiable-release",
   "fake-server.tamper-corrupt-byte",
   "fake-server.tamper-swap-sig",
