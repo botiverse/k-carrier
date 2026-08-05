@@ -18,7 +18,7 @@ import { pathToFileURL } from "node:url";
 import { type ToothContext } from "../teeth/registry.ts";
 import { staticManifestSource } from "../../../core/src/artifact/staticManifestSource.ts";
 import type { ReleaseContext, ReleaseSource } from "../../../core/src/artifact/source.ts";
-import { parseManifest, currentPlatformKey } from "../../../core/src/artifact/manifest.ts";
+import { parseManifest, currentPlatformKey } from "../../../core/src/artifact/staticManifestSource.ts";
 import { downloadVerified } from "../../../core/src/artifact/download.ts";
 import { atomicWriteFile } from "../../../core/src/artifact/swap.ts";
 import { FakeServer } from "../fake-server/server.ts";

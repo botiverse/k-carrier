@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import { createHash } from "node:crypto";
 import { downloadVerified } from "./download.ts";
-import type { ManifestTarget } from "./manifest.ts";
+import type { ManifestTarget } from "./staticManifestSource.ts";
 import type { Clock } from "../clock.ts";
 
 const PAYLOAD = new TextEncoder().encode("K artifact payload");

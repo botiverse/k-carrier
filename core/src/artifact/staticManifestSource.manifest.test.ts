@@ -3,7 +3,7 @@
 // reinterpretation.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseManifest } from "./manifest.ts";
+import { parseManifest } from "./staticManifestSource.ts";
 
 const VALID = JSON.stringify({
   version: "1.2.3",
