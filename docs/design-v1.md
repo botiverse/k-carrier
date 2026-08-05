@@ -104,6 +104,13 @@ server 侧最小要求 = 静态文件（manifest+工件+签名）；drive 为可
 2. **core 不含任何 Raft 概念**（无 SLOCK_HOME/机器身份/server 协议）—— 全部经 HostAdapter/配置注入；这是开源 forcing-function 的机械落点。
 3. **每层可单独关**：不用 drive = 纯本地；不用 L2 = 退化成 CLI 自升级（= 向下兼容到商品层，路径清晰）。
 
+## 2.4 类型与接口设计原则（xxchan 08-05："写出来就是对的，问题发生在静态检查阶段"）
+- **非法状态不可表示**：discriminated union 优先（`ToothKind`/`CaughtOnlyBy`/`EngineOutcome`/`UpgradeOutcome` 已示范）——"baseline 没有失效条件"这类状态在类型上就不存在，不靠运行时查。
+- **证据绑定进类型**：`ProcessEvidence{version,pid,startId}` 三件一体——不能只传 version（谓词函数签名逼你带上进程身份）。
+- **typed error/outcome，禁裸 throw string**；**禁 any/断言逃生舱**（ratchet + oxlint 双层机械封死）。
+- **构造期校验**（registerTooth 模式）：违纪律的对象根本注册不进去，不是注册进去再警告。
+- 静态查不了的（时序/持久性）才交给运行时齿——两层分工同我们 illegal-state 教义。
+
 ## 2.5 组合性：三档接入 profile（能力可组合，不要求 Raft Computer 级复杂度）
 
 **任何 CLI 应用都能用**，从最小档起步、按需长上去；每层都有退化实现，缺哪层就自动降到哪档：

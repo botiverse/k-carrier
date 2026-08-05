@@ -41,7 +41,7 @@ export class VirtualClock implements Clock {
     for (;;) {
       const due = this.timers
         .filter((t) => !t.cancelled && t.dueMs <= target)
-        .sort((a, b) => a.dueMs - b.dueMs || a.seq - b.seq)[0];
+        .toSorted((a, b) => a.dueMs - b.dueMs || a.seq - b.seq)[0];
       if (!due) break;
       this.timers = this.timers.filter((t) => t !== due);
       this.currentMs = due.dueMs;
