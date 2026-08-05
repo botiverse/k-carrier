@@ -31,6 +31,7 @@ import { systemClock, type Clock } from "./clock.ts";
 import { buildSurfaceAllowlist, evaluateLifecycleConvergence } from "./converge/lifecycle.ts";
 import type { ReadbackSurface, ConvergenceReport, PredicateResult } from "./converge/predicates.ts";
 import { platformOpsFor } from "./platform/index.ts";
+import { buildConvergenceReport } from "./converge/report.ts";
 import { slotArtifactPath } from "./txn/fileEffects.ts";
 
 export interface CreateUpgraderOptions extends UpgraderConfig {
@@ -197,7 +198,13 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
       const outcome = await engine.upgrade({ version: release.version, bytesRef });
       if (outcome.result === "promoted") {
         await notify("promoted", { version: outcome.version });
-        lastReport = realReport(outcome.version);
+        lastReport = buildConvergenceReport({
+          version: outcome.version,
+          evidence: lastEvidence,
+          lifecycle: lastLifecycle,
+          declaredSurfaces: (opts.lifecycleSurfaces ?? []).length,
+          nowMs: clock.nowMs(),
+        });
         return { result: "promoted", report: lastReport };
       }
       if (outcome.result === "rolled-back") {
@@ -208,30 +215,6 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
     } finally {
       await lock.release();
     }
-  }
-
-  function realReport(version: string): ConvergenceReport {
-    const now = lastEvidence ? lastEvidence.startId.length + clock.nowMs() : clock.nowMs();
-    const detail = lastEvidence
-      ? { version: lastEvidence.version, startId: lastEvidence.startId, pid: String(lastEvidence.pid) }
-      : {};
-    const binary: PredicateResult = {
-      passed: lastEvidence !== null && lastEvidence.version === version,
-      source: "host.healthProbe",
-      observedAtMs: now,
-      detail,
-    };
-    const lifecycle: PredicateResult =
-      lastLifecycle ??
-      (opts.lifecycleSurfaces && opts.lifecycleSurfaces.length > 0
-        ? { passed: false, source: "not-converged", observedAtMs: now, detail: {} }
-        : {
-            passed: true,
-            source: "no-lifecycle-surfaces-configured",
-            observedAtMs: now,
-            detail: { note: "the app declared no OS-lifecycle read-back surface" },
-          });
-    return { binaryAtTarget: binary, hostLifecycleConverged: lifecycle };
   }
 
   return {
@@ -265,7 +248,17 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
       // Retire the legacy lifecycle manager ONLY after convergence passed;
       // otherwise the machine would be left with no supervisor — a HOLD.
       const report = lastReport;
-      if (report === null || !report.hostLifecycleConverged.passed) {
+      const lifecycle = report?.hostLifecycleConverged ?? null;
+      if (lifecycle === null) {
+        return {
+          held:
+            "cannot retire the legacy lifecycle manager before host_lifecycle_converged passed" +
+            (report === null
+              ? " (no upgrade has converged yet)"
+              : " (this app declared no OS-lifecycle read-back surface, so it was never observed)"),
+        };
+      }
+      if (!lifecycle.passed) {
         return {
           held:
             "cannot retire the legacy lifecycle manager before host_lifecycle_converged passed",

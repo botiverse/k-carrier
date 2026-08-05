@@ -147,12 +147,10 @@ export async function checkM5LifecycleConvergedPromotes(
       return;
     }
     assert.equal(outcome.result, "promoted", "a converged surface must allow the promote");
-    assert.equal(
-      outcome.report?.hostLifecycleConverged.passed,
-      true,
-      "the report must carry the real converged predicate",
-    );
-    assert.equal(outcome.report?.hostLifecycleConverged.source, "test.autostart");
+    const lifecycle = outcome.report?.hostLifecycleConverged ?? null;
+    assert.ok(lifecycle, "this app DID declare a surface, so the report must carry a verdict");
+    assert.equal(lifecycle.passed, true, "the report must carry the real converged predicate");
+    assert.equal(lifecycle.source, "test.autostart");
     assert.equal(outcome.report?.binaryAtTarget.passed, true);
   } finally {
     await server.stop();
