@@ -214,3 +214,7 @@ async function waitForExit(child: ChildProcess): Promise<void> {
     child.once("exit", () => resolve());
   });
 }
+
+// ---------------------------------------------------------------------------
+// M1 exit: swap-tool end-to-end upgrade + rollback through core's Upgrader
+// ---------------------------------------------------------------------------

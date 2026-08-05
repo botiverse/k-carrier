@@ -8,8 +8,18 @@ import type { PlatformOps } from "./ops.ts";
 async function atomicReplace(filePath: string, data: Uint8Array): Promise<void> {
   const tmpPath = `${filePath}.tmp`;
   try {
+    // Preserve the target's mode across the swap: a self-replacing
+    // executable must stay executable (a leftover tmp from a previous
+    // crash must not dictate the new file's permissions either).
+    let mode: number | undefined;
+    try {
+      mode = (await fs.stat(filePath)).mode;
+    } catch {
+      // target does not exist yet: default permissions
+    }
     const fh = await fs.open(tmpPath, "w");
     try {
+      if (mode !== undefined) await fh.chmod(mode & 0o777);
       await fh.writeFile(data);
       await fh.sync(); // durable before the rename makes it visible
     } finally {

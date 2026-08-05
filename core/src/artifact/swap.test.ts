@@ -42,3 +42,21 @@ test("a failing swap (unwritable dir) leaves the target untouched", async () => 
     await fs.rm(dir, { recursive: true, force: true });
   }
 });
+
+test("the swap preserves the target's file mode (a self-replacing executable stays executable)", async () => {
+  const dir = await tmpDir();
+  const target = path.join(dir, "app.bin");
+  try {
+    await fs.writeFile(target, new TextEncoder().encode("old"), { mode: 0o755 });
+    await atomicWriteFile(target, new TextEncoder().encode("new"));
+    const mode = (await fs.stat(target)).mode;
+    assert.ok(mode & 0o100, `executable bit must survive the swap (mode ${mode.toString(8)})`);
+    // a non-executable target stays non-executable
+    await fs.writeFile(target, new TextEncoder().encode("old2"));
+    await fs.chmod(target, 0o644);
+    await atomicWriteFile(target, new TextEncoder().encode("new2"));
+    assert.ok(!((await fs.stat(target)).mode & 0o100), "non-executable target stays non-executable");
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});

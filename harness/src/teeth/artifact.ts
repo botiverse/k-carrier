@@ -10,6 +10,10 @@ import {
   checkKillMidSwapPreservesOld,
   checkSourceFailsClosed,
 } from "../artifact/checks.ts";
+import {
+  checkSwapToolUpgradeLoop,
+  checkSwapToolRollback,
+} from "../artifact/m1.ts";
 
 registerTooth({
   id: "artifact.tamper-refuses-install",
@@ -59,4 +63,36 @@ registerTooth({
     },
   ],
   run: checkSourceFailsClosed,
+});
+
+registerTooth({
+  id: "m1.swap-tool-upgrade",
+  profiles: ["swap"],
+  layers: ["L0", "L0.5", "L1p"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "the upgrade never reaches the stable slot (next run still reports the old version)",
+      caughtOnlyBy: "this", // only this tooth runs the full black-box upgrade through the demo
+    },
+  ],
+  run: checkSwapToolUpgradeLoop,
+});
+
+registerTooth({
+  id: "m1.swap-tool-rollback",
+  profiles: ["swap"],
+  layers: ["L0", "L0.5", "L1p"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "a failing experiment is promoted instead of rolled back",
+      caughtOnlyBy: {
+        alsoCaughtBy: "core txn engine unit tests (rollback symmetry)",
+        whyStillNeeded:
+          "the engine tests use in-memory effects; this tooth drives the real binary + real slots through the demo's own upgrade command",
+      },
+    },
+  ],
+  run: checkSwapToolRollback,
 });

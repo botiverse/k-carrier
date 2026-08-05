@@ -16,11 +16,17 @@ import {
   checkKillMidSwapPreservesOld,
   checkSourceFailsClosed,
 } from "../artifact/checks.ts";
+import {
+  checkSwapToolUpgradeLoop,
+  checkSwapToolRollback,
+} from "../artifact/m1.ts";
 
 const TOOTH_IDS = new Set([
   "artifact.tamper-refuses-install",
   "artifact.atomic-swap-crash-safe",
   "artifact.source-fails-closed",
+  "m1.swap-tool-upgrade",
+  "m1.swap-tool-rollback",
 ]);
 
 async function ctxFor(prefix: string): Promise<{ ctx: ToothContext; teardown: () => Promise<void> }> {
@@ -30,7 +36,7 @@ async function ctxFor(prefix: string): Promise<{ ctx: ToothContext; teardown: ()
 
 test("known-green: every M1 artifact tooth passes on a clean sandbox", async () => {
   const teeth = allTeeth().filter((t) => TOOTH_IDS.has(t.id));
-  assert.equal(teeth.length, 3, "all three artifact teeth must be registered");
+  assert.equal(teeth.length, 5, "all five artifact teeth must be registered");
   for (const tooth of teeth) {
     const { ctx, teardown } = await ctxFor(tooth.id.replaceAll(".", "-"));
     try {
@@ -78,6 +84,28 @@ test("known-red: source-fails-closed catches a source that guesses instead of re
   }
 });
 
+test("known-red: m1.swap-tool-upgrade catches an upgrade that never lands", async () => {
+  const { ctx, teardown } = await ctxFor("red-m1-upgrade");
+  try {
+    // mutation: a bad version is served — the upgrade rolls back, so the
+    // "self upgrade must exit 0 / next run must report" assertions go RED
+    await assert.rejects(checkSwapToolUpgradeLoop(ctx, { serveBadVersion: true }), /must exit 0|must report/);
+  } finally {
+    await teardown();
+  }
+});
+
+test("known-red: m1.swap-tool-rollback catches a promoted bad version", async () => {
+  const { ctx, teardown } = await ctxFor("red-m1-rollback");
+  try {
+    // mutation: a GOOD version is served — it promotes, so the rollback
+    // expectation goes RED
+    await assert.rejects(checkSwapToolRollback(ctx, { serveGoodVersion: true }), /must roll back/);
+  } finally {
+    await teardown();
+  }
+});
+
 test("registration discipline: profiles/layers/kind/mustRed all answered", () => {
   const teeth = allTeeth().filter((t) => TOOTH_IDS.has(t.id));
   for (const tooth of teeth) {
@@ -105,4 +133,6 @@ test("tooth run functions are the exported checks (single source of truth)", () 
   assert.equal(byId.get("artifact.tamper-refuses-install")!.run, checkTamperedArtifactRefused);
   assert.equal(byId.get("artifact.atomic-swap-crash-safe")!.run, checkKillMidSwapPreservesOld);
   assert.equal(byId.get("artifact.source-fails-closed")!.run, checkSourceFailsClosed);
+  assert.equal(byId.get("m1.swap-tool-upgrade")!.run, checkSwapToolUpgradeLoop);
+  assert.equal(byId.get("m1.swap-tool-rollback")!.run, checkSwapToolRollback);
 });
