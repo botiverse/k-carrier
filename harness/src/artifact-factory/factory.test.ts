@@ -83,7 +83,11 @@ test("behavior knobs produce genuinely broken binaries", async () => {
       const r = await runArtifact(artifactPath, timeoutMs);
       assert.equal(r.timedOut, behavior === "hang-on-quiesce", `${behavior}: hang must time out`);
       assert.equal(r.code, expectCode, `${behavior}: exit code`);
-      assert.equal(r.stdout.trim(), expectOut, `${behavior}: reported version`);
+      if (behavior !== "hang-on-quiesce") {
+        // the hang fixture's contract is "never exits" — whether its ready
+        // line arrived before the kill is timing-dependent under load
+        assert.equal(r.stdout.trim(), expectOut, `${behavior}: reported version`);
+      }
     }
   });
 });

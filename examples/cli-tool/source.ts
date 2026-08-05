@@ -2,22 +2,18 @@
  * cli-tool — the cli-profile example (design-v1 §2.5: L0 + L0.5 + L1').
  *
  * A REAL tiny CLI (zero deps) with one genuine command (`greet`) plus the
- * black-box contract (§1.76): `--version` and `self upgrade`. The cli
- * profile's upgrade model is "swap bytes = promote, next run takes effect"
- * (L1'): self-upgrade fetches the manifest, verifies the artifact's
- * sha256, atomically swaps its own file. The signature chain is served but
- * verification of the two-level chain lands with core's distsign (L0.5);
- * today the demo pins the L0 integrity + swap semantics.
+ * black-box contract (§1.76): `--version` and `self upgrade` (declared
+ * explicitly in `k.target.ts` — the harness never guesses commands). The
+ * cli profile's upgrade model is "swap bytes = promote, next run takes
+ * effect" (L1'): self-upgrade fetches the manifest, verifies the
+ * artifact's sha256, atomically swaps its own file. The signature chain is
+ * served but verification of the two-level chain lands with core's
+ * distsign (L0.5); today the demo pins the L0 integrity + swap semantics.
  *
  * Built by the artifact-factory: `__K_VERSION__` / `__K_BEHAVIOR__` are
  * stamped into the binary's own bytes (same SHAPE as SEA-embedded
  * versions). `K_RELEASE_BASE` env = releaseBase config.
  */
-export const CLI_TOOL_KJSON = {
-  version: ["--version"],
-  selfUpgrade: ["self", "upgrade"],
-} as const;
-
 export const CLI_TOOL_SOURCE = `#!/usr/bin/env node
 // cli-tool — K cli-profile example. Built by artifact-factory (§1.77).
 "use strict";

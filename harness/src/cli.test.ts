@@ -39,7 +39,7 @@ test("--profile managed runs the daemon/managed teeth too", async () => {
 test("--bin mode upgrades a factory-built binary end to end", async () => {
   const sb = await createSandbox({ prefix: "cli-bin" });
   try {
-    // build the demo binary + its k.json into the sandbox
+    // build the demo binary + its k.target.ts into the sandbox
     const factory = new ArtifactFactory({ cacheDir: path.join(sb.dir, "cache") });
     const server = new FakeServer({ storeDir: path.join(sb.dir, "store") });
     await server.start();
@@ -47,6 +47,10 @@ test("--bin mode upgrades a factory-built binary end to end", async () => {
       const rel = await factory.makeRelease({ version: "1.0.0", behavior: "ok", store: server.store });
       const binPath = path.join(sb.dir, "mytool");
       await fs.writeFile(binPath, rel.artifactBytes, { mode: 0o755 });
+      await fs.writeFile(
+        path.join(sb.dir, "k.target.ts"),
+        `export default { version: ["--version"], selfUpgrade: ["self", "upgrade"] };\n`,
+      );
       const { code, stdout } = await runCli(["--bin", binPath, "--target-version", "7.7.7"]);
       assert.equal(code, 0, stdout);
       assert.match(stdout, /contract\.version-command/);
@@ -73,7 +77,10 @@ test("--bin mode failure exits 1 with a typed error in the receipt", async () =>
       const rel = await factory.makeRelease({ version: "1.0.0", behavior: "ok", store: server.store });
       const binPath = path.join(sb.dir, "mytool");
       await fs.writeFile(binPath, rel.artifactBytes, { mode: 0o755 });
-      await fs.writeFile(path.join(sb.dir, "k.json"), JSON.stringify({ selfUpgrade: ["nope"] }));
+      await fs.writeFile(
+        path.join(sb.dir, "k.target.ts"),
+        `export default { version: ["--version"], selfUpgrade: ["nope"] };\n`,
+      );
       const { code, stdout } = await runCli(["--bin", binPath]);
       assert.equal(code, 1);
       assert.match(stdout, /result: fail/);

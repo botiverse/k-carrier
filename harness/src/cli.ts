@@ -5,11 +5,12 @@
  *   k-harness --profile <cli|daemon|managed>          run the tier-filtered teeth
  *   k-harness --bin ./mytool [--profile cli]          black-box: drive the real
  *                                                     binary through its declared
- *                                                     commands (k.json / defaults)
+ *                                                     commands (k.target.ts REQUIRED)
  *   k-harness --adapter <path> [--profile managed]    run the adopter contract subset
  *                                                     against an external adapter
  *   k-harness --json                                  machine-readable receipt
  *   k-harness --target-version <v>                    version served by --bin mode
+ *   k-harness --target <path>                         explicit target file for --bin
  *   k-harness --help
  *
  * Exit code 0 iff the receipt result is "pass". Receipt: structured, human
@@ -25,15 +26,16 @@ const USAGE = `k-harness — K acceptance harness
 
 Usage:
   k-harness --profile <cli|daemon|managed> [--json]
-  k-harness --bin <path-to-binary> [--profile cli] [--target-version <v>] [--json]
+  k-harness --bin <path-to-binary> [--profile cli] [--target-version <v>] [--target <path>] [--json]
   k-harness --adapter <path-to-module> [--profile managed] [--json]
   k-harness --help
 
 Options:
   --profile <p>        tier-filtered tooth set (cli | daemon | managed)
-  --bin <path>         black-box mode: drive a real binary (k.json / defaults)
+  --bin <path>         black-box mode: drive a real binary (k.target.ts REQUIRED)
   --adapter <path>     adapter mode: contract subset against an external adapter
                        (module default export: (stateDir) => HostDriver)
+  --target <path>      explicit target file for --bin (default <bin-dir>/k.target.ts)
   --target-version <v> version the --bin fake-server serves (default 2.0.0)
   --json               print the receipt as JSON (human lines always printed)
   --help               this message
@@ -44,9 +46,10 @@ function parseArgs(argv: string[]): {
   binPath: string | null;
   adapterPath: string | null;
   targetVersion: string | null;
+  targetPath: string | null;
   json: boolean;
 } {
-  const out = { profile: null as Profile | null, binPath: null as string | null, adapterPath: null as string | null, targetVersion: null as string | null, json: false };
+  const out = { profile: null as Profile | null, binPath: null as string | null, adapterPath: null as string | null, targetVersion: null as string | null, targetPath: null as string | null, json: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     const next = (): string => {
@@ -72,6 +75,9 @@ function parseArgs(argv: string[]): {
         break;
       case "--target-version":
         out.targetVersion = next();
+        break;
+      case "--target":
+        out.targetPath = next();
         break;
       case "--json":
         out.json = true;
@@ -101,6 +107,7 @@ async function main(): Promise<number> {
   if (args.binPath) {
     const binOpts: BinModeOptions = { binPath: args.binPath, profile };
     if (args.targetVersion !== null) binOpts.targetVersion = args.targetVersion;
+    if (args.targetPath !== null) binOpts.targetPath = args.targetPath;
     receipt = await runBinMode(binOpts);
   } else if (args.adapterPath) {
     receipt = await runAdapter(profile, args.adapterPath);
