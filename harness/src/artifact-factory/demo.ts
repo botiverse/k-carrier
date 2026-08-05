@@ -24,8 +24,11 @@ export const DEMO_SOURCE = `#!/usr/bin/env node
 const VERSION = "__K_VERSION__";
 const BEHAVIOR = "__K_BEHAVIOR__";
 const RELEASE_BASE = process.env.K_RELEASE_BASE;
-function report(v) { process.stdout.write(v + " ready\\n"); }
-function printVersion() { process.stdout.write(VERSION + "\\n"); process.exit(0); }
+const fs = require("node:fs");
+// Synchronous writes: process.exit()/SIGKILL can truncate buffered pipe
+// writes, and the black-box assertions read stdout as evidence.
+function report(v) { fs.writeSync(1, v + " ready\\n"); }
+function printVersion() { fs.writeSync(1, VERSION + "\\n"); process.exit(0); }
 
 async function selfUpgrade() {
   if (!RELEASE_BASE) { process.stderr.write("K_RELEASE_BASE not set\\n"); process.exit(2); }
@@ -46,7 +49,7 @@ async function selfUpgrade() {
   const tmp = selfPath + ".tmp";
   fs.writeFileSync(tmp, bytes, { mode: 0o755 });
   fs.renameSync(tmp, selfPath); // cli-profile L1': swap bytes, next run is new version
-  process.stdout.write("upgraded to " + manifest.version + "\\n");
+  fs.writeSync(1, "upgraded to " + manifest.version + "\\n");
   process.exit(0);
 }
 
