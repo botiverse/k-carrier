@@ -29,6 +29,7 @@ import {
 import {
   checkM3ServiceUpgrade,
   checkM3ServiceRollback,
+  checkM3StuckDriverEvidence,
 } from "../artifact/m3.ts";
 
 /**
@@ -72,6 +73,7 @@ const TOOTH_IDS = new Set([
   "m2.unsigned-refused-by-default",
   "m3.service-upgrade",
   "m3.service-rollback",
+  "m3.stuck-driver-evidence-recovery",
 ]);
 
 async function ctxFor(prefix: string): Promise<{ ctx: ToothContext; teardown: () => Promise<void> }> {
@@ -202,6 +204,17 @@ test("known-red: m3.service-rollback catches a promoted good version (both host 
     // mutation: a GOOD version is served — it promotes, so the rollback
     // expectation goes RED on both host shapes
     await assert.rejects(checkM3ServiceRollback(ctx, { serveGoodVersion: true }), /must roll back/);
+  } finally {
+    await teardown();
+  }
+});
+
+test("known-red: m3.stuck-driver-evidence-recovery catches a successor that never recovers", async () => {
+  const { ctx, teardown } = await ctxFor("red-m3-stuck");
+  try {
+    // mutation: the successor skips recovery — the transaction stays
+    // pending at handing-over, so the promoted assertion goes RED
+    await assert.rejects(checkM3StuckDriverEvidence(ctx, { skipRecovery: true }), /must finish the transaction/);
   } finally {
     await teardown();
   }

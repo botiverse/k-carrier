@@ -71,6 +71,11 @@ export function serviceEnv(
     K_HOST_SHAPE: shape,
     K_CORE_UPGRADER: coreUpgraderUrl(),
     K_ROOT_KEYS: JSON.stringify(servers.map((s) => s.rootKeyPem)),
+    // Every process this tooth spawns — and, via inheritance, every process
+    // the driver spawns — carries the sandbox marker, so the sandbox
+    // teardown's verifyProcessTreeDead is the backstop for any leak: a "red"
+    // can never degrade into a hang.
+    K_SANDBOX_MARKER: path.basename(ctx.sandboxDir),
   };
 }
 

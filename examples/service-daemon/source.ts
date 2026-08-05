@@ -107,7 +107,9 @@ async function tryReady(child, timeoutMs) {
   }
   // ---- SERVICE role ----
   if (BEHAVIOR === "crash-on-start") { wsync(2, "service-daemon crashed"); process.exit(1); }
-  await runRecovery(); // a handover may have outlived its driver
+  if (process.env.K_SKIP_RECOVERY !== "1") {
+    await runRecovery(); // a handover may have outlived its driver
+  }
   writeIncarnation();
   wsync(1, "ready " + JSON.stringify({ version: VERSION, pid: process.pid, startId }));
   process.stdin.on("data", (chunk) => {
@@ -184,6 +186,12 @@ async function selfUpgrade() {
   const host = {
     async quiesce() {}, // service profile hosts no workloads
     async stop() {
+      if (process.env.K_STUCK_DRIVER === "1") {
+        // A wedged host: stop() never returns. The engine's host-call budget
+        // must time this out; the successor's recovery then decides by
+        // evidence, never by a flag.
+        await new Promise(() => {});
+      }
       const inc = readIncarnation();
       if (inc && inc.pid !== process.pid) {
         try { process.kill(inc.pid, "SIGKILL"); } catch { /* already gone */ }
