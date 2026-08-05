@@ -40,9 +40,14 @@ export function buildReceipt(opts: {
   const pass = opts.checks.filter((c) => c.status === "pass").length;
   const fail = opts.checks.filter((c) => c.status === "fail").length;
   const na = opts.checks.filter((c) => c.status === "na").length;
-  // Fail-closed: an empty check list is NEVER a pass — "0 checks" and
-  // "all passed" must be distinguishable to every consumer (CI included).
-  const result: "pass" | "fail" = fail > 0 || opts.checks.length === 0 ? "fail" : "pass";
+  // Fail-closed on BOTH shapes of nothing:
+  //   - an empty check list ("0 checks" ≠ "all passed"), and
+  //   - a list where nothing actually executed. A receipt of all-`na` used to
+  //     report pass, which is the empty suite wearing a non-empty list: the
+  //     count looks healthy and not one thing was verified.
+  // A green therefore requires at least one check that genuinely passed.
+  const result: "pass" | "fail" =
+    fail > 0 || opts.checks.length === 0 || pass === 0 ? "fail" : "pass";
   return {
     mode: opts.mode,
     profile: opts.profile,
