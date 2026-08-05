@@ -14,6 +14,8 @@ import type { TxnEffects } from "./effects.ts";
 import type { JournalEntry, TxnPhase } from "./state.ts";
 import { STATE_FORMAT_VERSION } from "./state.ts";
 import type { Clock } from "../clock.ts";
+import { HostCallTimeout, DEFAULT_HOST_CALL_BUDGET_MS } from "./hostCallBudget.ts";
+
 
 export interface EngineDeps {
   effects: TxnEffects;
@@ -26,6 +28,19 @@ export interface EngineDeps {
    * converge/; the engine only cares about pass/fail + reason.)
    */
   evaluatePredicates: (evidence: ProcessEvidence, targetVersion: string) => Promise<string | null>;
+  /**
+   * Budget for a single host call (quiesce/stop/start/probe).
+   *
+   * A host that HANGS is worse than one that crashes: nothing is journaled,
+   * the lock stays held by a process that is still alive (so stale-lock
+   * takeover does not apply), and every later attempt queues behind it
+   * forever. That is the "wedged half-way" failure, and it is the one an
+   * updater is least able to explain afterwards.
+   *
+   * Default 120s: long enough for a real service to drain sessions on a busy
+   * machine, short enough that a wedge is reported the same day it happens.
+   */
+  hostCallBudgetMs?: number;
 }
 
 export type EngineOutcome =
@@ -123,14 +138,14 @@ export class UpgradeEngine {
       version: target.version,
       ...(priorStartId === null ? {} : { priorStartId }),
     });
-    await this.deps.host.quiesce();
-    await this.deps.host.stop("stable");
-    await this.deps.host.start("experiment");
+    await this.withBudget("quiesce", () => this.deps.host.quiesce());
+    await this.withBudget("stop", () => this.deps.host.stop("stable"));
+    await this.withBudget("start", () => this.deps.host.start("experiment"));
 
     await this.journal("running-experiment", { version: target.version });
     let evidence: ProcessEvidence;
     try {
-      evidence = await this.deps.host.healthProbe();
+      evidence = await this.withBudget("healthProbe", () => this.deps.host.healthProbe());
     } catch (err) {
       return this.rollbackOutcome(`experiment probe failed: ${(err as Error).message}`);
     }
@@ -160,7 +175,7 @@ export class UpgradeEngine {
     if (priorStartId === undefined) return false;
     let evidence: ProcessEvidence;
     try {
-      evidence = await this.deps.host.healthProbe();
+      evidence = await this.withBudget("healthProbe", () => this.deps.host.healthProbe());
     } catch {
       return false; // nothing alive to vouch for the handover
     }
@@ -171,7 +186,7 @@ export class UpgradeEngine {
   private async finishHandover(experimentVersion: string): Promise<void> {
     let evidence: ProcessEvidence;
     try {
-      evidence = await this.deps.host.healthProbe();
+      evidence = await this.withBudget("healthProbe", () => this.deps.host.healthProbe());
     } catch (err) {
       await this.rollbackTo(`successor probe failed: ${(err as Error).message}`);
       return;
@@ -187,10 +202,37 @@ export class UpgradeEngine {
     await this.deps.host.resume();
   }
 
+  /**
+   * Bound a host call. On expiry we do NOT pretend the call failed cleanly:
+   * a pending promise cannot be cancelled in JS, so the host may still be
+   * mid-operation. The transaction gives up instead of issuing further host
+   * calls it cannot reason about, and the journal records why. Recovery is
+   * the next process start, which probes for evidence and decides from facts.
+   */
+  private async withBudget<T>(label: string, call: () => Promise<T>): Promise<T> {
+    const budgetMs = this.deps.hostCallBudgetMs ?? DEFAULT_HOST_CALL_BUDGET_MS;
+    let cancel: (() => void) | undefined;
+    try {
+      return await Promise.race([
+        call(),
+        new Promise<never>((_resolve, reject) => {
+          cancel = this.deps.clock.after(budgetMs, () => {
+            reject(new HostCallTimeout(label, budgetMs));
+          });
+        }),
+      ]);
+    } finally {
+      cancel?.();
+    }
+  }
+
   /** Best-effort identity of the live process; null when nothing answers. */
   private async probeStartId(): Promise<string | null> {
     try {
-      return (await this.deps.host.healthProbe()).startId;
+      // Budgeted like every other host call: found by the wedged-host test,
+      // which hung HERE -- an unbounded probe before the handover is the same
+      // trap one line earlier.
+      return (await this.withBudget("healthProbe", () => this.deps.host.healthProbe())).startId;
     } catch {
       return null;
     }

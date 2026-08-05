@@ -97,7 +97,7 @@ at first and correct on reflection: **neither has a process K hands over.**
 Several old-version processes may keep running in the `swap` model — normal,
 and invisible to K.
 
-There is **no third model**. Workload preservation, OS lifecycle convergence
+There is **no third model**. OS lifecycle convergence
 and fleet drive are **capabilities** you opt into on top of `service`; bundling
 them into a "profile" confused *what your app does* with *what K does*, and
 what your app does is none of K's business.
@@ -106,7 +106,6 @@ what your app does is none of K's business.
 // a service that also wants its sessions preserved and its OS lifecycle proven
 createUpgrader({ host, source, policy: "auto", /* ... */ });
 // capabilities are declared by implementing the corresponding host duties:
-//   quiesce/resume round-trip      -> workload-preservation
 //   named readback surfaces        -> lifecycle-convergence
 //   attach the drive module        -> fleet-drive
 ```
@@ -122,7 +121,7 @@ about that line is part of the contract.
 | the transition itself: never two incarnations live, never an unbootable host, crash at any step recovers | that version N+1 can *read* what version N wrote (your data, DB schema, caches) |
 | the artifact is authentic (signature chain) and byte-complete | that N+1 speaks a protocol your server still accepts (and N does too, if you may roll back) |
 | the *binary* is restorable — rollback returns the exact bytes that were running | that rolling the binary back is *meaningful* — **K restores your binary, not your data**. If N+1 migrated the user's database, rolling back to N leaves N facing N+1-shaped data |
-| proof the new version is actually live and OS lifecycle converged | what `quiesce`/`resume` must preserve for *your* workloads to be intact |
+| proof the new version is actually live and OS lifecycle converged | what `quiesce` must park durably, and what `resume` must bring back |
 | the owner's consent policy is honored | whether this upgrade is *safe to offer* at all (feature flags, in-flight work, licence state) |
 
 **The sharpest case is rollback**, and it is the same trap as downgrade:

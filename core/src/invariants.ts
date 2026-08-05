@@ -90,7 +90,8 @@ export type HostAssumption =
   | "probe-from-live-process"       // evidence comes from the running process, not files
   | "compatibility-declared"        // checkCompatibility is implemented and correct
   | "data-format-backward-compatible" // version N can read what N+1 wrote
-  | "exclusive-handoff";            // one live incarnation at a time: stop old, then start new
+  | "exclusive-handoff"             // one live incarnation at a time: stop old, then start new
+  | "resident-service";             // the host runs a process that is supposed to BE alive
 
 export interface Invariant<S = WorldSnapshot> {
   id: string;
@@ -250,26 +251,6 @@ export function checkInvariants(
  * compares two snapshots rather than judging one — hosts that declare a
  * workloadDigest get this for free, in upgrade AND rollback paths.
  */
-/**
- * LIVENESS (progress), deliberately separate from the safety set above.
- *
- * Every safety invariant here is satisfiable by doing nothing at all, so
- * safety alone cannot say an updater works. This is the minimal progress
- * property: a transaction that started must reach a terminal phase within a
- * bounded number of steps — never parked in `staged`/`readback` forever.
- */
-export function reachesTerminalWithin(
-  phaseTrace: readonly TxnPhase[],
-  maxSteps: number,
-): InvariantResult {
-  const terminal = new Set<TxnPhase>(["idle", "promoted", "rolled-back"]);
-  const last = phaseTrace.at(-1);
-  if (last !== undefined && terminal.has(last)) return null;
-  return phaseTrace.length >= maxSteps
-    ? `transaction still in ${last ?? "unknown"} after ${phaseTrace.length} steps (limit ${maxSteps}) — no progress to a terminal phase`
-    : null;
-}
-
 export const WORKLOAD_PRESERVED_ASSUMES: readonly HostAssumption[] = ["quiesce-resume-inverse"];
 
 export function workloadPreserved(before: WorldSnapshot, after: WorldSnapshot): InvariantResult {

@@ -51,7 +51,33 @@ idle → staged（experiment 槽已下载+验签）
 **设计**：
 - **Host adapter 接口**（宿主必须实现的最小面）：`quiesce()`（负载可安全暂停/落盘）、`stop()`、`start(slot)`、`healthProbe() → {version, pid, startId}`、`resume()`。core 只调接口，不知宿主细节 —— 这就是"任何 daemon 可用"的机械保证。
 - 自替换顺序显式化（Datadog 的教训直接抄）：先落盘 journal 意图 → 交接进程树（detached owner 模式，= 我们 direction-B）→ 新进程自证（见 L3）→ 才清旧。
-- 会话保留 = 宿主契约的一部分：`quiesce` 前后负载状态等价（Raft 壳里 = agent 的 MEMORY/工作区/连接恢复；核心层只保证调用时序与回滚时的对称恢复）。
+- 会话保留 = **宿主自己的能力**，`quiesce/resume` 只保证**调用时序**与回滚时的对称恢复；**K 不会让不具备连续性的宿主凭空获得连续性。**
+  ⚠️ **08-05 核实纠正**：raft-computer **今天并不保留 agent**——升级时 `serviceShutdown` 会把所有 runner 子进程 SIGTERM 掉，接班人重新拉起它们。⇒ 所以对 computer 而言 `workload-preservation` **是一项未来能力，不是现状**；要连续性得单独做（例如 runner 不随服务生命周期而死），**不是接了 K 就顺手拿到**。
+
+**⭐ 一等模型（08-05 提升，原本按边角情况处理）：升级事务可以比发起它的进程活得久。**
+很多宿主**起不动自己**——它们通过**退出**被替换，由外部的东西（supervisor / OS 安装器）按新字节把它拉起来：
+- **raft-computer**（我们第一个真实 service 档用户）= 退出后由 detached owner 拉起；
+- **electron-updater**（08-05 读源码核实）= 把安装交给 Squirrel.Mac / NSIS / dpkg，安装器替换并重启 app。
+⇒ **所以这不是怪癖，是这个领域的主流形状。**
+```
+后果   成功路径上，驱动事务的那个进程【死在 handover 中间】
+       ⇒ 后继者看到的 journal 与"崩溃"完全一样
+判定   只能靠【证据】：活进程报 experiment 版本，且 startId ≠ handover 时记下的那个
+       ⇒ 后继者接着跑谓词 → promote / rollback
+⚠️ 绝不用"这次重启是计划内的"标志位：崩溃路径同样能设这个标志。
+   标志是一句声明，incarnation 不同是一件发生过的事。
+```
+⇒ `start()` 的语义随之收紧：**只表示"已请求后继者"，不表示"后继者在跑"**——后者只有 `healthProbe()` 能回答。
+
+**⚠️ 一个【记录但暂不实现】的观察（08-05，读 computer 真实升级链后）**：
+computer 的交接**比 K 现在的 `stop→start` 强**——在位进程释放 IPC 归属但**不死**，spawn 接班人，验完凭证（pid / 托管集合与机器身份 / 版本）**才**退出；失败就杀掉接班人、拿回归属、继续服务。
+```
+stop→start   中间有一段【什么都没跑】的窗口；回滚要【重新起动旧的】，而重启本身可能失败
+computer     旧的从没停过 ⇒ 回滚不需要重启任何东西 ⇒ 撤销代价为零
+⚠️ 这【不是】K 拒绝做的零停机 overlap：那里 overlap 买的是【可用性】，这里买的是【可撤销性】。
+```
+⇒ **曾实现过一个可选的 `handOver()`，当天 revert 了**（xxchan：过度设计——是从"读代码"推出来的接口，不是从"真接入时表达不了"推出来的）。
+⇒ **等真接入 computer 时若确实表达不了，更便宜的解法多半是一个"允许重叠"的能力位**（core 改成 `start → probe → stop`），**而不是让宿主替 core 完成整个交接**。
 
 ### L3 收敛与回读层（#395 直接平移，两家都没有）
 **要**：升级"说做到了"必须可机械证明。
@@ -151,6 +177,21 @@ server 侧最小要求 = 静态文件（manifest+工件+签名）；drive 为可
 6. **断言纪律**：承重齿 = invariant；锁当前实现的辅助断言 = baseline-带失效条件（#395 已入 spec 的二分）。
 7. **跨版本矩阵**：old-core 读 new-state = fail-closed；new-core 收养 old 布局 = 无损迁移；混合版本窗口显式建模。
 8. **真机验收协议**：Testbed 床跑全矩阵；个人真机只做 consent 后的读回抽样（1.0.15 建立的惯例）；in-env 复现构建核发布字节。
+
+## 3.5 与 electron-updater 的对照（08-05 读源码，v6.8.9 ≈4200 行）
+
+**两个互相独立的轴**（此前混为一谈的"复杂度"）：**交付**（把字节放到位有多难）与**保证**（放完之后承诺什么）。
+```
+rustup self update  交付低 / 保证低    换一个文件、退出
+electron-updater    交付高 / 保证低    4200 行几乎全在交付：feed 源 ~800 · 增量下载 ~800
+                                     · 各平台安装 ~800（mac 起本地 HTTP 服务器把 zip 喂给
+                                       Squirrel.Mac，因为它只肯接 URL）· 编排 ~730
+K                   交付低 / 保证高    单二进制；事务 + 回读 + 回滚
+```
+- **核实**：全包**零 rollback / 零 revert / 零装后健康检查**；签名靠**系统代码签名**（Windows Authenticode 发布者名 / mac codesign），不是自己的链。⇒ **"这一类没人做事务回滚与回读"成立。**
+- **不长成它**：`.app` / MSI / deb 的安装脏活是平台特有的，交给那些工具；K 只管事务与回滚，通过 `PlatformOps` / `HostAdapter` 调它们。
+- **灰度百分比不进核心**：按 K 自己的边界，"我该升到哪个版本"是 `ReleaseSource` 的问题 ⇒ 灰度天然属于那一层。**（这条算边界划对了的证据。）**
+- ⚠️ **已知真差距（记录，暂不做）**：**下载不可续**——进程死了要重下，而 computer 的 SEA ≈150MB，这个代价是真的。
 
 ## 4. 边界（不做什么）
 - 不替代 OS 包管理器：PM 拥有的安装交给 PM（TS 矩阵思路），core 的主 lane 是自有安装（SEA 类）。**v0 范围裁定（xxchan 08-05）：只假设官方 installer 安装；deb/RPM 等 PM 装的副本 = ownership 检测 → `held: managed-elsewhere` 即正确终态，不做接管/收编**；
