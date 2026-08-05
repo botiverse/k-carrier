@@ -14,6 +14,7 @@ function makeWorld(opts: {
   journal?: JournalEntry[];
   stable?: string | null;
   slots?: Record<Slot, string | null>;
+  handOver?: (slot: Slot) => Promise<ProcessEvidence>;
 } = {}) {
   const trace: string[] = [];
   const journal: JournalEntry[] = opts.journal ? [...opts.journal] : [];
@@ -57,6 +58,14 @@ function makeWorld(opts: {
         return { version: "2.0.0", pid: 42, startId: "s-42" };
       }),
       resume: async () => { trace.push("host:resume"); },
+      ...(opts.handOver
+        ? {
+            handOver: async (slot: Slot) => {
+              trace.push(`host:handOver:${slot}`);
+              return opts.handOver!(slot);
+            },
+          }
+        : {}),
     },
     clock: { nowMs: () => clockMs++, after: () => () => {} },
     evaluatePredicates: opts.predicates ?? (async () => null),
@@ -118,6 +127,54 @@ test("recover after crash mid-handover: rolls back with host restart", async () 
   const w = makeWorld({ journal: [entry(0, "staged"), entry(1, "handing-over")] });
   await new UpgradeEngine(w.deps).recover();
   assert.deepEqual(w.trace, ["journal:rolled-back", "host:stop:experiment", "host:start:stable", "host:resume", "slots:clear"]);
+});
+
+test("a reversible handover replaces stop+start entirely", async () => {
+  // The incumbent performs the exchange itself and returns the successor's
+  // evidence. K must NOT also stop/start around it -- doing so would reopen
+  // the very gap this host avoids.
+  const w = makeWorld({
+    handOver: async () => ({ version: "2.0.0", pid: 77, startId: "new" }),
+  });
+  const outcome = await new UpgradeEngine(w.deps).upgrade({ version: "2.0.0", bytesRef: "ref" });
+  assert.deepEqual(outcome, { result: "promoted", version: "2.0.0" });
+  assert.deepEqual(w.trace, [
+    "journal:staged", "slots:stage",
+    "host:probe",
+    "journal:handing-over", "host:quiesce",
+    "host:handOver:experiment",
+    "journal:running-experiment",
+    "journal:readback",
+    "journal:promoted", "slots:promote", "host:resume",
+  ]);
+  assert.equal(w.slots.stable, "2.0.0");
+});
+
+test("THE POINT: a refused handover does not restart a host that never stopped", async () => {
+  // The incumbent is still serving. Restarting it here would turn a clean
+  // refusal into an outage -- the exact failure the plain sequence risks.
+  const w = makeWorld({
+    handOver: async () => { throw new Error("successor never proved ownership"); },
+  });
+  const outcome = await new UpgradeEngine(w.deps).upgrade({ version: "2.0.0", bytesRef: "ref" });
+  assert.equal(outcome.result, "rolled-back");
+  assert.match((outcome as { reason: string }).reason, /successor never proved ownership/);
+  assert.equal(w.trace.includes("host:stop:experiment"), false, "must not stop a running incumbent");
+  assert.equal(w.trace.includes("host:start:stable"), false, "must not restart what never stopped");
+  assert.equal(w.slots.stable, "1.0.0");
+  assert.equal(w.slots.experiment, null);
+});
+
+test("a handover reporting the wrong version still faces the predicates", async () => {
+  // handOver returns evidence like any probe; it does not get to skip the
+  // host's own predicates just because the host performed the exchange.
+  const w = makeWorld({
+    handOver: async () => ({ version: "1.0.0", pid: 77, startId: "new" }),
+    predicates: async (e, target) => (e.version === target ? null : `predicates refused: live process reports ${e.version}`),
+  });
+  const outcome = await new UpgradeEngine(w.deps).upgrade({ version: "2.0.0", bytesRef: "ref" });
+  assert.equal(outcome.result, "rolled-back");
+  assert.match((outcome as { reason: string }).reason, /predicates refused/);
 });
 
 test("a handover that outlived its driver is FINISHED by the successor", async () => {

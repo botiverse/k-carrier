@@ -124,15 +124,34 @@ export class UpgradeEngine {
       ...(priorStartId === null ? {} : { priorStartId }),
     });
     await this.deps.host.quiesce();
-    await this.deps.host.stop("stable");
-    await this.deps.host.start("experiment");
 
-    await this.journal("running-experiment", { version: target.version });
+    // A host that can hand over reversibly does the whole exchange itself and
+    // returns the successor's evidence; its incumbent never stops, so a
+    // failure here costs nothing to undo. Hosts without it get the plain
+    // sequence, which does have a gap and must restart the old one to recover.
+    const handOver = this.deps.host.handOver?.bind(this.deps.host);
     let evidence: ProcessEvidence;
-    try {
-      evidence = await this.deps.host.healthProbe();
-    } catch (err) {
-      return this.rollbackOutcome(`experiment probe failed: ${(err as Error).message}`);
+    if (handOver) {
+      try {
+        evidence = await handOver("experiment");
+      } catch (err) {
+        // The incumbent is still serving (the adapter's contract), so undo the
+        // staged artifact WITHOUT restarting anything: restarting a host that
+        // never stopped is how a safe rollback turns into an outage.
+        await this.rollbackTo(`handover refused: ${(err as Error).message}`, { skipHostRestart: true });
+        return { result: "rolled-back", reason: `handover refused: ${(err as Error).message}` };
+      }
+      await this.journal("running-experiment", { version: target.version });
+    } else {
+      await this.deps.host.stop("stable");
+      await this.deps.host.start("experiment");
+
+      await this.journal("running-experiment", { version: target.version });
+      try {
+        evidence = await this.deps.host.healthProbe();
+      } catch (err) {
+        return this.rollbackOutcome(`experiment probe failed: ${(err as Error).message}`);
+      }
     }
 
     await this.journal("readback", { version: target.version });
