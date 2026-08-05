@@ -63,7 +63,7 @@
 |---|---|---|
 | mac/linux/windows 适配器 | 各平台读回面 allowlist 注册齐 + CI 矩阵跑（linux 真跑；mac/win 至少接口级+Testbed 真机轮） | 未注册面被引用 ⇒ 拒 |
 | managed 端到端 | managed-host demo：带活"会话"的完整升级→会话保留断言→回滚路径同样保留 | 升级后会话丢失/回滚后会话丢失 ⇒ 红 |
-| ownership 迁移场景（借 Datadog e2e） | PM/别的管理器装的 → K 接管（adopt）→ 状态/谓词正确 | 接管后旧管理器仍认为自己拥有 ⇒ 红 |
+| ownership 迁移场景 | **DEFERRED（xxchan 08-05 范围裁定：v0 只假设官方 installer 安装，不做 deb/RPM 接管）**——PM 装的副本走 ownership 检测 → `held: managed-elsewhere` 即为正确终态（有齿，M3）；接管(adopt)留给将来需要时再立项 | —（deferred） |
 
 ## M6 — L5 drive（可选层，最后）
 

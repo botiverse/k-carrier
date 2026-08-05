@@ -133,7 +133,7 @@ server 侧最小要求 = 静态文件（manifest+工件+签名）；drive 为可
 8. **真机验收协议**：Testbed 床跑全矩阵；个人真机只做 consent 后的读回抽样（1.0.15 建立的惯例）；in-env 复现构建核发布字节。
 
 ## 4. 边界（不做什么）
-- 不替代 OS 包管理器：PM 拥有的安装交给 PM（TS 矩阵思路），core 的主 lane 是自有安装（SEA 类）；
+- 不替代 OS 包管理器：PM 拥有的安装交给 PM（TS 矩阵思路），core 的主 lane 是自有安装（SEA 类）。**v0 范围裁定（xxchan 08-05）：只假设官方 installer 安装；deb/RPM 等 PM 装的副本 = ownership 检测 → `held: managed-elsewhere` 即正确终态，不做接管/收编**；
 - 不做 OS 镜像/嵌入式 OTA（Mender/RAUC 领域）；
 - 发布时机/法务 = 开源那步的独立决定（License 已定 Apache-2.0）；
 - `host_lifecycle_converged` 作为**发布字段**上报 fleet = 另立任务（#395 边界原样）。
