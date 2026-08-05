@@ -3,6 +3,16 @@
 A from-zero guide. If you already know updaters, skim §2 (concepts) and jump
 to your profile in §3.
 
+## 0. The premise (read this first)
+
+**K assumes restarting your service is not expensive.** It guarantees you
+**come back up** — not that you never went down. A short interruption during a
+version change is accepted by design; what K refuses to accept is an upgrade
+that leaves you unrunnable, half-migrated, or claiming success it cannot prove.
+
+If you need strict continuous availability, **K is the wrong tool** — better
+said here than discovered from behaviour later.
+
 ## 1. What problem does K solve? (plain words)
 
 Making a program update itself sounds trivial — download the new version,
@@ -74,11 +84,12 @@ creating a version mismatch.
 
 ## 3. Tiered adoption: start tiny, grow without switching
 
-You do **not** need all of that on day one. K has three adoption profiles;
+You do **not** need all of that on day one. K has three adoption profiles named after PROCESS MODELS (not program
+types — nobody should have to decide whether their tool 'is a daemon');
 each is a strict superset of the previous, so an app can start at the
 smallest and grow later **without changing framework**.
 
-### Profile `cli` — any command-line tool (5 minutes)
+### Profile `swap` — no live process to hand over (5 minutes)
 
 For a program with **no resident process**, most of the hard parts vanish:
 nothing to hand off, nothing to keep alive. You implement **nothing** —
@@ -102,7 +113,16 @@ chain, the crash-safe journal, and an install-provenance record — for free.
 command `self upgrade`, like `rustup self update` — a bare `upgrade` reads
 as "upgrade the thing I manage".)
 
-### Profile `daemon` — a resident service without hosted workloads
+> **Process model (v0): exclusive handoff.** At most one live incarnation of
+> the K-managed service exists at a time: quiesce → stop old → start new →
+> prove. The downtime window is by construction; K makes it short rather than
+> pretending it isn't there. Zero-downtime overlap (start new, drain old, stop
+> old) is a *different* model — it has a legitimate "both alive" state, needs a
+> drain contract, and changes which invariants hold — and K does not implement
+> it. In the `swap` profile none of this applies: several old-version processes
+> may keep running, and K neither tracks nor touches them.
+
+### Profile `service` — one live incarnation, handed over
 
 Now there is a live process to replace, so you implement **three real
 methods** (`quiesce`/`resume` may stay no-ops):
@@ -121,7 +141,7 @@ You get the full two-slot transaction: staged download, trial run,
 promote-or-rollback, crash recovery at any point, and process-level proof
 (`binary_at_target`) that the new version is actually the one running.
 
-### Profile `managed` — hosted workloads and OS lifecycle (the full stack)
+### Profile `hosted` — a service that also holds others' work (the full stack)
 
 For hosts like Raft Computer — live sessions that must survive the upgrade,
 plus OS state (launch-at-login, supervisors) that must converge:
