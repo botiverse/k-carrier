@@ -24,4 +24,10 @@ examples/   one runnable demo per profile (swap-tool / service-daemon / hosted-s
 docs/       guides + design + test plan + research
 ```
 
+**Platform support today:** Linux and macOS are implemented and gate CI.
+Windows platform operations (replacing a *running* .exe, process liveness) are
+deliberately unimplemented — they throw a typed `PLATFORM_UNSUPPORTED` rather
+than approximating POSIX behaviour and corrupting an install. The Windows CI
+job runs and reports, but does not gate, until those land.
+
 Status: incubating. TypeScript first. License: **Apache-2.0**.

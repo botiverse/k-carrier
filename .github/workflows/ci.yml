@@ -11,8 +11,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            required: true
+          - os: macos-latest
+            required: true
+          # Windows platform ops are deliberately unimplemented (they throw
+          # typed PLATFORM_UNSUPPORTED rather than approximating POSIX and
+          # corrupting an install). This job therefore reports honestly but
+          # does not gate: a permanently red required check teaches everyone
+          # to ignore red, which costs more than the signal is worth. It flips
+          # to required with the Windows milestone.
+          - os: windows-latest
+            required: false
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ !matrix.required }}
+    name: check (${{ matrix.os }}${{ matrix.required && '' || ', informational — Windows ops not implemented yet' }})
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
