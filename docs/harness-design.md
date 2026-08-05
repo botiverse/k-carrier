@@ -80,6 +80,25 @@ harness 有两个平面，**默认用外面那个**：
 
 接入方黑盒模式随之而来：`k-harness --profile cli --bin ./mytool` —— **零代码集成**：给你的真二进制，harness 起 fake-server、跑你的升级命令、断言下次运行版本/回滚/held。比 `--adapter` 还轻（cli 档接入方连 adapter 都不用给）。
 
+## 1.76 黑盒 CLI 契约（xxchan 08-05："需要定义查版本子命令、状态 predicate 之类"）
+
+黑盒平面要从外面问二进制三类问题，因此有一个**小的 CLI 契约** —— 但它是"声明"不是"每家自己发明"：
+
+**① core 白送命令实现**（app 只做一行接线）：
+- `versionCommand()` → 打印二进制自身版本（cli 档够用）；
+- `statusCommand()` → **问活进程**（走宿主 socket，同 same-PID 纪律）输出机读 JSON：`{ProcessEvidence, TxnState, ConvergenceReport}` —— 就是 core 已有的三个类型，不另造 schema；
+- `selfUpgradeCommand()` → 包装 `upgrader.upgrade()`，outcome 四态按结构化输出。
+
+**② app 声明命令名**（K 不规定你的 CLI 长相，只要能声明怎么调）：仓库放一个 `k.json`：
+```json
+{ "version": ["--version"], "status": ["k-status", "--json"], "selfUpgrade": ["self", "upgrade"] }
+```
+`k-harness --bin ./mytool` 读它来驱动；没有 `k.json` 时按默认约定探测（`--version` / `self upgrade`）。
+
+**③ 与透明性原则自洽**：这些不是测试后门，是**产品本来就该有的面**（用户和 support 一样需要 `status --json`）——harness 只是恰好消费它们。cli 档最小契约 = `version` + `selfUpgrade` 两条；daemon/managed 档 + `status`（活进程 JSON）。
+
+**齿**：契约自身可验 —— `k.json` 声明的命令跑不通 / status 输出不合 schema ⇒ 黑盒验收直接 FAIL（typed，不进齿评审）。
+
 ## 1.8 透明性原则（xxchan 08-05：测试框架对升级框架透明）
 
 **core 对 harness 零感知，机械强制**：
