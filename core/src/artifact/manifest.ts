@@ -1,12 +1,12 @@
 /**
  * L0 manifest model — the static-file protocol wire contract
  * (design-v1 §L0): `manifest.json` = version + per-platform targets
- * (file/sha256/size) + optional publish channel (latest|alpha).
+ * (file/sha256/size) + optional publisher-declared release streams.
  *
  * Parsing is strict and fail-closed: a malformed manifest or an unknown
- * channel value is a typed error, never a silent reinterpretation.
+ * malformed field is a typed error, never a silent reinterpretation.
  * Unknown EXTRA keys are ignored (forward compatibility — the required
- * shape is version + targets; channel is validated when present).
+ * shape is version + targets; channels validated for shape when present).
  */
 import { ArtifactError } from "./errors.ts";
 
@@ -19,11 +19,15 @@ export interface ManifestTarget {
 }
 
 export interface Manifest {
+  /**
+   * Publisher-declared release streams: name -> version. The NAMES are the
+   * adopter's vocabulary; K never invents or defaults them.
+   */
+  channels?: Record<string, string>;
   version: string;
   /** Platform tag (e.g. "darwin-arm64") -> binary target. */
   targets: Record<string, ManifestTarget>;
   /** Track the release was published under (latest | alpha). Optional. */
-  channel?: "latest" | "alpha";
 }
 
 const SHA256_RE = /^[0-9a-f]{64}$/;
@@ -67,17 +71,28 @@ export function parseManifest(text: string): Manifest {
     throw new ArtifactError("MANIFEST_INVALID", "manifest.targets must contain at least one platform");
   }
 
-  let channel: Manifest["channel"];
-  if (o.channel !== undefined) {
-    if (o.channel !== "latest" && o.channel !== "alpha") {
-      // unknown channel value fails closed (test-plan M1: 未知 channel 值 fail-closed)
-      throw new ArtifactError("CHANNEL_INVALID", `manifest.channel must be latest|alpha, got ${JSON.stringify(o.channel)}`);
+  // Release streams are the PUBLISHER's vocabulary: K validates the shape
+  // (name -> version string) but never the names themselves.
+  let channels: Record<string, string> | undefined;
+  if (o.channels !== undefined) {
+    if (typeof o.channels !== "object" || o.channels === null || Array.isArray(o.channels)) {
+      throw new ArtifactError("MANIFEST_INVALID", "manifest.channels must be an object mapping name -> version");
     }
-    channel = o.channel;
+    const parsed: Record<string, string> = {};
+    for (const [name, version] of Object.entries(o.channels as Record<string, unknown>)) {
+      if (typeof version !== "string" || !version.trim()) {
+        throw new ArtifactError(
+          "MANIFEST_INVALID",
+          `manifest.channels.${name} must be a non-empty version string`,
+        );
+      }
+      parsed[name] = version;
+    }
+    channels = parsed;
   }
 
   const out: Manifest = { version: o.version, targets };
-  if (channel !== undefined) out.channel = channel;
+  if (channels !== undefined) out.channels = channels;
   return out;
 }
 

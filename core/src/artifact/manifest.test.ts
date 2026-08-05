@@ -18,9 +18,12 @@ test("parses a valid manifest with version, targets and optional channel", () =>
   const target = m.targets["darwin-arm64"];
   assert.ok(target);
   assert.equal(target.file, "app-1.2.3.bin");
-  assert.equal(m.channel, undefined);
-  const alpha = parseManifest(JSON.stringify({ ...JSON.parse(VALID), channel: "alpha" }));
-  assert.equal(alpha.channel, "alpha");
+  assert.equal(m.channels, undefined);
+  // channel NAMES are the publisher's vocabulary: any name parses.
+  const streams = parseManifest(
+    JSON.stringify({ ...JSON.parse(VALID), channels: { stable: "1.2.3", "lts-2024": "1.0.0" } }),
+  );
+  assert.deepEqual(streams.channels, { stable: "1.2.3", "lts-2024": "1.0.0" });
 });
 
 test("rejects malformed shapes with MANIFEST_INVALID", () => {
@@ -38,9 +41,19 @@ test("rejects malformed shapes with MANIFEST_INVALID", () => {
   }
 });
 
-test("unknown channel value fails closed", () => {
+test("channel NAMES are the publisher's vocabulary; only the SHAPE is validated", () => {
+  // Any name is legitimate — K invents no channel vocabulary.
+  const ok = parseManifest(
+    JSON.stringify({ ...JSON.parse(VALID), channels: { nightly: "1.2.3", "lts-2024": "1.0.0" } }),
+  );
+  assert.equal(ok.channels?.["nightly"], "1.2.3");
+  // Malformed SHAPE still fails closed.
   assert.throws(
-    () => parseManifest(JSON.stringify({ ...JSON.parse(VALID), channel: "nightly" })),
-    /CHANNEL_INVALID/,
+    () => parseManifest(JSON.stringify({ ...JSON.parse(VALID), channels: ["stable"] })),
+    /MANIFEST_INVALID/,
+  );
+  assert.throws(
+    () => parseManifest(JSON.stringify({ ...JSON.parse(VALID), channels: { stable: 42 } })),
+    /MANIFEST_INVALID/,
   );
 });

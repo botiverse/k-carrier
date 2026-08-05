@@ -16,7 +16,7 @@ import { promises as fs } from "node:fs";
 import { spawn, type ChildProcess } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { type ToothContext } from "../teeth/registry.ts";
-import { parseChannel, resolveTarget, type Channel } from "../../../core/src/artifact/channel.ts";
+import { parseSelector, resolveSelector, type ReleaseSelector } from "../../../core/src/artifact/selector.ts";
 import { parseManifest, currentPlatformKey, type Manifest } from "../../../core/src/artifact/manifest.ts";
 import { downloadVerified } from "../../../core/src/artifact/download.ts";
 import { atomicWriteFile } from "../../../core/src/artifact/swap.ts";
@@ -134,43 +134,52 @@ export async function checkKillMidSwapPreservesOld(
 // unknown channel => fail-closed
 // ---------------------------------------------------------------------------
 
-function buildTestManifest(version: string, platform: string, channel?: "latest" | "alpha"): Manifest {
+/** channelName is the PUBLISHER's own vocabulary — any string is legitimate. */
+function buildTestManifest(version: string, platform: string, channelName?: string): Manifest {
   const o: Record<string, unknown> = {
     version,
     targets: { [platform]: { file: "app.bin", sha256: "a".repeat(64), size: 1 } },
   };
-  if (channel !== undefined) o.channel = channel;
+  if (channelName !== undefined) o.channels = { [channelName]: version };
   return parseManifest(JSON.stringify(o));
 }
 
 /** Mutation stand-in: a parser that accepts any string as a channel. */
-const lenientParse = (s: string): Channel => s as Channel;
+const lenientParse = (s: string): ReleaseSelector => ({ kind: "channel", name: s });
 
 export async function checkChannelFailClosed(
   _ctx: ToothContext,
   opts: { lenient?: boolean } = {},
 ): Promise<void> {
   const platform = currentPlatformKey();
-  const manifest = buildTestManifest("1.0.0", platform);
+  const manifest = buildTestManifest("1.0.0", platform, "stable");
   if (opts.lenient) {
     // mutation: a parser that accepts anything — the fail-closed
     // assertions must go RED against it
     assert.throws(() => lenientParse("nonsense"), /CHANNEL_INVALID/);
     return;
   }
-  assert.throws(() => parseChannel("nonsense"), /CHANNEL_INVALID/);
-  assert.throws(() => parseChannel("pinned:"), /CHANNEL_INVALID/);
+  // An adopter-owned name is accepted as a NAME (K invents no vocabulary),
+  // but must be published by the manifest or it fails closed.
+  assert.throws(() => parseSelector("   "), /CHANNEL_INVALID/);
+  assert.throws(() => parseSelector("pinned:"), /CHANNEL_INVALID/);
   assert.throws(
-    () => resolveTarget(manifest, parseChannel("pinned:2.0.0"), platform),
+    () => resolveSelector(manifest, parseSelector("nightly"), platform),
+    /CHANNEL_NOT_IN_MANIFEST/,
+  );
+  assert.throws(
+    () => resolveSelector(manifest, parseSelector("pinned:2.0.0"), platform),
     /PINNED_VERSION_MISMATCH/,
   );
-  assert.throws(() => resolveTarget(manifest, "alpha", platform), /NOT_ALPHA/);
-  assert.throws(() => resolveTarget(manifest, "latest", "windows-arm64"), /UNSUPPORTED_PLATFORM/);
-  const resolved = resolveTarget(manifest, "latest", platform);
+  assert.throws(() => resolveSelector(manifest, parseSelector("stable"), "windows-arm64"), /UNSUPPORTED_PLATFORM/);
+  const resolved = resolveSelector(manifest, parseSelector("stable"), platform);
   assert.equal(resolved.version, "1.0.0");
-  // an alpha-published manifest resolves under alpha
-  const alphaManifest = buildTestManifest("2.0.0-alpha.1", platform, "alpha");
-  assert.equal(resolveTarget(alphaManifest, "alpha", platform).version, "2.0.0-alpha.1");
+  // a publisher-declared stream resolves under ITS OWN name — any name.
+  const streamManifest = buildTestManifest("2.0.0-rc.1", platform, "canary");
+  assert.equal(
+    resolveSelector(streamManifest, parseSelector("canary"), platform).version,
+    "2.0.0-rc.1",
+  );
 }
 
 // ---------------------------------------------------------------------------

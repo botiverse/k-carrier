@@ -50,7 +50,7 @@ registerTooth({
   kind: { kind: "invariant" },
   mustRed: [
     {
-      mutate: "parseChannel accepts unknown values (no fail-closed)",
+      mutate: "resolveSelector falls back when the channel name is not in the manifest",
       caughtOnlyBy: {
         alsoCaughtBy: "core/src/artifact channel unit tests",
         whyStillNeeded:
