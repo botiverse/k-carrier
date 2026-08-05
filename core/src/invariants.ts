@@ -29,6 +29,19 @@
  *   - service / hosted: exactly one live incarnation of that identity, which
  *     is what `never-dual-run` constrains.
  *
+ *   PROCESS MODEL (v0, declared rather than inferable from call order):
+ *     EXCLUSIVE HANDOFF. At most one incarnation of the K-managed identity is
+ *     alive at a time; a handoff is quiesce -> stop(old) -> start(new) -> prove.
+ *     There is a downtime window by construction, and K makes it short rather
+ *     than pretending it does not exist.
+ *
+ *     Zero-downtime overlap (start new, drain old, then stop old) is a
+ *     DIFFERENT process model, not a flag on this one: it has a legitimate
+ *     "both alive" state, needs a drain contract instead of quiesce, and
+ *     changes which invariants hold. It is NOT implemented (ruled niche for
+ *     v0). Anything claiming K supports it would be claiming a guarantee K
+ *     does not make.
+ *
  *   OUT OF SCOPE for v0 (deliberately, not by oversight): one binary running
  *   several instances with different arguments. One Upgrader owns one service
  *   identity; run one Upgrader per instance (separate stateDir), or have the
@@ -76,7 +89,8 @@ export type HostAssumption =
   | "quiesce-resume-inverse"        // parked workloads are unchanged while parked
   | "probe-from-live-process"       // evidence comes from the running process, not files
   | "compatibility-declared"        // checkCompatibility is implemented and correct
-  | "data-format-backward-compatible"; // version N can read what N+1 wrote
+  | "data-format-backward-compatible" // version N can read what N+1 wrote
+  | "exclusive-handoff";            // one live incarnation at a time: stop old, then start new
 
 export interface Invariant<S = WorldSnapshot> {
   id: string;
@@ -100,6 +114,11 @@ export const neverDualRun: Invariant = {
   id: "k.never-dual-run",
   description:
     "at most one live incarnation of the K-managed service identity (vacuous in the swap profile)",
+  // NOT a universal truth about upgrades — it holds under K's declared process
+  // model (exclusive handoff). An app that starts the new incarnation before
+  // draining the old one is not violating a law of nature; it is running a
+  // model K does not implement (see PROCESS MODEL below).
+  assumes: ["exclusive-handoff"],
   check: (s) =>
     s.liveProcesses.length > 1
       ? `${s.liveProcesses.length} live incarnations: ${s.liveProcesses
