@@ -1,10 +1,10 @@
 # K (k-carrier)
 
-**Upgrade framework for managed resident services on personal devices.** (private while incubating)
+**Self-upgrade framework for programs that must prove they came back up.** (private while incubating)
 
-CLI self-update libraries solve the easy end; org-fleet updaters solve the server end. **Nobody covers the middle — a resident service on a machine a *person* owns, hosting live workloads.** K is that union: transactional two-slot upgrades with rollback, host handoff with session preservation, *proven* convergence (live-process + named-surface readback; version strings are never proof), owner consent/notification, and optional policy-gated fleet drive.
+CLI self-update libraries stop at replacing bytes; fleet updaters assume a machine someone else administers. K covers what neither does: **an upgrade that is a transaction and can prove it happened** — two slots with rollback, crash-safe at every step, handoff of a live process with its workloads intact, and convergence proven from the live process and named OS surfaces (a version string is never accepted as proof). Consent and notification are built in, because on a machine someone owns personally, changing behaviour silently is not acceptable — but nothing here is limited to personal machines.
 
-**Serves every application form, from day one** — three adoption profiles named after PROCESS MODELS, each a superset of the last: `swap` (no live process to hand over — bytes land, next start uses them) → `service` (one live incarnation, stopped and restarted under proof) → `hosted` (a service that also holds others' work and OS lifecycle state). Start with a 5-minute integration and grow without switching frameworks. Proof is executable: one runnable example per profile, and a profile without a green example has no support claim.
+**Two process models, defined by how many live incarnations K manages** — `swap` (**0**: K replaces bytes and touches no process; a one-shot CLI and an hours-long agent session are the same case) and `service` (**1**: K stops the old, starts the new, and proves it). Workload preservation, OS lifecycle convergence and fleet drive are capabilities you opt into on top, not a third model. Proof is executable: a runnable example per case, and a claim without a green example does not exist.
 
 ## Start here
 
