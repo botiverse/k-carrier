@@ -14,8 +14,10 @@ jobs:
         include:
           - os: ubuntu-latest
             required: true
+            label: ubuntu (gating)
           - os: macos-latest
             required: true
+            label: macos (gating)
           # Windows platform ops are deliberately unimplemented (they throw
           # typed PLATFORM_UNSUPPORTED rather than approximating POSIX and
           # corrupting an install). This job therefore reports honestly but
@@ -24,9 +26,10 @@ jobs:
           # to required with the Windows milestone.
           - os: windows-latest
             required: false
+            label: "windows (informational — Windows ops not implemented yet)"
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ !matrix.required }}
-    name: check (${{ matrix.os }}${{ matrix.required && '' || ', informational — Windows ops not implemented yet' }})
+    name: check ${{ matrix.label }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
