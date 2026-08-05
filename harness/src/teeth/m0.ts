@@ -17,6 +17,7 @@ import {
   checkServeOlderVersion,
   checkDropFileRemoves,
   checkSandboxIsolation,
+  checkSandboxVerifyDead,
 } from "./checks.ts";
 
 registerTooth({
@@ -95,6 +96,20 @@ registerTooth({
     },
   ],
   run: checkDropFileRemoves,
+});
+
+registerTooth({
+  id: "scenario.sandbox-verify-dead",
+  profiles: ["cli", "daemon", "managed"],
+  layers: ["L0"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "teardown sends kill but never scans/verifies death (residual marker process survives)",
+      caughtOnlyBy: "this", // only this tooth proves "发了 kill"≠"死了" at the sandbox boundary
+    },
+  ],
+  run: checkSandboxVerifyDead,
 });
 
 registerTooth({

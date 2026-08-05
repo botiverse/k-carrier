@@ -69,16 +69,18 @@ test("ok artifact really runs and reports its stamped version", async () => {
 test("behavior knobs produce genuinely broken binaries", async () => {
   await withSandbox(async (dir) => {
     const factory = new ArtifactFactory({ cacheDir: path.join(dir, "cache") });
-    const behaviors: Array<{ behavior: Behavior; expectCode: number | null; expectOut: string }> = [
-      { behavior: "crash-on-start", expectCode: 1, expectOut: "3.0.0 ready" },
-      { behavior: "wrong-version-probe", expectCode: 0, expectOut: "9.9.9 ready" },
-      { behavior: "hang-on-quiesce", expectCode: null, expectOut: "3.0.0 ready" }, // killed by timeout
+    const behaviors: Array<{ behavior: Behavior; expectCode: number | null; expectOut: string; timeoutMs: number }> = [
+      // non-hang behaviors get a generous timeout: under parallel load a
+      // 1s window can kill a healthy process before it exits
+      { behavior: "crash-on-start", expectCode: 1, expectOut: "3.0.0 ready", timeoutMs: 10000 },
+      { behavior: "wrong-version-probe", expectCode: 0, expectOut: "9.9.9 ready", timeoutMs: 10000 },
+      { behavior: "hang-on-quiesce", expectCode: null, expectOut: "3.0.0 ready", timeoutMs: 1000 }, // killed by timeout
     ];
-    for (const { behavior, expectCode, expectOut } of behaviors) {
+    for (const { behavior, expectCode, expectOut, timeoutMs } of behaviors) {
       const store = storeFor(dir, `store-${behavior}`);
       const rel = await factory.makeRelease({ version: "3.0.0", behavior, store });
       const artifactPath = path.join(dir, `store-${behavior}`, "releases", "3.0.0", rel.artifactFile);
-      const r = await runArtifact(artifactPath, 1000);
+      const r = await runArtifact(artifactPath, timeoutMs);
       assert.equal(r.timedOut, behavior === "hang-on-quiesce", `${behavior}: hang must time out`);
       assert.equal(r.code, expectCode, `${behavior}: exit code`);
       assert.equal(r.stdout.trim(), expectOut, `${behavior}: reported version`);
