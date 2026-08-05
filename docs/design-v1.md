@@ -139,6 +139,12 @@ server 侧最小要求 = 静态文件（manifest+工件+签名）；drive 为可
 - `host_lifecycle_converged` 作为**发布字段**上报 fleet = 另立任务（#395 边界原样）。
 
 ## 5. 与现状的衔接（Raft 壳落地顺序）
+
+### 5.0 依赖机制（xxchan 08-05 问"raft cli / computer 如何依赖 K"）
+- **K 是编译进宿主二进制的库，无独立运行时**：core build 进 Computer SEA / raft CLI 二进制 → "谁升级 K" = 升级宿主即升级内嵌的 K。
+- **孵化期**：git 依赖钉 commit SHA（pnpm：`"@k-carrier/core": "github:botiverse/k-carrier#<sha>&path:core"`）→ 可复现 + 供应链干净；**升 K = 改 SHA 的 PR**（依赖变更 review 可见）；CI 同 org 已有权限。
+- **API 稳定后**：发 `@k-carrier/core` 到 GitHub Packages（私有 npm）按 semver；开源后转公共 npm。
+- **两壳接法（都在 slock 仓库）**：packages/computer（managed 档）= 五方法 HostAdapter（quiesce=park agent runners / stop·start=`__service` / probe=复用 #5245 same-PID 证据 / resume）+ Electron login-item 读回面 + 三入口同一 Upgrader，状态 `SLOCK_HOME/computer/k/`；packages/cli（cli 档）= 零 adapter + ownership 探测（Computer 注入 wrapper 标记）+ `raft self upgrade`，状态 CLI 自有目录。**同 monorepo 吃同一 core 版本**（两壳永不错位）；两壳状态目录分离互不干扰。
 1. 1.0.16（已冻 #395）= L2/L3 在 Raft 壳内的第一次真实现（upgrade 入口接线 + 自启迁移 + 谓词回读）——**不等 core 成型，按本仓库已落的接口形状写**（`core/src/lifecycle/hostAdapter.ts` / `txn/state.ts` / `converge/predicates.ts` / `upgrader.ts`），之后平移进 core；
 2. K 既有产物直接归位：dark policy-row fixture（已建验）→ L5 drive 的门；channel file → L0；distsign → L0.5 新建；
 3. 本仓库 = 原"release/publish 侧 spec"的上位替代；接入方视角见 `docs/integration.md`。
