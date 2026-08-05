@@ -18,6 +18,8 @@ import { FakeServer } from "../fake-server/server.ts";
 import { runCommand } from "../artifact-factory/run.ts";
 import { buildSwapTool, coreUpgraderUrl, readState, serveRelease } from "./m1.ts";
 import { CLI_TOOL_SOURCE } from "../../../examples/swap-tool/source.ts";
+import { ArtifactFactory } from "../artifact-factory/factory.ts";
+import { currentPlatformKey } from "../../../core/src/artifact/staticManifestSource.ts";
 
 function swapEnv(ctx: ToothContext, baseUrl: string, servers: FakeServer[], extra: Record<string, string> = {}): Record<string, string> {
   return {
@@ -108,10 +110,22 @@ export async function checkM4ConsentBindsVersion(
     if (opts.serverSwitched) {
       // the SAME server now serves 3.0.0 — the continuation must refuse the
       // approved 2.0.0, not silently install whatever is current
-      await target.store.publish({
+      // 3.0.0 must be a REAL, RUNNABLE release. Publishing garbage bytes here
+      // made this tooth pass for the wrong reason: with version binding
+      // removed, the continuation DID fetch 3.0.0 -- it just could not run, so
+      // the probe failed and nothing was installed, which is exactly what the
+      // oracle checks. The tooth then proves "the payload was unrunnable", not
+      // "consent is bound to a version". (Found in review by removing the
+      // binding and watching this stay green.)
+      const switchedFactory = new ArtifactFactory({
+        cacheDir: path.join(ctx.sandboxDir, "cache-switched"),
+        demoSource: CLI_TOOL_SOURCE,
+      });
+      await switchedFactory.makeRelease({
         version: "3.0.0",
-        artifacts: { "app-3.0.0.bin": new TextEncoder().encode("v3") },
-        platform: (await import("../../../core/src/artifact/staticManifestSource.ts")).currentPlatformKey(),
+        behavior: "ok",
+        store: target.store,
+        platform: currentPlatformKey(),
       });
       try {
         const continueRun = await runCommand(binPath, ["confirm", "upgrade", "2.0.0"], {
