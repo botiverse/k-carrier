@@ -274,7 +274,7 @@ will and won't do with your app (full design: `harness-design.md`):
 Run the harness against **your** adapter, at your profile:
 
 ```
-k-harness --profile daemon --adapter ./dist/myHost.js
+k-harness --profile service --adapter ./dist/myHost.js
 ```
 
 Same teeth K tests itself with, tiered to your profile: crash-injection per

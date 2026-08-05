@@ -19,16 +19,26 @@
  *    rule: a cli-profile tooth exercising L2 is a registration error)
  */
 
-export type Profile = "cli" | "daemon" | "managed";
+export type Profile = "swap" | "service" | "hosted";
 
 /** L1p = the simplified cli-profile slot model ("swap is promote"). */
 export type Layer = "L0" | "L0.5" | "L1p" | "L1" | "L2" | "L3" | "L4" | "L5";
 
 /** Which layers each profile is allowed to exercise (design §2.5). */
+/**
+ * Profiles name PROCESS MODELS, not program archetypes:
+ *   swap    no live process K hands over. Bytes are replaced and take effect
+ *           on the next start. Several old-version processes may keep running
+ *           concurrently — that is normal, and invisible to K.
+ *   service exactly one live incarnation is handed over: stop old, start new,
+ *           prove it. This is where never-dual-run has meaning.
+ *   hosted  a service that also holds someone else's work (sessions/jobs) and
+ *           OS lifecycle state that must converge.
+ */
 export const PROFILE_LAYERS: Record<Profile, ReadonlySet<Layer>> = {
-  cli: new Set<Layer>(["L0", "L0.5", "L1p"]),
-  daemon: new Set<Layer>(["L0", "L0.5", "L1p", "L1", "L2", "L3"]),
-  managed: new Set<Layer>(["L0", "L0.5", "L1p", "L1", "L2", "L3", "L4", "L5"]),
+  swap: new Set<Layer>(["L0", "L0.5", "L1p"]),
+  service: new Set<Layer>(["L0", "L0.5", "L1p", "L1", "L2", "L3"]),
+  hosted: new Set<Layer>(["L0", "L0.5", "L1p", "L1", "L2", "L3", "L4", "L5"]),
 };
 
 export type ToothKind =

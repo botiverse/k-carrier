@@ -66,7 +66,7 @@ registerTooth({
   run: async (ctx) => { ... },
 });
 ```
-- **分档执行**：`--profile cli|daemon|managed` 选齿集；cli 档误挂 L2 齿 ⇒ 注册期报错（档界齿）。
+- **分档执行**：`--profile swap|daemon|managed` 选齿集；cli 档误挂 L2 齿 ⇒ 注册期报错（档界齿）。
 - **断言二分机械化**：`kind` 必填 invariant 或 baseline-带失效条件；CI 扫无标注断言（#395 纪律的执行器）。
 - **mutation-runner 对接**：registry 导出齿清单 + must-red 表，Lincan 的 runner 直接消费（未变异 baseline 0 失败 / 每齿变异必红 / 全红也不发结论）。
 
@@ -89,7 +89,7 @@ harness 有两个平面，**默认用外面那个**：
 
 **规则：能在黑盒层表达的齿必须写在黑盒层**；library 层是例外、要说明为什么外面够不着。（同我们 symptom-layer 教义：用户层的红是最不可伪造的 oracle。）
 
-接入方黑盒模式随之而来：`k-harness --profile cli --bin ./mytool` —— **零代码集成**：给你的真二进制，harness 起 fake-server、跑你的升级命令、断言下次运行版本/回滚/held。比 `--adapter` 还轻（cli 档接入方连 adapter 都不用给）。
+接入方黑盒模式随之而来：`k-harness --profile swap --bin ./mytool` —— **零代码集成**：给你的真二进制，harness 起 fake-server、跑你的升级命令、断言下次运行版本/回滚/held。比 `--adapter` 还轻（cli 档接入方连 adapter 都不用给）。
 
 ## 1.76 黑盒 CLI 契约（xxchan 08-05："需要定义查版本子命令、状态 predicate 之类"）
 

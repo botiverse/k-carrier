@@ -14,9 +14,9 @@ import {
 } from "./registry.ts";
 import { checkTierHasTeeth } from "./selfCheck.ts";
 
-const SELF_CHECK_IDS = ["harness.teeth-present-cli", "harness.teeth-present-daemon", "harness.teeth-present-managed"];
+const SELF_CHECK_IDS = ["harness.teeth-present-swap", "harness.teeth-present-service", "harness.teeth-present-hosted"];
 
-const ctx: ToothContext = { profile: "managed", sandboxDir: "" };
+const ctx: ToothContext = { profile: "hosted", sandboxDir: "" };
 
 test("known-green: each profile tier has real teeth, self-check teeth pass", async () => {
   const teeth = allTeeth().filter((t) => SELF_CHECK_IDS.includes(t.id));
@@ -28,7 +28,7 @@ test("known-green: each profile tier has real teeth, self-check teeth pass", asy
     assert.ok(tooth.mustRed.length > 0, `${tooth.id}: must-red`);
   }
   // and each tier genuinely has real (non-harness) teeth
-  for (const profile of ["cli", "daemon", "managed"] as const) {
+  for (const profile of ["swap", "service", "hosted"] as const) {
     assert.ok(
       teethFor(profile).some((t) => !t.id.startsWith("harness.")),
       `${profile} tier must contain real teeth`,
@@ -38,19 +38,19 @@ test("known-green: each profile tier has real teeth, self-check teeth pass", asy
 
 test("known-red: an emptied tier makes the self-check red", async () => {
   clearRegistry();
-  await assert.rejects(checkTierHasTeeth("cli"), /HARNESS_EMPTY_TIER/);
+  await assert.rejects(checkTierHasTeeth("swap"), /HARNESS_EMPTY_TIER/);
 });
 
 test("known-red: a tier left with only self-check teeth is still red", async () => {
   clearRegistry();
   const spec: ToothSpec = {
-    id: "harness.teeth-present-cli",
-    profiles: ["cli"],
+    id: "harness.teeth-present-swap",
+    profiles: ["swap"],
     layers: ["L0"],
     kind: { kind: "invariant" },
     mustRed: [{ mutate: "x", caughtOnlyBy: "this" }],
     run: async () => {},
   };
   registerTooth(spec);
-  await assert.rejects(checkTierHasTeeth("cli"), /HARNESS_EMPTY_TIER/);
+  await assert.rejects(checkTierHasTeeth("swap"), /HARNESS_EMPTY_TIER/);
 });

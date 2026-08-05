@@ -32,7 +32,7 @@ const M0_TOOTH_IDS = new Set([
 
 const ctxFor = async (prefix: string): Promise<{ ctx: ToothContext; teardown: () => Promise<void> }> => {
   const sb = await createSandbox({ prefix });
-  return { ctx: { profile: "managed", sandboxDir: sb.dir }, teardown: sb.teardown };
+  return { ctx: { profile: "hosted", sandboxDir: sb.dir }, teardown: sb.teardown };
 };
 
 // ---------------------------------------------------------------------------

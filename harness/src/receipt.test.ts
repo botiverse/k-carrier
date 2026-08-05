@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { buildReceipt, printReceipt } from "./receipt.ts";
 
 test("an empty check list renders as fail, never pass", () => {
-  const r = buildReceipt({ mode: "profile", profile: "cli", target: null, checks: [] });
+  const r = buildReceipt({ mode: "profile", profile: "swap", target: null, checks: [] });
   assert.equal(r.result, "fail");
   assert.deepEqual(r.summary, { pass: 0, fail: 0, na: 0, total: 0 });
 });
@@ -13,7 +13,7 @@ test("an empty check list renders as fail, never pass", () => {
 test("any fail dominates, and pass/na mix renders pass", () => {
   const fail = buildReceipt({
     mode: "profile",
-    profile: "cli",
+    profile: "swap",
     target: null,
     checks: [
       { id: "a", status: "pass", error: null, durationMs: 1 },
@@ -23,7 +23,7 @@ test("any fail dominates, and pass/na mix renders pass", () => {
   assert.equal(fail.result, "fail");
   const pass = buildReceipt({
     mode: "profile",
-    profile: "cli",
+    profile: "swap",
     target: null,
     checks: [
       { id: "a", status: "pass", error: null, durationMs: 1 },
@@ -36,7 +36,7 @@ test("any fail dominates, and pass/na mix renders pass", () => {
 test("human receipt lines state the result and the check marks", () => {
   const r = buildReceipt({
     mode: "profile",
-    profile: "cli",
+    profile: "swap",
     target: null,
     checks: [
       { id: "a", status: "pass", error: null, durationMs: 5 },

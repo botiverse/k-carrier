@@ -1,5 +1,5 @@
 /**
- * managed-host — the managed-profile example (design-v1 §2.5: full stack,
+ * hosted-service — the managed-profile example (design-v1 §2.5: full stack,
  * the Raft-Computer-shaped host).
  *
  * A HostDriver implementation a real managed host would ship: five-method
@@ -10,9 +10,9 @@
  * managed profile's "session preservation" claim.
  *
  * This is the demo's OWN host (a real adopter brings its own), not the
- * harness's fake — accepted by `k-harness --adapter examples/managed-host/host.ts`
+ * harness's fake — accepted by `k-harness --adapter examples/hosted-service/host.ts`
  * (contract subset: ledger equivalence ×2 + probe veracity/binding) and by
- * the registered tooth `examples.managed-host-adapter` in the managed tier.
+ * the registered tooth `examples.hosted-service-adapter` in the managed tier.
  *
  * Default export contract: `(stateDir: string) => HostDriver`.
  */
@@ -26,7 +26,7 @@ const SESSION_FILE = "session.bin";
 
 export function createManagedHost(stateDir: string): HostDriver {
   let counter = 0;
-  let checksum: Uint8Array = createHash("sha256").update("managed-host-v1").digest();
+  let checksum: Uint8Array = createHash("sha256").update("hosted-service-v1").digest();
   let runningSlot: Slot | null = null;
   let parked = false;
   let incarnation = 0;

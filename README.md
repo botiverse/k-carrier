@@ -20,7 +20,7 @@ CLI self-update libraries solve the easy end; org-fleet updaters solve the serve
 core/       the framework — zero host-specific concepts (shells live in their
             product's repo and consume core as a dependency)
 harness/    generic acceptance bed: fake-host daemon + profile-tiered teeth
-examples/   one runnable demo per profile (cli-tool / plain-daemon / managed-host)
+examples/   one runnable demo per profile (swap-tool / service-daemon / hosted-service)
 docs/       guides + design + test plan + research
 ```
 

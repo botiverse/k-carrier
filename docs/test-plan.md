@@ -15,9 +15,9 @@
 | fake-host（实现 HostAdapter 的最小假宿主，带可注入故障开关） | 五方法可被编排调用、故障开关能让任一方法定点失败 | 关掉故障开关注入 ⇒ 对应齿必须转绿（证明齿测的是故障不是常态） |
 | fake 静态 server（manifest+工件+签名，可篡改） | 正常链路可走通 | 篡改任一字节 ⇒ 下游校验齿红 |
 | **harness 自验**（mutation 契约 §自验承重墙） | 内置已知红/已知绿样例各≥1 + **1 个对抗样例**（结构过 fixture、违真 oracle） | 对抗样例被判 EFFECTIVE ⇒ harness 不上线 |
-| profile 分档执行器 | `--profile cli|daemon|managed` 只跑该档齿集 | cli 档误跑 L2 齿 ⇒ 计划红（档界齿） |
+| profile 分档执行器 | `--profile swap|daemon|managed` 只跑该档齿集 | cli 档误跑 L2 齿 ⇒ 计划红（档界齿） |
 
-## M1 — L1 事务 + L0 工件（出口：`examples/cli-tool` 绿 = cli 档成立）
+## M1 — L1 事务 + L0 工件（出口：`examples/swap-tool` 绿 = cli 档成立）
 
 | 测什么 | 怎么算过 | must-red |
 |---|---|---|
@@ -28,7 +28,7 @@
 | config 同轨 | 配置 experiment/promote/rollback 走同一状态机 | config 绕过状态机直写 ⇒ 红 |
 | L0 channel 解析 | latest/alpha/pinned:X 三态 + Version XOR Track 语义 | 未知 channel 值 fail-closed |
 | L0 校验+原子换 | sha256 不符拒装；换字节原子（半写不可见）；Windows 运行中自替换 | 篡改工件 ⇒ 拒；swap 中途 kill ⇒ 旧字节完好 |
-| cli 档端到端 | cli-tool demo：升级→下次运行是新版；`held/rolled-back/up-to-date` 四态出口都可构造 | — |
+| cli 档端到端 | swap-tool demo：升级→下次运行是新版；`held/rolled-back/up-to-date` 四态出口都可构造 | — |
 
 ## M2 — L0.5 供应链
 
@@ -38,7 +38,7 @@
 | root 轮换 | 多 root 并存期新旧 root 签的 signing.pub 都可验 | 已移除 root 签的 ⇒ 拒 |
 | 防回滚 | manifest 版本低于当前且非 pinned ⇒ 默认拒（显式降级需 typed 确认） | 静默接受更低版本 ⇒ 红 |
 
-## M3 — L2 生命周期 + L3 收敛（出口：`examples/plain-daemon` 绿 = daemon 档成立）
+## M3 — L2 生命周期 + L3 收敛（出口：`examples/service-daemon` 绿 = daemon 档成立）
 
 | 测什么 | 怎么算过 | must-red |
 |---|---|---|
@@ -57,12 +57,12 @@
 | 策略门 | confirm 未答 ⇒ 零副作用；notify-only ⇒ 只通知不动 | confirm 前有任何盘面写 ⇒ 红 |
 | **通知可验齿**（Hipp 判据原样） | 构造真实失败（迁移写失败/readback 不一致）⇒ sink **真收到**结构化事件 | 删通知调用 ⇒ 此齿必须红；"代码调用了通知"但 sink 没收到 ⇒ 红 |
 
-## M5 — platform 适配器 + managed 档（出口：`examples/managed-host` 绿）
+## M5 — platform 适配器 + managed 档（出口：`examples/hosted-service` 绿）
 
 | 测什么 | 怎么算过 | must-red |
 |---|---|---|
 | mac/linux/windows 适配器 | 各平台读回面 allowlist 注册齐 + CI 矩阵跑（linux 真跑；mac/win 至少接口级+Testbed 真机轮） | 未注册面被引用 ⇒ 拒 |
-| managed 端到端 | managed-host demo：带活"会话"的完整升级→会话保留断言→回滚路径同样保留 | 升级后会话丢失/回滚后会话丢失 ⇒ 红 |
+| managed 端到端 | hosted-service demo：带活"会话"的完整升级→会话保留断言→回滚路径同样保留 | 升级后会话丢失/回滚后会话丢失 ⇒ 红 |
 | ownership 迁移场景 | **DEFERRED（xxchan 08-05 范围裁定：v0 只假设官方 installer 安装，不做 deb/RPM 接管）**——PM 装的副本走 ownership 检测 → `held: managed-elsewhere` 即为正确终态（有齿，M3）；接管(adopt)留给将来需要时再立项 | —（deferred） |
 
 ## M6 — L5 drive（可选层，最后）

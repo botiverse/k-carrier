@@ -24,7 +24,7 @@ export async function checkTierHasTeeth(profile: Profile): Promise<void> {
   );
 }
 
-for (const profile of ["cli", "daemon", "managed"] as const) {
+for (const profile of ["swap", "service", "hosted"] as const) {
   registerTooth({
     id: `harness.teeth-present-${profile}`,
     profiles: [profile],

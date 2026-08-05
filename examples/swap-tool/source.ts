@@ -1,5 +1,5 @@
 /**
- * cli-tool — the cli-profile example (design-v1 §2.5: L0 + L0.5 + L1').
+ * swap-tool — the cli-profile example (design-v1 §2.5: L0 + L0.5 + L1').
  *
  * A REAL tiny CLI (zero deps) with one genuine command (`greet`) plus the
  * black-box contract (§1.76): `--version` and `self upgrade` (declared
@@ -15,7 +15,7 @@
  * versions). `K_RELEASE_BASE` env = releaseBase config.
  */
 export const CLI_TOOL_SOURCE = `#!/usr/bin/env node
-// cli-tool — K cli-profile example. Built by artifact-factory (§1.77).
+// swap-tool — K cli-profile example. Built by artifact-factory (§1.77).
 "use strict";
 const VERSION = "__K_VERSION__";
 const BEHAVIOR = "__K_BEHAVIOR__";
@@ -37,10 +37,10 @@ if (args[0] === "self" && args[1] === "upgrade") {
   selfUpgrade().catch((e) => { process.stderr.write(String(e) + "\\n"); process.exit(5); });
 } else {
   switch (BEHAVIOR) {
-    case "crash-on-start": process.stderr.write("cli-tool crashed\\n"); process.exit(1); break;
-    case "hang-on-quiesce": fs.writeSync(1, "cli-tool " + VERSION + "\\n"); setInterval(() => {}, 2147483647); break;
+    case "crash-on-start": process.stderr.write("swap-tool crashed\\n"); process.exit(1); break;
+    case "hang-on-quiesce": fs.writeSync(1, "swap-tool " + VERSION + "\\n"); setInterval(() => {}, 2147483647); break;
     case "ok":
-    default: fs.writeSync(1, "cli-tool " + VERSION + "\\n"); process.exit(0); break;
+    default: fs.writeSync(1, "swap-tool " + VERSION + "\\n"); process.exit(0); break;
   }
 }
 

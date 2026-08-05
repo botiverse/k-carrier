@@ -16,16 +16,16 @@ async function runCli(args: string[]): Promise<{ code: number | null; stdout: st
   return { code: r.code, stdout: r.stdout, stderr: r.stderr };
 }
 
-test("--profile cli runs the cli-tier teeth and exits 0", async () => {
-  const { code, stdout } = await runCli(["--profile", "cli"]);
-  assert.equal(code, 0, stdout + "\n---\n" + (await runCli(["--profile", "cli"])).stderr);
+test("--profile swap runs the cli-tier teeth and exits 0", async () => {
+  const { code, stdout } = await runCli(["--profile", "swap"]);
+  assert.equal(code, 0, stdout + "\n---\n" + (await runCli(["--profile", "swap"])).stderr);
   assert.match(stdout, /result: pass/);
   assert.match(stdout, /fake-server\.tamper-corrupt-byte/);
   assert.match(stdout, /artifact-factory\.ok-artifact-runs/);
 });
 
-test("--profile managed runs the daemon/managed teeth too", async () => {
-  const { code, stdout } = await runCli(["--profile", "managed", "--json"]);
+test("--profile hosted runs the daemon/managed teeth too", async () => {
+  const { code, stdout } = await runCli(["--profile", "hosted", "--json"]);
   assert.equal(code, 0);
   const receipt = JSON.parse(stdout) as {
     checks: Array<{ id: string; status: string }>;

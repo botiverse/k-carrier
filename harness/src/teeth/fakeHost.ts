@@ -19,7 +19,7 @@ import {
 
 registerTooth({
   id: "fake-host.ledger-equivalence",
-  profiles: ["daemon", "managed"],
+  profiles: ["service", "hosted"],
   layers: ["L2"],
   kind: { kind: "invariant" },
   mustRed: [
@@ -37,7 +37,7 @@ registerTooth({
 
 registerTooth({
   id: "fake-host.ledger-equivalence-after-rollback",
-  profiles: ["daemon", "managed"],
+  profiles: ["service", "hosted"],
   layers: ["L2"],
   kind: { kind: "invariant" },
   mustRed: [
@@ -51,7 +51,7 @@ registerTooth({
 
 registerTooth({
   id: "fake-host.fault-fail-on-quiesce",
-  profiles: ["daemon", "managed"],
+  profiles: ["service", "hosted"],
   layers: ["L2"],
   kind: { kind: "invariant" },
   mustRed: [
@@ -65,7 +65,7 @@ registerTooth({
 
 registerTooth({
   id: "fake-host.fault-hang-on-stop",
-  profiles: ["daemon", "managed"],
+  profiles: ["service", "hosted"],
   layers: ["L2"],
   kind: { kind: "invariant" },
   mustRed: [
@@ -79,7 +79,7 @@ registerTooth({
 
 registerTooth({
   id: "fake-host.fault-wrong-version-probe",
-  profiles: ["daemon", "managed"],
+  profiles: ["service", "hosted"],
   layers: ["L2", "L3"],
   kind: { kind: "invariant" },
   mustRed: [
@@ -93,7 +93,7 @@ registerTooth({
 
 registerTooth({
   id: "fake-host.fault-stale-startid-probe",
-  profiles: ["daemon", "managed"],
+  profiles: ["service", "hosted"],
   layers: ["L2", "L3"],
   kind: { kind: "invariant" },
   mustRed: [
@@ -107,7 +107,7 @@ registerTooth({
 
 registerTooth({
   id: "fake-host.fault-crash-during-start",
-  profiles: ["daemon", "managed"],
+  profiles: ["service", "hosted"],
   layers: ["L2"],
   kind: { kind: "invariant" },
   mustRed: [

@@ -1,5 +1,5 @@
 /**
- * plain-daemon — the daemon-profile example (design-v1 §2.5: full L1
+ * service-daemon — the daemon-profile example (design-v1 §2.5: full L1
  * two-slot + L2 + L3 binary predicate).
  *
  * A real long-running service process (zero deps). It implements the
@@ -15,7 +15,7 @@
  * stamped into the binary. `K_RELEASE_BASE` env = releaseBase config.
  */
 export const PLAIN_DAEMON_SOURCE = `#!/usr/bin/env node
-// plain-daemon — K daemon-profile example. Built by artifact-factory.
+// service-daemon — K daemon-profile example. Built by artifact-factory.
 "use strict";
 const VERSION = "__K_VERSION__";
 const BEHAVIOR = "__K_BEHAVIOR__";
@@ -35,7 +35,7 @@ if (args[0] === "self" && args[1] === "upgrade") {
   selfUpgrade().catch((e) => { process.stderr.write(String(e) + "\\n"); process.exit(5); });
 } else {
   // daemon mode
-  if (BEHAVIOR === "crash-on-start") { process.stderr.write("plain-daemon crashed\\n"); process.exit(1); }
+  if (BEHAVIOR === "crash-on-start") { process.stderr.write("service-daemon crashed\\n"); process.exit(1); }
   fs.writeSync(1, "ready " + JSON.stringify({ version: VERSION, pid: process.pid, startId }) + "\\n");
   process.stdin.on("data", (chunk) => {
     for (const line of chunk.toString("utf8").split("\\n")) {

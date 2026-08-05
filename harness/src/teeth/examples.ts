@@ -11,8 +11,8 @@ import {
 } from "../examples/checks.ts";
 
 registerTooth({
-  id: "examples.cli-tool-blackbox",
-  profiles: ["cli"],
+  id: "examples.swap-tool-blackbox",
+  profiles: ["swap"],
   layers: ["L0", "L0.5", "L1p"],
   kind: { kind: "invariant" },
   mustRed: [
@@ -21,7 +21,7 @@ registerTooth({
       caughtOnlyBy: {
         alsoCaughtBy: "k-harness --bin contract.self-upgrade (CONTRACT_UPGRADE_SELF_UNCHANGED)",
         whyStillNeeded:
-          "this tooth makes the cli-tool demo's claim a CI-enforced registered tooth in the cli tier, not just an ad-hoc CLI invocation",
+          "this tooth makes the swap-tool demo's claim a CI-enforced registered tooth in the cli tier, not just an ad-hoc CLI invocation",
       },
     },
   ],
@@ -29,8 +29,8 @@ registerTooth({
 });
 
 registerTooth({
-  id: "examples.plain-daemon-contract",
-  profiles: ["daemon"],
+  id: "examples.service-daemon-contract",
+  profiles: ["service"],
   layers: ["L0", "L0.5", "L2", "L3"],
   kind: { kind: "invariant" },
   mustRed: [
@@ -43,8 +43,8 @@ registerTooth({
 });
 
 registerTooth({
-  id: "examples.managed-host-adapter",
-  profiles: ["managed"],
+  id: "examples.hosted-service-adapter",
+  profiles: ["hosted"],
   layers: ["L2", "L3"],
   kind: { kind: "invariant" },
   mustRed: [

@@ -1,4 +1,4 @@
-# plain-daemon — the daemon-profile example
+# service-daemon — the daemon-profile example
 
 **Proves:** the daemon profile's support claim — a long-running service
 with a 3-method HostAdapter surface exercises L2 + L3 in process reality:
@@ -7,7 +7,7 @@ startId, the #5245 anti-fake-green discipline), real stop (OS-confirmed
 dead), and an atomic self-upgrade whose new version is what the next
 spawned incarnation reports.
 
-Accepted by the registered tooth `examples.plain-daemon-contract` in the
+Accepted by the registered tooth `examples.service-daemon-contract` in the
 daemon tier (spawn → probe → stop → verify dead → upgrade → next-run
 version).
 

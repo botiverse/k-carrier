@@ -17,7 +17,7 @@ const TOOTH_IDS = new Set([
 
 async function ctxFor(prefix: string): Promise<{ ctx: ToothContext; teardown: () => Promise<void> }> {
   const sb = await createSandbox({ prefix });
-  return { ctx: { profile: "managed", sandboxDir: sb.dir }, teardown: sb.teardown };
+  return { ctx: { profile: "hosted", sandboxDir: sb.dir }, teardown: sb.teardown };
 }
 
 test("known-green: both artifact-factory teeth pass on a clean sandbox", async () => {

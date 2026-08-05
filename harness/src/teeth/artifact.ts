@@ -13,7 +13,7 @@ import {
 
 registerTooth({
   id: "artifact.tamper-refuses-install",
-  profiles: ["cli", "daemon", "managed"],
+  profiles: ["swap", "service", "hosted"],
   layers: ["L0"],
   kind: { kind: "invariant" },
   mustRed: [
@@ -31,7 +31,7 @@ registerTooth({
 
 registerTooth({
   id: "artifact.atomic-swap-crash-safe",
-  profiles: ["cli", "daemon", "managed"],
+  profiles: ["swap", "service", "hosted"],
   layers: ["L0"],
   kind: { kind: "invariant" },
   mustRed: [
@@ -45,7 +45,7 @@ registerTooth({
 
 registerTooth({
   id: "artifact.source-fails-closed",
-  profiles: ["cli", "daemon", "managed"],
+  profiles: ["swap", "service", "hosted"],
   layers: ["L0"],
   kind: { kind: "invariant" },
   mustRed: [

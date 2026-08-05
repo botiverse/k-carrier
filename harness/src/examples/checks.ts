@@ -5,11 +5,11 @@
  * Each demo is the credential for its profile's support claim
  * (examples/README.md: "if a profile has no green example, the claim does
  * not exist"):
- *  - cli-tool: black-box upgrade loop (L0/L0.5/L1') — version command,
+ *  - swap-tool: black-box upgrade loop (L0/L0.5/L1') — version command,
  *    self-upgrade swaps bytes, next run reports the served version;
- *  - plain-daemon: process-reality L2/L3 — real spawn, startId-bound
+ *  - service-daemon: process-reality L2/L3 — real spawn, startId-bound
  *    probe evidence, OS-confirmed stop, upgrade effective next spawn;
- *  - managed-host: adapter contract subset (§1.7) — session preservation
+ *  - hosted-service: adapter contract subset (§1.7) — session preservation
  *    incl. after rollback + probe veracity/binding.
  */
 import assert from "node:assert/strict";
@@ -29,12 +29,12 @@ import {
   checkProbeBindsCurrentIncarnation,
 } from "../fake-host/checks.ts";
 import type { HostDriver } from "../fake-host/inproc.ts";
-import { CLI_TOOL_SOURCE } from "../../../examples/cli-tool/source.ts";
-import { PLAIN_DAEMON_SOURCE } from "../../../examples/plain-daemon/source.ts";
+import { CLI_TOOL_SOURCE } from "../../../examples/swap-tool/source.ts";
+import { PLAIN_DAEMON_SOURCE } from "../../../examples/service-daemon/source.ts";
 
 const RELEASE_BASE_ENV = "K_RELEASE_BASE";
 
-/** The cli-tool's explicit target declaration (mirrors k.target.ts). */
+/** The swap-tool's explicit target declaration (mirrors k.target.ts). */
 export const CLI_TOOL_TARGET_TS = `export default { version: ["--version"], selfUpgrade: ["self", "upgrade"] };
 `;
 
@@ -69,7 +69,7 @@ async function fileSha256(p: string): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
-// cli-tool
+// swap-tool
 // ---------------------------------------------------------------------------
 
 export async function checkCliToolBlackbox(
@@ -80,7 +80,7 @@ export async function checkCliToolBlackbox(
     source: CLI_TOOL_SOURCE,
     version: "1.0.0",
     behavior: "ok",
-    name: "cli-tool",
+    name: "swap-tool",
   });
   await fs.writeFile(path.join(ctx.sandboxDir, "app", "k.target.ts"), CLI_TOOL_TARGET_TS);
 
@@ -121,7 +121,7 @@ export async function checkCliToolBlackbox(
 }
 
 // ---------------------------------------------------------------------------
-// plain-daemon
+// service-daemon
 // ---------------------------------------------------------------------------
 
 function readLine(child: ChildProcess, prefix: string, timeoutMs = 5000): Promise<string> {
@@ -129,7 +129,7 @@ function readLine(child: ChildProcess, prefix: string, timeoutMs = 5000): Promis
     let buffer = "";
     const timer = setTimeout(() => {
       cleanup();
-      reject(new Error(`timed out waiting for "${prefix}" from plain-daemon`));
+      reject(new Error(`timed out waiting for "${prefix}" from service-daemon`));
     }, timeoutMs);
     const onData = (chunk: Buffer): void => {
       buffer += chunk.toString("utf8");
@@ -173,7 +173,7 @@ export async function checkPlainDaemonContract(
     source: PLAIN_DAEMON_SOURCE,
     version: "1.0.0",
     behavior: opts.behavior ?? "ok",
-    name: "plain-daemon",
+    name: "service-daemon",
   });
 
   // 1) process-reality lifecycle: spawn -> probe -> stop, OS-confirmed dead
@@ -236,7 +236,7 @@ export async function checkPlainDaemonContract(
 }
 
 // ---------------------------------------------------------------------------
-// managed-host
+// hosted-service
 // ---------------------------------------------------------------------------
 
 export async function checkManagedHostAdapter(
@@ -248,7 +248,7 @@ export async function checkManagedHostAdapter(
   const makeHost = async (): Promise<HostDriver> =>
     opts.hostOverride
       ? opts.hostOverride()
-      : (await import("../../../examples/managed-host/host.ts")).createManagedHost(
+      : (await import("../../../examples/hosted-service/host.ts")).createManagedHost(
           path.join(ctx.sandboxDir, "host"),
         );
   // the same contract subset k-harness --adapter runs (§1.7)

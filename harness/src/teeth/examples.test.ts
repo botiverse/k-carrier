@@ -15,14 +15,14 @@ import {
 import type { HostDriver } from "../fake-host/inproc.ts";
 
 const TOOTH_IDS = new Set([
-  "examples.cli-tool-blackbox",
-  "examples.plain-daemon-contract",
-  "examples.managed-host-adapter",
+  "examples.swap-tool-blackbox",
+  "examples.service-daemon-contract",
+  "examples.hosted-service-adapter",
 ]);
 
 async function ctxFor(prefix: string): Promise<{ ctx: ToothContext; teardown: () => Promise<void> }> {
   const sb = await createSandbox({ prefix });
-  return { ctx: { profile: "managed", sandboxDir: sb.dir }, teardown: sb.teardown };
+  return { ctx: { profile: "hosted", sandboxDir: sb.dir }, teardown: sb.teardown };
 }
 
 // ---------------------------------------------------------------------------
@@ -48,8 +48,8 @@ test("known-green: every examples tooth passes on a clean sandbox", async () => 
 // known-red
 // ---------------------------------------------------------------------------
 
-test("known-red: cli-tool catches a self-upgrade that swaps no bytes", async () => {
-  const { ctx, teardown } = await ctxFor("red-cli-tool");
+test("known-red: swap-tool catches a self-upgrade that swaps no bytes", async () => {
+  const { ctx, teardown } = await ctxFor("red-swap-tool");
   try {
     // mutation: the served release is the CURRENT version, so the upgrade
     // swaps identical bytes — the on-disk change assertion must go red
@@ -62,7 +62,7 @@ test("known-red: cli-tool catches a self-upgrade that swaps no bytes", async () 
   }
 });
 
-test("known-red: plain-daemon catches a daemon that crashes on start", async () => {
+test("known-red: service-daemon catches a daemon that crashes on start", async () => {
   const { ctx, teardown } = await ctxFor("red-daemon");
   try {
     await assert.rejects(
@@ -74,12 +74,12 @@ test("known-red: plain-daemon catches a daemon that crashes on start", async () 
   }
 });
 
-test("known-red: managed-host catches a host that loses the session on resume", async () => {
+test("known-red: hosted-service catches a host that loses the session on resume", async () => {
   const { ctx, teardown } = await ctxFor("red-managed");
   try {
     // mutation: resume cannot restore the parked ledger — a broken adopter
     // host. Delegated explicitly (spread would freeze the getters).
-    const real = (await import("../../../examples/managed-host/host.ts")).createManagedHost(
+    const real = (await import("../../../examples/hosted-service/host.ts")).createManagedHost(
       path.join(ctx.sandboxDir, "host"),
     );
     const broken: HostDriver = {
@@ -140,14 +140,14 @@ test("registration discipline: profiles/layers/kind/mustRed all answered", () =>
 
 test("each examples tooth is tagged to exactly its own profile tier", () => {
   const byId = new Map(allTeeth().map((t) => [t.id, t] as const));
-  assert.deepEqual(byId.get("examples.cli-tool-blackbox")!.profiles, ["cli"]);
-  assert.deepEqual(byId.get("examples.plain-daemon-contract")!.profiles, ["daemon"]);
-  assert.deepEqual(byId.get("examples.managed-host-adapter")!.profiles, ["managed"]);
+  assert.deepEqual(byId.get("examples.swap-tool-blackbox")!.profiles, ["swap"]);
+  assert.deepEqual(byId.get("examples.service-daemon-contract")!.profiles, ["service"]);
+  assert.deepEqual(byId.get("examples.hosted-service-adapter")!.profiles, ["hosted"]);
 });
 
 test("tooth run functions are the exported checks (single source of truth)", () => {
   const byId = new Map(allTeeth().map((t) => [t.id, t] as const));
-  assert.equal(byId.get("examples.cli-tool-blackbox")!.run, checkCliToolBlackbox);
-  assert.equal(byId.get("examples.plain-daemon-contract")!.run, checkPlainDaemonContract);
-  assert.equal(byId.get("examples.managed-host-adapter")!.run, checkManagedHostAdapter);
+  assert.equal(byId.get("examples.swap-tool-blackbox")!.run, checkCliToolBlackbox);
+  assert.equal(byId.get("examples.service-daemon-contract")!.run, checkPlainDaemonContract);
+  assert.equal(byId.get("examples.hosted-service-adapter")!.run, checkManagedHostAdapter);
 });

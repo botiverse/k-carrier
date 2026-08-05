@@ -33,7 +33,7 @@ export async function checkMissingTargetFails(
         `export default { version: ["--version"], selfUpgrade: ["self", "upgrade"] };`,
       );
     }
-    const receipt = await runBinMode({ binPath, profile: "cli" });
+    const receipt = await runBinMode({ binPath, profile: "swap" });
     const decl = receipt.checks.find((c) => c.id === "contract.target-declarations");
     assert.ok(
       decl?.status === "fail",

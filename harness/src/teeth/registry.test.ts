@@ -14,7 +14,7 @@ import {
 function validSpec(overrides: Partial<ToothSpec> = {}): ToothSpec {
   return {
     id: "txn.no-dual-run",
-    profiles: ["daemon", "managed"],
+    profiles: ["service", "hosted"],
     layers: ["L1", "L2"],
     kind: { kind: "invariant" },
     mustRed: [{ mutate: "skip journal fsync before handover", caughtOnlyBy: "this" }],
@@ -27,9 +27,9 @@ beforeEach(() => clearRegistry());
 
 test("registers a fully-declared tooth and tier-filters it", () => {
   registerTooth(validSpec());
-  assert.equal(teethFor("daemon").length, 1);
-  assert.equal(teethFor("managed").length, 1);
-  assert.equal(teethFor("cli").length, 0);
+  assert.equal(teethFor("service").length, 1);
+  assert.equal(teethFor("hosted").length, 1);
+  assert.equal(teethFor("swap").length, 0);
 });
 
 function assertRejects(spec: ToothSpec, code: string) {
@@ -89,14 +89,14 @@ test("rejects an empty or unanswered must-red list", () => {
 
 test("tier boundary: a cli-tagged tooth exercising L2 is rejected at registration", () => {
   assertRejects(
-    validSpec({ id: "bad.cli-tooth", profiles: ["cli"], layers: ["L0", "L2"] }),
+    validSpec({ id: "bad.cli-tooth", profiles: ["swap"], layers: ["L0", "L2"] }),
     "TIER_BOUNDARY",
   );
   // cli-tagged tooth within cli layers is fine
   registerTooth(
-    validSpec({ id: "ok.cli-tooth", profiles: ["cli"], layers: ["L0", "L0.5", "L1p"] }),
+    validSpec({ id: "ok.cli-tooth", profiles: ["swap"], layers: ["L0", "L0.5", "L1p"] }),
   );
-  assert.equal(teethFor("cli").length, 1);
+  assert.equal(teethFor("swap").length, 1);
 });
 
 test("mutation-runner export carries every tooth's must-red list", () => {
@@ -104,7 +104,7 @@ test("mutation-runner export carries every tooth's must-red list", () => {
   registerTooth(
     validSpec({
       id: "converge.projection-ban",
-      profiles: ["daemon", "managed"],
+      profiles: ["service", "hosted"],
       layers: ["L3"],
       mustRed: [
         { mutate: "let manifest version green the predicate", caughtOnlyBy: "this" },

@@ -13,6 +13,28 @@
  * in-process, in simulation, and black-box against `status --json`.
  * Returning a *reason string* (not a boolean) means a violation explains
  * itself wherever it fires — including from a seed replay hours later.
+ *
+ * ---------------------------------------------------------------------------
+ * SCOPE — what "the service" means here, stated so nothing is assumed:
+ *
+ *   K reasons about exactly ONE service identity per Upgrader: the process(es)
+ *   its HostAdapter starts and stops. It is NOT a process supervisor for the
+ *   machine and knows nothing about other processes that happen to run the
+ *   same binary.
+ *
+ *   - swap profile: concurrent old-version processes are NORMAL (think many
+ *     open CLI sessions). They are not K-managed, so no invariant here says
+ *     anything about them. `never-dual-run` is vacuous in this profile rather
+ *     than accidentally satisfied.
+ *   - service / hosted: exactly one live incarnation of that identity, which
+ *     is what `never-dual-run` constrains.
+ *
+ *   OUT OF SCOPE for v0 (deliberately, not by oversight): one binary running
+ *   several instances with different arguments. One Upgrader owns one service
+ *   identity; run one Upgrader per instance (separate stateDir), or have the
+ *   adapter treat the whole set as a single identity. K does not orchestrate
+ *   across instances, and no invariant here should be read as if it did.
+ * ---------------------------------------------------------------------------
  */
 import type { TxnPhase } from "./txn/state.ts";
 
@@ -69,10 +91,15 @@ export interface Invariant<S = WorldSnapshot> {
   check: (snapshot: S) => InvariantResult;
 }
 
-/** Never two service incarnations alive at once. */
+/**
+ * Never two live incarnations OF THE SERVICE IDENTITY K MANAGES.
+ * Says nothing about other processes running the same binary (see SCOPE):
+ * in the swap profile liveProcesses is empty, so this is vacuous by design.
+ */
 export const neverDualRun: Invariant = {
   id: "k.never-dual-run",
-  description: "at most one service incarnation is live at any moment",
+  description:
+    "at most one live incarnation of the K-managed service identity (vacuous in the swap profile)",
   check: (s) =>
     s.liveProcesses.length > 1
       ? `${s.liveProcesses.length} live incarnations: ${s.liveProcesses
@@ -81,17 +108,24 @@ export const neverDualRun: Invariant = {
       : null,
 };
 
-/** Never a host with nothing runnable: some slot always holds a version. */
+/**
+ * Never a host with nothing runnable. Concerns the SLOTS (bytes on disk), not
+ * whether a process is currently up: a stopped service with intact stable
+ * bytes is not bricked.
+ */
 export const neverBricked: Invariant = {
   id: "k.never-bricked",
-  description: "at least one slot always holds a runnable version",
+  description: "at least one slot always holds runnable bytes (about slots, not liveness)",
   check: (s) =>
     s.slots.stable === null && s.slots.experiment === null
       ? "both slots empty — nothing left to run"
       : null,
 };
 
-/** A live process must come from a slot that actually holds that version. */
+/**
+ * A live incarnation's version matches the slot it was started from.
+ * Only constrains processes K started; slots reporting null are ignored.
+ */
 export const liveProcessMatchesSlot: Invariant = {
   id: "k.live-process-matches-slot",
   description: "a live incarnation's version matches the slot it was started from",
@@ -116,7 +150,10 @@ export const journalPrecedesPhase: Invariant = {
       : null,
 };
 
-/** Terminal phases leave no experiment slot behind. */
+/**
+ * After promote/rollback the experiment slot is cleared. This is about the
+ * TRANSACTION's own bookkeeping, not about whether a restart has happened yet.
+ */
 export const terminalLeavesNoExperiment: Invariant = {
   id: "k.terminal-leaves-no-experiment",
   description: "after promote/rollback the experiment slot is cleared",
@@ -126,7 +163,12 @@ export const terminalLeavesNoExperiment: Invariant = {
       : null,
 };
 
-/** Nothing reaches a slot without a verified signature chain. */
+/**
+ * Nothing occupies the experiment slot without a verified signature chain.
+ * Fires only when verification is explicitly reported false — a host that
+ * does not report verification at all is NOT silently treated as verified;
+ * it is simply outside this invariant's knowledge (see undeclared handling).
+ */
 export const noUnverifiedArtifact: Invariant = {
   id: "k.no-unverified-artifact",
   description: "an artifact only occupies the experiment slot after its signature chain verified",

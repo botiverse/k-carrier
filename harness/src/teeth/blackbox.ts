@@ -9,7 +9,7 @@ import { checkMissingTargetFails } from "../targetCheck.ts";
 
 registerTooth({
   id: "blackbox.missing-target-fails",
-  profiles: ["cli", "daemon", "managed"],
+  profiles: ["swap", "service", "hosted"],
   layers: ["L0", "L0.5", "L1p"],
   kind: { kind: "invariant" },
   mustRed: [

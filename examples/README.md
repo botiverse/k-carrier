@@ -8,13 +8,13 @@ form" does not exist.
 
 | Example | Profile | Shape | Demonstrates |
 |---|---|---|---|
-| `cli-tool/` | cli | tiny single-binary CLI, no resident process | zero-HostAdapter adoption; upgrade effective next run; signature chain + journal for free. **First real adopter: standalone raft CLI** (Computer-injected copies are `held: managed-elsewhere` by ownership detection) |
-| `plain-daemon/` | daemon | small long-running service, no hosted workloads | 3-method HostAdapter; two-slot transaction, crash-safe rollback, same-PID convergence proof |
-| `managed-host/` | managed | fake host with live "sessions" + an OS-lifecycle surface | full stack: quiesce/resume session preservation, named-surface lifecycle readback, policy/notification, optional drive. Shares its fake host with `harness/`. |
+| `swap-tool/` | cli | tiny single-binary CLI, no resident process | zero-HostAdapter adoption; upgrade effective next run; signature chain + journal for free. **First real adopter: standalone raft CLI** (Computer-injected copies are `held: managed-elsewhere` by ownership detection) |
+| `service-daemon/` | daemon | small long-running service, no hosted workloads | 3-method HostAdapter; two-slot transaction, crash-safe rollback, same-PID convergence proof |
+| `hosted-service/` | managed | fake host with live "sessions" + an OS-lifecycle surface | full stack: quiesce/resume session preservation, named-surface lifecycle readback, policy/notification, optional drive. Shares its fake host with `harness/`. |
 
 Status: all three demos landed — each is a runnable app accepted by the
-harness (cli-tool via `k-harness --bin`, managed-host via
-`k-harness --adapter`, plain-daemon via its registered tooth); the teeth
+harness (swap-tool via `k-harness --bin`, hosted-service via
+`k-harness --adapter`, service-daemon via its registered tooth); the teeth
 `examples.*` make each profile's claim CI-enforced. The full managed
 upgrade loop (L1 two-slot + L4/L5) lands when the core upgrader wiring
 does; each demo README states exactly what it proves today.

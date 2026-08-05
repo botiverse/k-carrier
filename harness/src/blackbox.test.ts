@@ -94,7 +94,7 @@ test("bin mode: full upgrade loop against the factory-built demo binary", async 
     const binPath = await buildDemoBinary(sb.dir, "1.0.0");
     assert.equal((await runCommand(binPath, ["--version"])).stdout.trim(), "1.0.0");
 
-    const receipt = await runBinMode({ binPath, profile: "cli", targetVersion: "9.9.9" });
+    const receipt = await runBinMode({ binPath, profile: "swap", targetVersion: "9.9.9" });
     assert.equal(receipt.result, "pass", JSON.stringify(receipt.checks, null, 2));
     const byId = new Map(receipt.checks.map((c) => [c.id, c] as const));
     assert.equal(byId.get("contract.target-declarations")!.status, "pass");
@@ -116,7 +116,7 @@ test("bin mode: a binary whose commands fail produces a typed FAIL", async () =>
     const binPath = path.join(sb.dir, "mytool");
     await fs.writeFile(binPath, "#!/bin/sh\necho boom >&2\nexit 1\n", { mode: 0o755 });
     await fs.writeFile(path.join(sb.dir, TARGET_FILE), VALID_TARGET);
-    const receipt = await runBinMode({ binPath, profile: "cli" });
+    const receipt = await runBinMode({ binPath, profile: "swap" });
     assert.equal(receipt.result, "fail");
     const version = receipt.checks.find((c) => c.id === "contract.version-command")!;
     assert.equal(version.status, "fail");
@@ -132,7 +132,7 @@ test("bin mode: a binary whose commands fail produces a typed FAIL", async () =>
 test("bin mode: a missing binary is a typed FAIL, not a crash", async () => {
   const sb = await createSandbox({ prefix: "bin-missing" });
   try {
-    const receipt = await runBinMode({ binPath: path.join(sb.dir, "nope"), profile: "cli" });
+    const receipt = await runBinMode({ binPath: path.join(sb.dir, "nope"), profile: "swap" });
     assert.equal(receipt.result, "fail");
     const present = receipt.checks.find((c) => c.id === "contract.binary-present")!;
     assert.equal(present.status, "fail");
@@ -147,7 +147,7 @@ test("bin mode: a missing target file is a typed FAIL and stops the run", async 
   try {
     const binPath = await buildDemoBinary(sb.dir, "1.0.0");
     await fs.rm(path.join(sb.dir, TARGET_FILE)); // remove the target: REQUIRED, not optional
-    const receipt = await runBinMode({ binPath, profile: "cli" });
+    const receipt = await runBinMode({ binPath, profile: "swap" });
     assert.equal(receipt.result, "fail");
     const decl = receipt.checks.find((c) => c.id === "contract.target-declarations")!;
     assert.equal(decl.status, "fail");
@@ -169,7 +169,7 @@ test("bin mode: --target explicit path overrides the default location", async ()
     await fs.rm(path.join(sb.dir, TARGET_FILE)); // no target next to the binary
     const elsewhere = path.join(sb.dir, "custom-target.ts");
     await fs.writeFile(elsewhere, VALID_TARGET);
-    const receipt = await runBinMode({ binPath, profile: "cli", targetPath: elsewhere });
+    const receipt = await runBinMode({ binPath, profile: "swap", targetPath: elsewhere });
     assert.equal(receipt.result, "pass", JSON.stringify(receipt.checks));
   } finally {
     await sb.teardown();
@@ -180,7 +180,7 @@ test("bin mode: default target version is served when not specified", async () =
   const sb = await createSandbox({ prefix: "bin-default" });
   try {
     const binPath = await buildDemoBinary(sb.dir, "1.0.0");
-    const receipt = await runBinMode({ binPath, profile: "cli" });
+    const receipt = await runBinMode({ binPath, profile: "swap" });
     assert.equal(receipt.result, "pass");
     assert.equal((await runCommand(binPath, ["--version"])).stdout.trim(), DEFAULT_TARGET_VERSION);
   } finally {
