@@ -35,14 +35,37 @@ export interface WorldSnapshot {
    * happened rather than trusting a version string (Raft #5245 family).
    */
   priorIncarnationStartId?: string;
+  /** Did the artifact currently in the experiment slot pass the signature chain? */
+  experimentSignatureVerified?: boolean;
+  /** Who owns this install: ourselves, or an external manager (PM/injector)? */
+  installOwnership?: "self" | "managed-elsewhere";
 }
 
 /** null = holds; string = why it was violated (shown to humans and in seed replays). */
 export type InvariantResult = string | null;
 
+/**
+ * What the HOST must do for a conditional guarantee to hold (assume-guarantee).
+ * The left side of "if the app satisfies A, K guarantees G" — the app's
+ * responsibility, verifiable by the harness against its adapter. Closed set:
+ * if you need a new one, it is a design decision, not a free-text note.
+ */
+export type HostAssumption =
+  | "quiesce-resume-inverse"        // parked workloads are unchanged while parked
+  | "probe-from-live-process"       // evidence comes from the running process, not files
+  | "compatibility-declared"        // checkCompatibility is implemented and correct
+  | "data-format-backward-compatible"; // version N can read what N+1 wrote
+
 export interface Invariant<S = WorldSnapshot> {
   id: string;
   description: string;
+  /**
+   * Empty/absent = K guarantees this UNCONDITIONALLY.
+   * Non-empty = K guarantees it only if the host satisfies these assumptions.
+   * This is how an adopter tells, from the library alone, which guarantees are
+   * ours and which depend on their own code.
+   */
+  assumes?: readonly HostAssumption[];
   check: (snapshot: S) => InvariantResult;
 }
 
@@ -103,6 +126,26 @@ export const terminalLeavesNoExperiment: Invariant = {
       : null,
 };
 
+/** Nothing reaches a slot without a verified signature chain. */
+export const noUnverifiedArtifact: Invariant = {
+  id: "k.no-unverified-artifact",
+  description: "an artifact only occupies the experiment slot after its signature chain verified",
+  check: (s) =>
+    s.slots.experiment !== null && s.experimentSignatureVerified === false
+      ? `experiment slot holds ${s.slots.experiment} but its signature chain was not verified`
+      : null,
+};
+
+/** A copy owned by another manager never upgrades itself. */
+export const managedCopyNeverSelfUpgrades: Invariant = {
+  id: "k.managed-copy-never-self-upgrades",
+  description: "an install owned by an external manager performs no upgrade of its own",
+  check: (s) =>
+    s.installOwnership === "managed-elsewhere" && s.phase !== "idle"
+      ? `install is managed elsewhere but a transaction reached phase ${s.phase}`
+      : null,
+};
+
 /** The built-in set. Adopters concat their own app invariants. */
 export const BUILT_IN_INVARIANTS: readonly Invariant[] = [
   neverDualRun,
@@ -110,7 +153,18 @@ export const BUILT_IN_INVARIANTS: readonly Invariant[] = [
   liveProcessMatchesSlot,
   journalPrecedesPhase,
   terminalLeavesNoExperiment,
+  noUnverifiedArtifact,
+  managedCopyNeverSelfUpgrades,
 ];
+
+/**
+ * Deliberately NOT snapshot invariants — stated here so their absence is a
+ * decision, not an oversight:
+ *  - "no side effect before consent" and "every reconcile is journaled" are
+ *    properties of an EVENT SEQUENCE, not of a single state. Forcing them into
+ *    a snapshot predicate would require smuggling history into the snapshot;
+ *    they are teeth over a scenario trace instead (policy/provenance teeth).
+ */
 
 export interface Violation {
   invariantId: string;
@@ -135,6 +189,28 @@ export function checkInvariants(
  * compares two snapshots rather than judging one — hosts that declare a
  * workloadDigest get this for free, in upgrade AND rollback paths.
  */
+/**
+ * LIVENESS (progress), deliberately separate from the safety set above.
+ *
+ * Every safety invariant here is satisfiable by doing nothing at all, so
+ * safety alone cannot say an updater works. This is the minimal progress
+ * property: a transaction that started must reach a terminal phase within a
+ * bounded number of steps — never parked in `staged`/`readback` forever.
+ */
+export function reachesTerminalWithin(
+  phaseTrace: readonly TxnPhase[],
+  maxSteps: number,
+): InvariantResult {
+  const terminal = new Set<TxnPhase>(["idle", "promoted", "rolled-back"]);
+  const last = phaseTrace.at(-1);
+  if (last !== undefined && terminal.has(last)) return null;
+  return phaseTrace.length >= maxSteps
+    ? `transaction still in ${last ?? "unknown"} after ${phaseTrace.length} steps (limit ${maxSteps}) — no progress to a terminal phase`
+    : null;
+}
+
+export const WORKLOAD_PRESERVED_ASSUMES: readonly HostAssumption[] = ["quiesce-resume-inverse"];
+
 export function workloadPreserved(before: WorldSnapshot, after: WorldSnapshot): InvariantResult {
   if (before.workloadDigest === undefined || after.workloadDigest === undefined) return null;
   return before.workloadDigest === after.workloadDigest

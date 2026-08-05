@@ -86,6 +86,9 @@ function adversarialWorld(): WorldSnapshot {
 export const promotedVersionIsLive: Invariant = {
   id: "k.promoted-runs-a-fresh-incarnation",
   description: "after promote, the live incarnation is not the one that preceded the upgrade",
+  // Conditional: we can only trust incarnation identity if the host's probe
+  // reports from the live process rather than from a file or cache.
+  assumes: ["probe-from-live-process"],
   check: (s) => {
     if (s.phase !== "promoted" || s.priorIncarnationStartId === undefined) return null;
     const stale = s.liveProcesses.filter((p) => p.startId === s.priorIncarnationStartId);
