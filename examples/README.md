@@ -8,7 +8,7 @@ form" does not exist.
 
 | Example | Profile | Shape | Demonstrates |
 |---|---|---|---|
-| `cli-tool/` | cli | tiny single-binary CLI, no resident process | zero-HostAdapter adoption: releaseBase+channel+rootKeys only; upgrade effective next run; signature chain + journal for free |
+| `cli-tool/` | cli | tiny single-binary CLI, no resident process | zero-HostAdapter adoption; upgrade effective next run; signature chain + journal for free. **First real adopter: standalone raft CLI** (Computer-injected copies are `held: managed-elsewhere` by ownership detection) |
 | `plain-daemon/` | daemon | small long-running service, no hosted workloads | 3-method HostAdapter; two-slot transaction, crash-safe rollback, same-PID convergence proof |
 | `managed-host/` | managed | fake host with live "sessions" + an OS-lifecycle surface | full stack: quiesce/resume session preservation, named-surface lifecycle readback, policy/notification, optional drive. Shares its fake host with `harness/`. |
 

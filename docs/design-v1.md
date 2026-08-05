@@ -109,6 +109,9 @@ server 侧最小要求 = 静态文件（manifest+工件+签名）；drive 为可
 
 机制保证：`UpgraderConfig.host` 缺省 = `NoResidentHost`；harness 按 profile 分档跑（cli 档只跑 L0/L1' 齿）。**这同时是开源的 adoption funnel**：简单应用从 cli 档零成本进来，长成 daemon/managed 档不换框架。
 
+**install-ownership 检测（框架级规则，Tailscale 原则机械化）**：升级前先判"这份安装归谁管"——**受管副本禁自升**：被别的管理器（OS 包管理器 / 上级 supervisor / 注入器）拥有的安装，自升会与管理器错位 ⇒ 返回 typed `held: managed-elsewhere`（不静默、指向真正的管理者），只有 standalone 安装才走自升。ownership 探测面由壳声明（如 raft CLI：检测 Computer 注入 wrapper 标记）。
+**第二个真实壳 = raft CLI（cli 档，xxchan 08-05）**：standalone 安装的 raft CLI 接 cli 档拿 `raft upgrade`（签名链/journal/provenance 白送）；Computer 注入份 → `held: managed-elsewhere`。cli 档由此有真实 adopter，非玩具 demo。
+
 ## 3. 怎么测试（QA 面 = 框架的一半价值）
 
 按我们的 QA 教义（un-fakeable、失效条件、named-surface）：
