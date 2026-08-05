@@ -113,8 +113,11 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
         );
         signatureVerified = true;
       } else if (release.unsigned === true) {
-        signatureVerified = false; // declared, surfaced in status, not hidden
-        await notify("held", { reason: "unsigned-release-accepted", version: release.version });
+        // Declared by the source's construction site, surfaced in status
+        // (`experimentSignatureVerified: false`) rather than hidden. It is NOT
+        // notified as "held": this upgrade proceeds, and a host rendering
+        // "held" here would show the opposite of what happened.
+        signatureVerified = false;
       } else {
         return {
           result: "held",

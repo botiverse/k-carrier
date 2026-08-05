@@ -16,7 +16,13 @@
  * core, so a POSIX assumption cannot quietly grow into the engine.
  */
 export interface PlatformOps {
-  /** Replace an executable's bytes; must be crash-safe (never a half file). */
+  /**
+   * Replace an executable's bytes. Contract:
+   *  - crash-safe: a reader sees the old file or the whole new one, never half;
+   *  - PRESERVES the target's mode/permissions. A self-upgrading binary that
+   *    loses +x fails on its NEXT launch, far from the upgrade that caused it
+   *    (found in review: every self-upgrading binary hits this).
+   */
   swapExecutable(filePath: string, data: Uint8Array): Promise<void>;
   /** Does the OS still know this pid? */
   isProcessAlive(pid: number): boolean;
