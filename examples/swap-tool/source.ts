@@ -97,9 +97,26 @@ async function selfUpgrade() {
     async resume() {},
   };
 
+  // This demo publishes to a plain file server and has no signing story, so it
+  // says so out loud: K refuses bytes it cannot attribute unless someone takes
+  // explicit responsibility for them. The declaration lives here, in the
+  // adopter's code, rather than as an allowUnsigned option on the source --
+  // a flag in core would let anyone turn off signature verification by passing
+  // true, which is a security decision made by a default. Six lines is the
+  // right amount of friction for "install bytes nobody vouched for". Real
+  // products sign instead; see docs/integration.md.
+  const published = staticManifestSource({ baseUrl: RELEASE_BASE });
+  const source = {
+    checkForUpdate: async (ctx) => {
+      const r = await published.checkForUpdate(ctx);
+      return r === null ? null : { ...r, unsigned: true };
+    },
+    fetchRelease: async (v, ctx) => ({ ...(await published.fetchRelease(v, ctx)), unsigned: true }),
+  };
+
   const upgrader = createUpgrader({
     host,
-    source: staticManifestSource({ baseUrl: RELEASE_BASE }),
+    source,
     policy: "auto",
     notificationSink: async (ev) => {
       const reason = ev.detail.reason !== undefined ? ": " + ev.detail.reason : "";
