@@ -1,6 +1,6 @@
 /**
  * HostAdapter is the entire surface a host service must implement to be
- * upgraded by carrier. The core calls ONLY this interface — it never knows
+ * upgraded by K. The core calls ONLY this interface — it never knows
  * host internals. This is the mechanical guarantee behind "any daemon can
  * use this", and the harness's fake host implements exactly this.
  *

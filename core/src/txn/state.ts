@@ -1,7 +1,7 @@
 /**
  * Upgrade transaction: two-slot repository + append-only journal +
  * crash-recoverable state machine (Datadog fleet-installer model, hardened
- * with carrier's convergence predicates before promote).
+ * with K's convergence predicates before promote).
  *
  * Invariants (each is a harness tooth, not prose):
  *  - Never two service incarnations running at once (no dual-run).
