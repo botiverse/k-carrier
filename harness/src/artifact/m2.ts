@@ -25,6 +25,7 @@ import {
   readState,
   serveRelease,
 } from "./m1.ts";
+import type { FakeServer } from "../fake-server/server.ts";
 
 function sha256Hex(data: Uint8Array): string {
   return createHash("sha256").update(data).digest("hex");
@@ -157,13 +158,16 @@ export async function checkM2UnsignedExplicitAccepted(
   try {
     await seedStable(ctx, binPath, seed);
 
-    const targetEnv = swapToolEnv(ctx, target.url, [seed, target]);
+    // K_ACCEPT_UNSIGNED is the DEMO APP's own switch: accepting unattributable
+    // bytes is a client decision. Without it this same release is refused --
+    // which is what m2.unsigned-refused-by-default pins.
+    const targetEnv = { ...swapToolEnv(ctx, target.url, [seed, target]), K_ACCEPT_UNSIGNED: "1" };
     const up = await runCommand(binPath, ["self", "upgrade"], { env: targetEnv, timeoutMs: 30000 });
     assert.equal(up.code, 0, `unsigned upgrade must exit 0 (${up.stderr.trim()})`);
     assert.match(
       up.stderr,
-      /unsigned-release-accepted/,
-      "an unsigned release must be recorded as unverified (serveSigned mutation => RED)",
+      /installed-unverified/,
+      "an unsigned release must be reported as unverified (serveSigned mutation => RED)",
     );
     assert.equal(await versionOf(binPath), "2.0.0", "the unsigned release must install");
     const state = await readState(targetEnv);
@@ -171,5 +175,50 @@ export async function checkM2UnsignedExplicitAccepted(
   } finally {
     await seed.stop();
     await target.stop();
+  }
+}
+
+/**
+ * The default posture. Same publisher, same bytes, same absent signature --
+ * the only difference is that the client never said it would accept
+ * unattributable bytes, so K refuses instead of installing.
+ *
+ * This is the tooth that makes the "unsigned" story non-vacuous: without it,
+ * accepting unsigned bytes and accepting everything look identical.
+ */
+export async function checkM2UnsignedRefusedByDefault(
+  ctx: ToothContext,
+  opts: { clientAccepts?: boolean } = {},
+): Promise<void> {
+  const binPath = await buildSwapTool(ctx);
+  // Servers are tracked from the moment they exist: if the SECOND publish
+  // throws, an untracked first server keeps the event loop alive and this
+  // failure would surface as a 2-minute hang instead of a red assertion.
+  const servers: FakeServer[] = [];
+  try {
+    const seed = await serveRelease(ctx, { version: "1.0.0", behavior: "ok", name: "seed" });
+    servers.push(seed);
+    const target = await serveRelease(ctx, {
+      version: "2.0.0",
+      behavior: "ok",
+      name: "target",
+      unsigned: true,
+    });
+    servers.push(target);
+    await seedStable(ctx, binPath, seed);
+    const env = {
+      ...swapToolEnv(ctx, target.url, [seed, target]),
+      ...(opts.clientAccepts === true ? { K_ACCEPT_UNSIGNED: "1" } : {}),
+    };
+    await runCommand(binPath, ["self", "upgrade"], { env, timeoutMs: 30000 });
+    assert.equal(
+      await versionOf(binPath),
+      "1.0.0",
+      "an unsigned release must NOT install unless the client accepts it (clientAccepts mutation => RED)",
+    );
+    const state = await readState(env);
+    assert.equal(state.stableVersion, "1.0.0", "stable must be untouched");
+  } finally {
+    for (const s of servers) await s.stop();
   }
 }

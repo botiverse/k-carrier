@@ -41,18 +41,15 @@ export interface Manifest {
   /** Track the release was published under (latest | alpha). Optional. */
   channel?: "latest" | "alpha";
   /** Explicit opt-out of the signature chain (never a silent default). */
-  unsigned?: boolean;
 }
 
 export function buildManifest(
   version: string,
   targets: Record<string, ManifestTarget>,
   channel?: "latest" | "alpha",
-  unsigned?: boolean,
 ): Manifest {
   const manifest: Manifest = { version, targets };
   if (channel !== undefined) manifest.channel = channel;
-  if (unsigned !== undefined) manifest.unsigned = unsigned;
   return manifest;
 }
 

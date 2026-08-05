@@ -36,9 +36,22 @@ export interface Manifest {
   /** Platform tag (e.g. "darwin-arm64") -> binary target. */
   targets: Record<string, ManifestTarget>;
   /** Track the release was published under (latest | alpha). Optional. */
-  /** Explicit opt-out of the signature chain (never a silent default). */
-  unsigned?: boolean;
 }
+
+/**
+ * NOTE: there is deliberately no `unsigned` field here.
+ *
+ * The manifest is served BY the release source, which is exactly the party the
+ * signature chain exists to distrust. A manifest-declared `unsigned: true`
+ * would let anyone who controls (or compromises) the source turn off signature
+ * verification for every client, by serving one extra JSON field -- the whole
+ * two-tier chain bypassed without breaking any crypto.
+ *
+ * "We accept bytes nobody vouched for" is a decision only the CLIENT can make,
+ * so it lives in the adopter's own code, next to their compiled-in root keys
+ * (see examples/swap-tool). A source can offer bytes; it cannot grant itself
+ * trust.
+ */
 
 const SHA256_RE = /^[0-9a-f]{64}$/;
 
@@ -81,16 +94,7 @@ export function parseManifest(text: string): Manifest {
     throw new ArtifactError("MANIFEST_INVALID", "manifest.targets must contain at least one platform");
   }
 
-  let unsigned: boolean | undefined;
-  if (o.unsigned !== undefined) {
-    if (typeof o.unsigned !== "boolean") {
-      throw new ArtifactError("MANIFEST_INVALID", "manifest.unsigned must be a boolean");
-    }
-    unsigned = o.unsigned;
-  }
-
   const out: Manifest = { version: o.version, targets };
-  if (unsigned !== undefined) out.unsigned = unsigned;
   return out;
 }
 
@@ -152,13 +156,6 @@ async function releaseFrom(
     sha256: target.sha256,
     size: target.size,
   };
-
-  if (manifest.unsigned === true) {
-    // The publisher explicitly declared no signing story: record it, never
-    // pretend the artifact was verified.
-    release.unsigned = true;
-    return release;
-  }
 
   // A signed release carries a per-artifact signature bundle. Absent =
   // neither signed nor declared unsigned: the upgrader refuses such bytes.

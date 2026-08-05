@@ -24,6 +24,7 @@ import {
   checkM2UntrustedSignerRefused,
   checkM2TamperedArtifactRefused,
   checkM2UnsignedExplicitAccepted,
+  checkM2UnsignedRefusedByDefault,
 } from "../artifact/m2.ts";
 
 const TOOTH_IDS = new Set([
@@ -35,6 +36,7 @@ const TOOTH_IDS = new Set([
   "m2.untrusted-signer-refused",
   "m2.tampered-artifact-refused",
   "m2.unsigned-explicit-accepted",
+  "m2.unsigned-refused-by-default",
 ]);
 
 async function ctxFor(prefix: string): Promise<{ ctx: ToothContext; teardown: () => Promise<void> }> {
@@ -44,7 +46,15 @@ async function ctxFor(prefix: string): Promise<{ ctx: ToothContext; teardown: ()
 
 test("known-green: every M1 artifact tooth passes on a clean sandbox", async () => {
   const teeth = allTeeth().filter((t) => TOOTH_IDS.has(t.id));
-  assert.equal(teeth.length, 8, "all eight artifact teeth must be registered");
+  // Both directions, because each catches a different mistake:
+  //  - a listed id that nothing registers => the list rots
+  //  - a registered artifact tooth missing from the list => it silently never
+  //    runs here, which is the false-green this whole file exists to prevent.
+  assert.equal(teeth.length, TOOTH_IDS.size, "every listed id must be registered");
+  const unlisted = allTeeth()
+    .map((t) => t.id)
+    .filter((id) => /^(artifact|m1|m2)\./u.test(id) && !TOOTH_IDS.has(id));
+  assert.deepEqual(unlisted, [], "artifact teeth missing from TOOTH_IDS never run here");
   for (const tooth of teeth) {
     const { ctx, teardown } = await ctxFor(tooth.id.replaceAll(".", "-"));
     try {
@@ -141,6 +151,22 @@ test("known-red: m2.unsigned-explicit-accepted catches a signed release", async 
     // mutation: a SIGNED release is served — no unsigned record, so the
     // unverified-notification assertion goes RED
     await assert.rejects(checkM2UnsignedExplicitAccepted(ctx, { serveSigned: true }));
+  } finally {
+    await teardown();
+  }
+});
+
+test("known-red: m2.unsigned-refused-by-default catches a client that accepts", async () => {
+  const { ctx, teardown } = await ctxFor("red-m2-default");
+  try {
+    // mutation: the CLIENT accepts unattributable bytes (K_ACCEPT_UNSIGNED=1),
+    // so the unsigned release installs and the refusal assertion goes RED.
+    // This is what makes the tooth non-vacuous: without it, "refuses unsigned"
+    // and "refuses nothing" would look the same.
+    await assert.rejects(
+      checkM2UnsignedRefusedByDefault(ctx, { clientAccepts: true }),
+      /must NOT install/,
+    );
   } finally {
     await teardown();
   }

@@ -108,7 +108,7 @@ export class ReleaseStore {
       sha256: sha256Hex(binaryData),
       size: binaryData.length,
     };
-    const manifest = buildManifest(version, targets, spec.channel, spec.unsigned);
+    const manifest = buildManifest(version, targets, spec.channel);
     const manifestJson = new TextEncoder().encode(JSON.stringify(manifest, null, 2));
 
     // Signature chain files.
@@ -126,6 +126,7 @@ export class ReleaseStore {
     for (const name of artifactNames) {
       const data = bytes.get(name);
       if (!data) throw new Error(`missing bytes for ${name}`);
+      if (spec.unsigned === true) continue; // no signing story: nothing to verify against
       await fs.writeFile(path.join(releaseDir, sigFileFor(name)), signData(this.keychain.signing, data));
       // Machine-readable signature bundle the release source consumes.
       const bundle = {
@@ -152,15 +153,17 @@ export class ReleaseStore {
       sigFileFor(MANIFEST_FILE),
       new Uint8Array(await fs.readFile(path.join(releaseDir, sigFileFor(MANIFEST_FILE)))),
     );
-    for (const name of artifactNames) {
-      pristineFiles.set(
-        sigFileFor(name),
-        new Uint8Array(await fs.readFile(path.join(releaseDir, sigFileFor(name)))),
-      );
-      pristineFiles.set(
-        sigBundleFileFor(name),
-        new Uint8Array(await fs.readFile(path.join(releaseDir, sigBundleFileFor(name)))),
-      );
+    if (spec.unsigned !== true) {
+      for (const name of artifactNames) {
+        pristineFiles.set(
+          sigFileFor(name),
+          new Uint8Array(await fs.readFile(path.join(releaseDir, sigFileFor(name)))),
+        );
+        pristineFiles.set(
+          sigBundleFileFor(name),
+          new Uint8Array(await fs.readFile(path.join(releaseDir, sigBundleFileFor(name)))),
+        );
+      }
     }
     this.pristine.set(version, pristineFiles);
 

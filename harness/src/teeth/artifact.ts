@@ -18,6 +18,7 @@ import {
   checkM2UntrustedSignerRefused,
   checkM2TamperedArtifactRefused,
   checkM2UnsignedExplicitAccepted,
+  checkM2UnsignedRefusedByDefault,
 } from "../artifact/m2.ts";
 
 registerTooth({
@@ -150,4 +151,23 @@ registerTooth({
     },
   ],
   run: checkM2UnsignedExplicitAccepted,
+});
+
+registerTooth({
+  id: "m2.unsigned-refused-by-default",
+  profiles: ["swap"],
+  layers: ["L0", "L0.5"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate:
+        "a release source is allowed to declare its own bytes acceptable (manifest-declared unsigned, or an allowUnsigned option on the source)",
+      caughtOnlyBy: {
+        alsoCaughtBy: "core/src/artifact/sourceTrust.test.ts (same attack, in-process)",
+        whyStillNeeded:
+          "this runs it against the real publisher and a real binary: the client's compiled-in root keys are present and correct, and the payload still must not install",
+      },
+    },
+  ],
+  run: checkM2UnsignedRefusedByDefault,
 });

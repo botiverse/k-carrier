@@ -97,22 +97,22 @@ async function selfUpgrade() {
     async resume() {},
   };
 
-  // This demo publishes to a plain file server and has no signing story, so it
-  // says so out loud: K refuses bytes it cannot attribute unless someone takes
-  // explicit responsibility for them. The declaration lives here, in the
-  // adopter's code, rather than as an allowUnsigned option on the source --
-  // a flag in core would let anyone turn off signature verification by passing
-  // true, which is a security decision made by a default. Six lines is the
-  // right amount of friction for "install bytes nobody vouched for". Real
-  // products sign instead; see docs/integration.md.
+  // Accepting bytes nobody vouched for is a CLIENT decision, so it is made
+  // here in the adopter's code -- never by an option on the source and never
+  // by a field in the manifest (the manifest is served by the very party the
+  // signature chain exists to distrust; see core/src/artifact/sourceTrust.test.ts).
+  // Real products sign; this switch exists so the harness can exercise the
+  // "no signing story yet" posture deliberately.
   const published = staticManifestSource({ baseUrl: RELEASE_BASE });
-  const source = {
-    checkForUpdate: async (ctx) => {
-      const r = await published.checkForUpdate(ctx);
-      return r === null ? null : { ...r, unsigned: true };
-    },
-    fetchRelease: async (v, ctx) => ({ ...(await published.fetchRelease(v, ctx)), unsigned: true }),
-  };
+  const source = process.env.K_ACCEPT_UNSIGNED === "1"
+    ? {
+        checkForUpdate: async (ctx) => {
+          const r = await published.checkForUpdate(ctx);
+          return r === null ? null : { ...r, unsigned: true };
+        },
+        fetchRelease: async (v, ctx) => ({ ...(await published.fetchRelease(v, ctx)), unsigned: true }),
+      }
+    : published;
 
   const upgrader = createUpgrader({
     host,

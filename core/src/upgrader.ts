@@ -69,6 +69,13 @@ export interface UpgraderConfig {
 }
 
 export interface NotificationEvent {
-  kind: "confirm-request" | "upgrade-failed" | "rolled-back" | "held" | "promoted";
+  kind:
+    | "confirm-request"
+    | "upgrade-failed"
+    | "rolled-back"
+    | "held"
+    | "promoted"
+    /** Installing bytes the client chose to accept without attribution. */
+    | "installed-unverified";
   detail: Record<string, string>;
 }
