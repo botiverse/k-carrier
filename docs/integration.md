@@ -1,11 +1,11 @@
-# Integrating carrier into your application
+# Integrating K into your application
 
 The adopter's view: what you implement, what you call, what you deploy, what you get. Core never learns your internals; you never re-implement upgrade logic.
 
 ## The boundary in one picture
 
 ```
-            YOUR APP                    |            CARRIER CORE
+            YOUR APP                    |              K CORE
                                         |
   daemon ──┐                            |   ┌─ artifact (channel/download/verify/swap)
   CLI `myapp upgrade` ──┤ constructs    |   ├─ distsign (2-tier signature client)
@@ -47,7 +47,7 @@ const upgrader = createUpgrader({
   policy: "confirm",                     // "auto" | "confirm" | "notify-only"
   notificationSink: (e) => myUi.show(e), // consent prompts + failure notices
   rootKeys: EMBEDDED_ROOT_KEYS,          // compiled into your binary
-  stateDir: "/var/lib/myapp/carrier",
+  stateDir: "/var/lib/myapp/k",
 });
 ```
 

@@ -1,6 +1,6 @@
 # K
 
-**Upgrade framework for managed resident services on personal devices.** (working name; private while incubating)
+**Upgrade framework for managed resident services on personal devices.** (private while incubating)
 
 Existing tools solve the two easy ends: CLI self-update libraries (`self_update`, `minio/selfupdate` — fetch/verify/swap, effective on restart) and org-fleet updaters (Datadog fleet installer — remote-driven, machines owned by ops). **Nobody covers the middle: a resident service on a machine a *person* owns, hosting live workloads.** That demands the *union* of both ends' capabilities, plus a few nobody has:
 
