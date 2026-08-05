@@ -162,6 +162,24 @@ Any static file host works — there is no server-side logic.
 
 ## 6. Testing your integration
 
+Three beliefs shape how K is tested — knowing them explains what the harness
+will and won't do with your app (full design: `harness-design.md`):
+
+1. **Test like a user.** The primary tests spawn your *real binary* and drive
+   it through its *CLI commands*, asserting from outside (exit codes, files,
+   what version actually runs next). Library-level tests are the exception,
+   not the rule — a green that only exists inside an import is not proof.
+2. **The tests are the spec.** Every guarantee K claims (never dual-run,
+   never bricked, sessions survive rollback…) exists as a registered tooth
+   with a declared way to make it fail. A claim without a runnable red case
+   doesn't count — that includes profile support ("K supports CLIs" is
+   backed by a runnable example, not a sentence).
+3. **No test backdoors.** K core contains zero test-awareness — no test
+   modes, no "skip verification" flags. Everything the harness uses is a
+   product surface you also get (status command, injected clock, config).
+   So passing the harness means the *shipping* code path works, not a
+   test-shaped variant of it.
+
 Run the harness against **your** adapter, at your profile:
 
 ```
