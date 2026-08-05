@@ -10,6 +10,7 @@ CLI self-update libraries solve the easy end; org-fleet updaters solve the serve
 
 - **[`docs/integration.md`](docs/integration.md)** — from-zero guide: the problem in plain words, concept primer, tiered adoption with code.
 - [`docs/design-v1.md`](docs/design-v1.md) — full design: six layers, architecture, decision record.
+- [`docs/harness-design.md`](docs/harness-design.md) — the test framework, designed first: harness as executable spec (teeth registry, real-process crash injection, adversarial self-verification).
 - [`docs/test-plan.md`](docs/test-plan.md) — executable test plan (M0–M6, must-red per cell).
 - [`docs/research-tailscale-datadog.md`](docs/research-tailscale-datadog.md) — the source-level survey this design stands on.
 
