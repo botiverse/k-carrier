@@ -288,6 +288,12 @@ export async function checkSandboxIsolation(ctx: ToothContext): Promise<void> {
   await assertDirGone(b.dir);
 }
 
+/**
+ * Sandbox verify-dead check lives with the sandbox module (its domain):
+ * re-exported here so the M0 teeth and tests import from one place.
+ */
+export { checkSandboxVerifyDead } from "../scenario/sandbox.ts";
+
 // ---------------------------------------------------------------------------
 // Registered teeth (must-red answered per "who else would catch this?").
 // ---------------------------------------------------------------------------

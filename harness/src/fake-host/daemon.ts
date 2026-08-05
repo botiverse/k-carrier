@@ -9,11 +9,10 @@
  *   - "verify dead" means the OS says gone, not that we sent a signal
  */
 import { spawn, type ChildProcess } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import path from "node:path";
 import type { HostAdapter, ProcessEvidence, Slot } from "../../../core/src/lifecycle/hostAdapter.ts";
 
-const ENTRY = path.join(path.dirname(fileURLToPath(import.meta.url)), "daemon-entry.ts");
+const ENTRY = path.join(import.meta.dirname, "daemon-entry.ts");
 
 interface Incarnation {
   child: ChildProcess;
@@ -28,6 +27,8 @@ export interface DaemonHostOptions {
   slotVersions: Record<Slot, string | null>;
   /** Milliseconds before a start/probe is considered hung. */
   timeoutMs?: number;
+  /** Extra env for spawned incarnations (e.g. the sandbox marker). */
+  env?: Record<string, string>;
 }
 
 /** Does the OS still know this pid? (Signal 0 = existence check, no delivery.) */
@@ -66,7 +67,7 @@ export class DaemonFakeHost implements HostAdapter {
     const version = this.opts.slotVersions[slot];
     if (version === null) throw new Error(`slot ${slot} holds no version to start`);
     const child = spawn(process.execPath, [ENTRY], {
-      env: { ...process.env, K_FAKE_VERSION: version, K_FAKE_SLOT: slot },
+      env: { ...process.env, ...this.opts.env, K_FAKE_VERSION: version, K_FAKE_SLOT: slot },
       stdio: ["pipe", "pipe", "ignore"],
     });
     const ready = await this.readLine(child, "ready", this.opts.timeoutMs ?? 5000);
@@ -121,7 +122,9 @@ export class DaemonFakeHost implements HostAdapter {
     const deadline = Date.now() + timeoutMs;
     while (processAlive(pid)) {
       if (Date.now() > deadline) throw new Error(`pid ${pid} still alive after ${timeoutMs}ms`);
-      await new Promise((r) => setTimeout(r, 10));
+      await new Promise((r) => {
+        setTimeout(r, 10);
+      });
     }
   }
 

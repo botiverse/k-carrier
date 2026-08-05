@@ -13,6 +13,7 @@ import {
   checkServeOlderVersion,
   checkDropFileRemoves,
   checkSandboxIsolation,
+  checkSandboxVerifyDead,
   assertSandboxDistinct,
   assertDirGone,
   M0_ARTIFACT,
@@ -26,6 +27,7 @@ const M0_TOOTH_IDS = new Set([
   "fake-server.tamper-serve-older-version",
   "fake-server.tamper-drop-file",
   "scenario.sandbox-isolation",
+  "scenario.sandbox-verify-dead",
 ]);
 
 const ctxFor = async (prefix: string): Promise<{ ctx: ToothContext; teardown: () => Promise<void> }> => {
@@ -39,7 +41,7 @@ const ctxFor = async (prefix: string): Promise<{ ctx: ToothContext; teardown: ()
 
 test("known-green: every M0 tooth passes on a clean sandbox", async () => {
   const teeth = allTeeth().filter((t) => M0_TOOTH_IDS.has(t.id));
-  assert.equal(teeth.length, 6, "all M0 teeth must be registered");
+  assert.equal(teeth.length, 7, "all M0 teeth must be registered");
   for (const tooth of teeth) {
     const { ctx, teardown } = await ctxFor(tooth.id.replaceAll(".", "-"));
     try {
@@ -122,6 +124,18 @@ test("known-red: tamper-dropFile catches a no-op dropFile", async () => {
   }
 });
 
+test("known-red: sandbox-verify-dead catches a teardown that leaves the marker process alive", async () => {
+  const { ctx, teardown } = await ctxFor("red-verify-dead");
+  try {
+    await assert.rejects(
+      checkSandboxVerifyDead(ctx, { skipTeardownKill: true }),
+      /no marker processes may remain/,
+    );
+  } finally {
+    await teardown();
+  }
+});
+
 test("known-red: sandbox-isolation catches shared dir/port and leftover dirs", async () => {
   assert.throws(
     () => assertSandboxDistinct({ dir: "/same", port: 1234 }, { dir: "/same", port: 1234 }),
@@ -165,6 +179,7 @@ test("tooth run functions are the exported checks (single source of truth)", () 
   assert.equal(byId.get("fake-server.tamper-serve-older-version")!.run, checkServeOlderVersion);
   assert.equal(byId.get("fake-server.tamper-drop-file")!.run, checkDropFileRemoves);
   assert.equal(byId.get("scenario.sandbox-isolation")!.run, checkSandboxIsolation);
+  assert.equal(byId.get("scenario.sandbox-verify-dead")!.run, checkSandboxVerifyDead);
 });
 
 test("mutation-runner export carries the M0 must-red lists", () => {

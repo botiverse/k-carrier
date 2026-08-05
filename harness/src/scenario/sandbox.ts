@@ -20,14 +20,28 @@ import { promises as fs } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { createServer } from "node:net";
+import { execFileSync, spawn } from "node:child_process";
+import assert from "node:assert/strict";
+import { processAlive } from "../fake-host/daemon.ts";
+import { type ToothContext } from "../teeth/registry.ts";
+
+/**
+ * The sandbox marker env var: processes spawned inside a sandbox carry
+ * `K_SANDBOX_MARKER=<sandbox id>`, making them discoverable out-of-band
+ * via `ps e` so teardown can prove zero residuals (harness-design §1.77:
+ * "按沙箱标记 pgrep 复核零残留").
+ */
+export const MARKER_ENV = "K_SANDBOX_MARKER";
 
 export interface Sandbox {
   /** Unique temp dir (mkdtemp); the scenario's entire world. */
   readonly dir: string;
   /** Port reserved for this sandbox's fake-server. */
   readonly port: number;
-  /** Sandbox marker file content (future pgrep-by-marker key). */
+  /** Sandbox marker file content (the pgrep-by-marker key). */
   readonly id: string;
+  /** The env var a spawned process needs to be claimable by this sandbox. */
+  envMarker(): Record<string, string>;
   /** Delete the sandbox tree; idempotent. */
   teardown(): Promise<void>;
 }
@@ -84,25 +98,132 @@ export async function createSandbox(opts: SandboxOptions = {}): Promise<Sandbox>
   let tornDown = false;
   const teardown = async (): Promise<void> => {
     if (tornDown) return;
-    tornDown = true;
-    await verifyProcessTreeDead(dir, id); // stub until fake-host daemon lands
+    await verifyProcessTreeDead(dir, id); // throws on residuals; dir kept as evidence
     await fs.rm(dir, { recursive: true, force: true });
     reservedPorts.delete(port);
+    tornDown = true;
   };
 
-  return { dir, port, id, teardown };
+  return { dir, port, id, envMarker: () => ({ [MARKER_ENV]: id }), teardown };
+}
+
+/**
+ * All pids whose environment carries `NAME=value` (the sandbox-marker
+ * scan). Reads `ps eaxo pid=,command=` — the `e` flag appends each
+ * process's environment, so the marker is observable even for processes
+ * whose parent has died (orphans/zombies the host no longer tracks).
+ */
+export function findPidsByEnv(name: string, value: string): number[] {
+  const out = execFileSync("ps", ["eaxo", "pid=,command="], { encoding: "utf8" });
+  const token = `${name}=${value}`;
+  const pids: number[] = [];
+  for (const line of out.split("\n")) {
+    if (!line.includes(token)) continue;
+    const m = /^\s*(\d+)/.exec(line);
+    const pid = m?.[1];
+    if (pid) pids.push(Number(pid));
+  }
+  return pids;
+}
+
+/** Typed teardown failure: residual processes survived the kill+verify. */
+export class VerifyDeadError extends Error {
+  readonly code = "SANDBOX_VERIFY_DEAD";
+  readonly survivors: number[];
+
+  constructor(survivors: number[]) {
+    super(`SANDBOX_VERIFY_DEAD: ${survivors.length} process(es) still alive after teardown kill: ${survivors.join(", ")}`);
+    this.name = "VerifyDeadError";
+    this.survivors = survivors;
+  }
+}
+
+const KILL_GRACE_MS = 2000;
+const POLL_MS = 10;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => {
+    setTimeout(r, ms);
+  });
 }
 
 /**
  * Process-tree verify-dead — the teardown half that proves "发了 kill"≠
- * "死了" (zombie `__service` was a real production lesson). Currently a
- * no-op skeleton: it needs the fake-host daemon's spawn/pgrep conventions
- * (sandbox marker -> process group) before it can assert anything.
- *
- * Lands with harness/src/fake-host/ (archer: "进程树 verify-dead 那半等
- * fake-host daemon 到位再接") — at that point this pgrep's by marker id,
- * asserts zero matches, and fails teardown with a typed error otherwise.
+ * "死了" (zombie `__service` was a real production lesson): scan for every
+ * process carrying this sandbox's marker, SIGKILL them, then make the OS
+ * confirm each is gone. Any survivor raises a typed VerifyDeadError and
+ * the sandbox dir is kept as evidence (the teardown did NOT succeed).
  */
-async function verifyProcessTreeDead(_sandboxDir: string, _markerId: string): Promise<void> {
-  // Skeleton: fake-host daemon fills in the marker-pgrep here.
+export async function verifyProcessTreeDead(_sandboxDir: string, markerId: string): Promise<void> {
+  const alive = findPidsByEnv(MARKER_ENV, markerId);
+  if (alive.length === 0) return;
+  for (const pid of alive) {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      // already gone between the scan and the signal
+    }
+  }
+  const survivors: number[] = [];
+  const deadline = Date.now() + KILL_GRACE_MS;
+  for (const pid of alive) {
+    while (processAlive(pid)) {
+      if (Date.now() > deadline) {
+        survivors.push(pid);
+        break;
+      }
+      await sleep(POLL_MS);
+    }
+  }
+  if (survivors.length > 0) throw new VerifyDeadError(survivors);
+}
+
+/**
+ * The sandbox verify-dead tooth check (registered as
+ * scenario.sandbox-verify-dead): a process carrying the sandbox marker
+ * must be SIGKILLed and OS-confirmed gone by teardown ("发了 kill"≠"死
+ * 了"). `skipTeardownKill` simulates the must-red mutation (teardown's
+ * kill/verify is a no-op) for known-red driving.
+ */
+export async function checkSandboxVerifyDead(
+  ctx: ToothContext,
+  opts: { skipTeardownKill?: boolean } = {},
+): Promise<void> {
+  const sb = await createSandbox({ prefix: "verify-dead", baseDir: ctx.sandboxDir });
+  const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+    env: { ...process.env, ...sb.envMarker() },
+    stdio: "ignore", // no pipes: a failed assertion must not degrade into a hang
+  });
+  try {
+    await waitForMarker(sb.id);
+    if (opts.skipTeardownKill) {
+      // mutation: teardown's kill/verify never ran — the marker process is
+      // still alive, and the zero-residual assertion must go RED
+      assert.deepEqual(
+        findPidsByEnv(MARKER_ENV, sb.id),
+        [],
+        "after teardown no marker processes may remain (kill step skipped => RED)",
+      );
+      return;
+    }
+    await sb.teardown();
+    assert.ok(!processAlive(child.pid ?? -1), "teardown must kill the marker process");
+    assert.deepEqual(
+      findPidsByEnv(MARKER_ENV, sb.id),
+      [],
+      "no marker processes may remain after teardown",
+    );
+    await assert.rejects(fs.access(sb.dir), "teardown must remove the sandbox dir");
+  } finally {
+    if (processAlive(child.pid ?? -1)) child.kill("SIGKILL");
+    await sb.teardown().catch(() => {});
+  }
+}
+
+async function waitForMarker(markerId: string): Promise<void> {
+  const deadline = Date.now() + 2000;
+  while (findPidsByEnv(MARKER_ENV, markerId).length === 0) {
+    if (Date.now() > deadline) throw new Error(`marker process ${markerId} never became visible`);
+    await sleep(20);
+  }
 }
