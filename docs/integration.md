@@ -107,6 +107,10 @@ what your app does is none of K's business.
 createUpgrader({ host, source, policy: "auto", /* ... */ });
 // capabilities are declared by implementing the corresponding host duties:
 //   quiesce/resume round-trip      -> workload-preservation
+//     (this claims YOUR workloads survive the round trip. If your service
+//      kills its children on shutdown and restarts them afterwards, they did
+//      not survive -- they were restarted, and this capability is not yours
+//      to declare. K cannot give continuity to a host that does not have it.)
 //   named readback surfaces        -> lifecycle-convergence
 //   attach the drive module        -> fleet-drive
 ```

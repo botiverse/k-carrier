@@ -51,7 +51,8 @@ idle → staged（experiment 槽已下载+验签）
 **设计**：
 - **Host adapter 接口**（宿主必须实现的最小面）：`quiesce()`（负载可安全暂停/落盘）、`stop()`、`start(slot)`、`healthProbe() → {version, pid, startId}`、`resume()`。core 只调接口，不知宿主细节 —— 这就是"任何 daemon 可用"的机械保证。
 - 自替换顺序显式化（Datadog 的教训直接抄）：先落盘 journal 意图 → 交接进程树（detached owner 模式，= 我们 direction-B）→ 新进程自证（见 L3）→ 才清旧。
-- 会话保留 = 宿主契约的一部分：`quiesce` 前后负载状态等价（Raft 壳里 = agent 的 MEMORY/工作区/连接恢复；核心层只保证调用时序与回滚时的对称恢复）。
+- 会话保留 = **宿主自己的能力**，`quiesce/resume` 只保证**调用时序**与回滚时的对称恢复；**K 不会让不具备连续性的宿主凭空获得连续性。**
+  ⚠️ **08-05 核实纠正**：raft-computer **今天并不保留 agent**——升级时 `serviceShutdown` 会把所有 runner 子进程 SIGTERM 掉，接班人重新拉起它们。⇒ 所以对 computer 而言 `workload-preservation` **是一项未来能力，不是现状**；要连续性得单独做（例如 runner 不随服务生命周期而死），**不是接了 K 就顺手拿到**。
 
 **⭐ 一等模型（08-05 提升，原本按边角情况处理）：升级事务可以比发起它的进程活得久。**
 很多宿主**起不动自己**——它们通过**退出**被替换，由外部的东西（supervisor / OS 安装器）按新字节把它拉起来：
