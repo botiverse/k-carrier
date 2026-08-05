@@ -31,6 +31,35 @@ import {
   checkM3ServiceRollback,
 } from "../artifact/m3.ts";
 
+/**
+ * Teeth whose green run lives in another file. Listing one here is a claim
+ * that it IS exercised there -- not a way to skip it.
+ */
+const COVERED_ELSEWHERE = new Set([
+  "fake-server.serves-verifiable-release",
+  "fake-server.tamper-corrupt-byte",
+  "fake-server.tamper-swap-sig",
+  "fake-server.tamper-serve-older-version",
+  "fake-server.tamper-drop-file",
+  "scenario.sandbox-verify-dead",
+  "scenario.sandbox-isolation",
+  "artifact-factory.deterministic-build",
+  "artifact-factory.ok-artifact-runs",
+  "fake-host.ledger-equivalence",
+  "fake-host.ledger-equivalence-after-rollback",
+  "fake-host.fault-fail-on-quiesce",
+  "fake-host.fault-hang-on-stop",
+  "fake-host.fault-wrong-version-probe",
+  "fake-host.fault-stale-startid-probe",
+  "fake-host.fault-crash-during-start",
+  "harness.teeth-present-swap",
+  "harness.teeth-present-service",
+  "examples.swap-tool-blackbox",
+  "examples.service-daemon-contract",
+  "examples.hosted-service-adapter", // green run: teeth/examples.test.ts
+  "blackbox.missing-target-fails",
+]);
+
 const TOOTH_IDS = new Set([
   "artifact.tamper-refuses-install",
   "artifact.atomic-swap-crash-safe",
@@ -41,6 +70,8 @@ const TOOTH_IDS = new Set([
   "m2.tampered-artifact-refused",
   "m2.unsigned-explicit-accepted",
   "m2.unsigned-refused-by-default",
+  "m3.service-upgrade",
+  "m3.service-rollback",
 ]);
 
 async function ctxFor(prefix: string): Promise<{ ctx: ToothContext; teardown: () => Promise<void> }> {
@@ -48,17 +79,22 @@ async function ctxFor(prefix: string): Promise<{ ctx: ToothContext; teardown: ()
   return { ctx: { profile: "service", sandboxDir: sb.dir }, teardown: sb.teardown };
 }
 
-test("known-green: every M1 artifact tooth passes on a clean sandbox", async () => {
+test("known-green: every artifact/milestone tooth passes on a clean sandbox", async () => {
   const teeth = allTeeth().filter((t) => TOOTH_IDS.has(t.id));
   // Both directions, because each catches a different mistake:
   //  - a listed id that nothing registers => the list rots
   //  - a registered artifact tooth missing from the list => it silently never
   //    runs here, which is the false-green this whole file exists to prevent.
   assert.equal(teeth.length, TOOTH_IDS.size, "every listed id must be registered");
+  // Fail CLOSED on new teeth. The previous version enumerated known prefixes
+  // (artifact|m1|m2), so the moment m3 landed its teeth were silently absent
+  // from the green run -- only their known-red tests executed them, and those
+  // pass whether or not the assertions mean anything. A guard that lists the
+  // names it knows about stops guarding exactly when something new arrives.
   const unlisted = allTeeth()
     .map((t) => t.id)
-    .filter((id) => /^(artifact|m1|m2)\./u.test(id) && !TOOTH_IDS.has(id));
-  assert.deepEqual(unlisted, [], "artifact teeth missing from TOOTH_IDS never run here");
+    .filter((id) => !TOOTH_IDS.has(id) && !COVERED_ELSEWHERE.has(id));
+  assert.deepEqual(unlisted, [], "every registered tooth must run green somewhere");
   for (const tooth of teeth) {
     const { ctx, teardown } = await ctxFor(tooth.id.replaceAll(".", "-"));
     try {

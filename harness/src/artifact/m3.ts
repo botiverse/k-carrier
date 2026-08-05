@@ -51,6 +51,7 @@ async function runUpgradeShape(
   });
   const { seedChild, seedPid } = await seedService(shapeCtx, shape, binPath, seed);
   const env = serviceEnv(shapeCtx, shape, target.url, [seed, target]);
+  let respawned: Awaited<ReturnType<typeof respawnUntilUp>> | null = null;
   try {
     const before = await readIncarnation(shapeCtx);
     assert.ok(before, "a running incarnation must exist before the upgrade");
@@ -65,7 +66,10 @@ async function runUpgradeShape(
       `self upgrade must exit 0 (${up.stderr.trim()}; serveBadVersion mutation => RED)`,
     );
     if (shape === "respawn") {
-      await respawnUntilUp(shapeCtx, env);
+      // Tracked, not discarded: if an assertion below fails, an untracked
+      // live service keeps the test runner alive and a red degrades into a
+      // hang -- the failure mode is then indistinguishable from a wedge.
+      respawned = await respawnUntilUp(shapeCtx, env);
     }
 
     // signal-sent ≠ dead: the OLD pid must be VERIFIED gone.
@@ -86,6 +90,9 @@ async function runUpgradeShape(
     assert.equal(state.stableVersion, "2.0.0", `[${shape}] stable slot must hold the new version`);
     assert.equal(state.phase, "promoted", `[${shape}] journal must end at promoted`);
   } finally {
+    if (respawned && respawned.child.pid && processAlive(respawned.child.pid)) {
+      respawned.child.kill("SIGKILL");
+    }
     await killIncarnation(shapeCtx);
     if (processAlive(seedPid)) seedChild.kill("SIGKILL");
     await seed.stop();
@@ -127,6 +134,7 @@ async function runRollbackShape(
   });
   const { seedChild, seedPid } = await seedService(shapeCtx, shape, binPath, seed);
   const env = serviceEnv(shapeCtx, shape, target.url, [seed, target]);
+  let respawned: Awaited<ReturnType<typeof respawnUntilUp>> | null = null;
   try {
     const before = await readIncarnation(shapeCtx);
     assert.ok(before, "a running incarnation must exist before the upgrade");
@@ -134,7 +142,10 @@ async function runRollbackShape(
 
     const up = await runCommand(binPath, ["self", "upgrade"], { env, timeoutMs: 30000 });
     if (shape === "respawn") {
-      await respawnUntilUp(shapeCtx, env);
+      // Tracked, not discarded: if an assertion below fails, an untracked
+      // live service keeps the test runner alive and a red degrades into a
+      // hang -- the failure mode is then indistinguishable from a wedge.
+      respawned = await respawnUntilUp(shapeCtx, env);
     }
 
     const state = await readState(env);
@@ -175,6 +186,9 @@ async function runRollbackShape(
     );
     assert.ok(!processAlive(oldPid), `[${shape}] the pre-upgrade incarnation must stay dead`);
   } finally {
+    if (respawned && respawned.child.pid && processAlive(respawned.child.pid)) {
+      respawned.child.kill("SIGKILL");
+    }
     await killIncarnation(shapeCtx);
     if (processAlive(seedPid)) seedChild.kill("SIGKILL");
     await seed.stop();

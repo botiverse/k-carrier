@@ -147,6 +147,14 @@ export class UpgradeEngine {
     try {
       evidence = await this.withBudget("healthProbe", () => this.deps.host.healthProbe());
     } catch (err) {
+      // A probe that FAILED is information: the host answered "not healthy",
+      // so rolling back (which calls stop/start/resume) is sound. A probe that
+      // WEDGED is not information -- we do not know what the host is doing, and
+      // issuing more host calls to a host that never answered the last one is
+      // how a stuck upgrade becomes two live incarnations. Let it out; the
+      // journal keeps the in-flight phase and the next start resolves it from
+      // evidence.
+      if (err instanceof HostCallTimeout) throw err;
       return this.rollbackOutcome(`experiment probe failed: ${(err as Error).message}`);
     }
 
@@ -188,6 +196,7 @@ export class UpgradeEngine {
     try {
       evidence = await this.withBudget("healthProbe", () => this.deps.host.healthProbe());
     } catch (err) {
+      if (err instanceof HostCallTimeout) throw err; // same rule: do not act on a wedged host
       await this.rollbackTo(`successor probe failed: ${(err as Error).message}`);
       return;
     }
