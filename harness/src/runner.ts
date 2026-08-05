@@ -23,6 +23,12 @@ import {
   hasWorkloadDriver,
 } from "./fake-host/checks.ts";
 import type { HostDriver } from "./fake-host/inproc.ts";
+import {
+  checkAdapterServiceUpgrade,
+  checkAdapterServiceRollback,
+  checkAdapterLifecycleConverged,
+  type ServiceAdapterFactory,
+} from "./adapter/serviceChecks.ts";
 
 /** Adapter contract subset: quiesce↔resume equivalence + probe 活性 (§1.7). */
 const ADAPTER_CHECKS: Array<{ id: string; run: (ctx: ToothContext, host: HostDriver) => Promise<void> }> = [
@@ -114,7 +120,7 @@ export async function runProfile(profile: Profile): Promise<Receipt> {
 }
 
 /** Load an adapter module: default export must be `(stateDir) => HostDriver`. */
-export async function loadAdapter(adapterPath: string): Promise<(stateDir: string) => HostDriver> {
+export async function loadAdapter(adapterPath: string): Promise<ServiceAdapterFactory> {
   const mod = (await import(pathToFileURL(adapterPath).href)) as { default?: unknown };
   const factory = mod.default;
   if (typeof factory !== "function") {
@@ -122,7 +128,7 @@ export async function loadAdapter(adapterPath: string): Promise<(stateDir: strin
       `adapter ${adapterPath}: default export must be a factory function (stateDir) => HostDriver`,
     );
   }
-  return factory as (stateDir: string) => HostDriver;
+  return factory as ServiceAdapterFactory;
 }
 
 export async function runAdapter(profile: Profile, adapterPath: string): Promise<Receipt> {
@@ -147,15 +153,43 @@ export async function runAdapter(profile: Profile, adapterPath: string): Promise
     });
   }
   const checks: CheckResult[] = [];
+  // Shape probe: the inproc-driver marker (doWork/ledger) selects the
+  // contract subset; the lifecycleSurfaces marker selects the service-tier
+  // checks. An adapter with NEITHER implements no recognizable contract.
+  const inprocDriver = await (async () => {
+    const sb = await createSandbox({ prefix: "adapter-probe-driver" });
+    try {
+      return hasWorkloadDriver(factory(sb.dir));
+    } finally {
+      await sb.teardown();
+    }
+  })();
+  const serviceTier = await (async () => {
+    const sb = await createSandbox({ prefix: "adapter-probe-service" });
+    try {
+      const host = factory(sb.dir);
+      return typeof (host as { lifecycleSurfaces?: unknown }).lifecycleSurfaces === "function";
+    } finally {
+      await sb.teardown();
+    }
+  })();
+  if (!inprocDriver && !serviceTier) {
+    checks.push({
+      id: "adapter.must-declare-a-contract",
+      status: "fail",
+      error:
+        "HARNESS_ADAPTER_SHAPE: the adapter implements neither the inproc workload driver (doWork/ledger) nor the service-tier lifecycle surfaces — nothing is testable without a backdoor",
+      durationMs: 0,
+    });
+  }
+
   for (const { id, run } of ADAPTER_CHECKS) {
     checks.push(
       await runCheck(id, async () => {
         const sb = await createSandbox({ prefix: id.replaceAll(".", "-") });
         try {
+          if (!inprocDriver) return { skipped: true };
           const host = factory(sb.dir);
-          if (id.startsWith("adapter.ledger-") && !hasWorkloadDriver(host)) {
-            return { skipped: true };
-          }
           await run({ profile, sandboxDir: sb.dir }, host);
         } finally {
           await sb.teardown();
@@ -163,6 +197,34 @@ export async function runAdapter(profile: Profile, adapterPath: string): Promise
         return { skipped: false };
       }),
     );
+  }
+
+  // Service-tier adapter acceptance: the SAME assertions as the service
+  // teeth (upgrade / rollback / lifecycle-converged), host swapped for the
+  // external adapter (archer: "同一套齿，换一个宿主实现"). Gated on the
+  // adapter declaring lifecycle surfaces — the service-tier marker; an
+  // adapter without them is a contract-subset-only host and the checks are
+  // skipped (like the ledger checks' driver skip).
+  if (profile === "service") {
+    const serviceChecks: Array<{ id: string; run: (ctx: ToothContext, f: ServiceAdapterFactory) => Promise<void> }> = [
+      { id: "adapter.service-upgrade", run: (ctx, f) => checkAdapterServiceUpgrade(ctx, f) },
+      { id: "adapter.service-rollback", run: (ctx, f) => checkAdapterServiceRollback(ctx, f) },
+      { id: "adapter.lifecycle-converged", run: (ctx, f) => checkAdapterLifecycleConverged(ctx, f) },
+    ];
+    for (const { id, run } of serviceChecks) {
+      checks.push(
+        await runCheck(id, async () => {
+          const sb = await createSandbox({ prefix: id.replaceAll(".", "-") });
+          try {
+            if (!serviceTier) return { skipped: true };
+            await run({ profile, sandboxDir: sb.dir }, factory);
+          } finally {
+            await sb.teardown();
+          }
+          return { skipped: false };
+        }),
+      );
+    }
   }
   return buildReceipt({
     mode: "adapter",
