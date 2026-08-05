@@ -1,0 +1,4 @@
+{
+  "version": ["--version"],
+  "selfUpgrade": ["self", "upgrade"]
+}

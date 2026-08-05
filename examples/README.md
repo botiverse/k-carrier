@@ -12,5 +12,9 @@ form" does not exist.
 | `plain-daemon/` | daemon | small long-running service, no hosted workloads | 3-method HostAdapter; two-slot transaction, crash-safe rollback, same-PID convergence proof |
 | `managed-host/` | managed | fake host with live "sessions" + an OS-lifecycle surface | full stack: quiesce/resume session preservation, named-surface lifecycle readback, policy/notification, optional drive. Shares its fake host with `harness/`. |
 
-Status: skeletons — filled in as each layer lands (examples land WITH the
-layer, not after; an unlanded layer has no example to fake).
+Status: all three demos landed — each is a runnable app accepted by the
+harness (cli-tool via `k-harness --bin`, managed-host via
+`k-harness --adapter`, plain-daemon via its registered tooth); the teeth
+`examples.*` make each profile's claim CI-enforced. The full managed
+upgrade loop (L1 two-slot + L4/L5) lands when the core upgrader wiring
+does; each demo README states exactly what it proves today.
