@@ -20,6 +20,10 @@ import {
   checkM2UnsignedExplicitAccepted,
   checkM2UnsignedRefusedByDefault,
 } from "../artifact/m2.ts";
+import {
+  checkM3ServiceUpgrade,
+  checkM3ServiceRollback,
+} from "../artifact/m3.ts";
 
 registerTooth({
   id: "artifact.tamper-refuses-install",
@@ -170,4 +174,36 @@ registerTooth({
     },
   ],
   run: checkM2UnsignedRefusedByDefault,
+});
+
+registerTooth({
+  id: "m3.service-upgrade",
+  profiles: ["service"],
+  layers: ["L0", "L0.5", "L1", "L2", "L3"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "the new service is the SAME process as the old (no fresh incarnation; startId reused)",
+      caughtOnlyBy: "this", // only this tooth checks the running process's fresh startId end to end
+    },
+    {
+      mutate: "stop(slot) sends SIGKILL but never verifies the process is gone",
+      caughtOnlyBy: "this", // signal-sent != dead; only this tooth asserts the old pid is OS-gone
+    },
+  ],
+  run: checkM3ServiceUpgrade,
+});
+
+registerTooth({
+  id: "m3.service-rollback",
+  profiles: ["service"],
+  layers: ["L0", "L0.5", "L1", "L2", "L3"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "rollback reverts the slots but does not pull the old version back up",
+      caughtOnlyBy: "this", // only this tooth asserts the old version is ACTUALLY running after rollback
+    },
+  ],
+  run: checkM3ServiceRollback,
 });

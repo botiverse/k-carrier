@@ -26,6 +26,10 @@ import {
   checkM2UnsignedExplicitAccepted,
   checkM2UnsignedRefusedByDefault,
 } from "../artifact/m2.ts";
+import {
+  checkM3ServiceUpgrade,
+  checkM3ServiceRollback,
+} from "../artifact/m3.ts";
 
 const TOOTH_IDS = new Set([
   "artifact.tamper-refuses-install",
@@ -140,6 +144,28 @@ test("known-red: m2.tampered-artifact-refused catches an untouched artifact", as
   try {
     // mutation: no tamper — the 2.0.0 installs, so the refusal goes RED
     await assert.rejects(checkM2TamperedArtifactRefused(ctx, { skipTamper: true }), /must not land/);
+  } finally {
+    await teardown();
+  }
+});
+
+test("known-red: m3.service-upgrade catches an upgrade that never lands (both host shapes)", async () => {
+  const { ctx, teardown } = await ctxFor("red-m3-upgrade");
+  try {
+    // mutation: a bad version is served — it rolls back, so the fresh
+    // incarnation assertion goes RED on both host shapes
+    await assert.rejects(checkM3ServiceUpgrade(ctx, { serveBadVersion: true }), /must exit 0/);
+  } finally {
+    await teardown();
+  }
+});
+
+test("known-red: m3.service-rollback catches a promoted good version (both host shapes)", async () => {
+  const { ctx, teardown } = await ctxFor("red-m3-rollback");
+  try {
+    // mutation: a GOOD version is served — it promotes, so the rollback
+    // expectation goes RED on both host shapes
+    await assert.rejects(checkM3ServiceRollback(ctx, { serveGoodVersion: true }), /must roll back/);
   } finally {
     await teardown();
   }

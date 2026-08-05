@@ -217,7 +217,8 @@ export async function checkPlainDaemonContract(
     if (processAlive(pid)) child.kill("SIGKILL");
   }
 
-  // 2) upgrade: swap bytes, next spawned incarnation reports the new version
+  // 2) upgrade through core's Upgrader with the real service host: the new
+  // version becomes the RUNNING service (registered, alive), not a byte swap.
   const server = new FakeServer({ storeDir: path.join(ctx.sandboxDir, "store2") });
   await server.start();
   const factory = new ArtifactFactory({
@@ -225,23 +226,37 @@ export async function checkPlainDaemonContract(
     demoSource: PLAIN_DAEMON_SOURCE,
   });
   try {
-    await factory.makeRelease({ version: "2.0.0", behavior: "ok", store: server.store });
-    const before = await fileSha256(binPath);
+    await factory.makeRelease({
+      version: "2.0.0",
+      behavior: "ok",
+      store: server.store,
+      platform: currentPlatformKey(),
+    });
+    const stateDir = path.join(ctx.sandboxDir, "app", "state");
     const up = await runCommand(binPath, ["self", "upgrade"], {
-      env: { [RELEASE_BASE_ENV]: server.url },
+      env: {
+        [RELEASE_BASE_ENV]: server.url,
+        K_CORE_UPGRADER: coreUpgraderUrl(),
+        K_ROOT_KEYS: JSON.stringify([server.rootKeyPem]),
+        K_STATE_DIR: stateDir,
+        K_HOST_SHAPE: "spawn",
+      },
+      timeoutMs: 30000,
     });
     assert.equal(up.code, 0, `self upgrade must exit 0 (${up.stderr.trim()})`);
-    assert.notEqual(await fileSha256(binPath), before, "upgrade must change the binary bytes");
 
-    const second = spawnDaemon(binPath);
+    // the running service is now the new version, registered and alive
+    const inc = JSON.parse(
+      await fs.readFile(path.join(stateDir, "incarnation.json"), "utf8"),
+    ) as { version: string; pid: number };
+    assert.equal(inc.version, "2.0.0", "the running service must be the new version");
+    assert.ok(processAlive(inc.pid), "the upgraded service must be alive");
     try {
-      const ready2 = JSON.parse(await readLine(second.child, "ready")) as { version: string };
-      assert.equal(ready2.version, "2.0.0", "next incarnation must run the new version");
-      second.child.stdin?.write("exit\n");
-      await waitDead(second.pid);
-    } finally {
-      if (processAlive(second.pid)) second.child.kill("SIGKILL");
+      process.kill(inc.pid, "SIGKILL");
+    } catch {
+      // already gone
     }
+    await waitDead(inc.pid);
   } finally {
     await server.stop();
   }
