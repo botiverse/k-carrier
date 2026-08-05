@@ -12,7 +12,6 @@
  *    workload driver; probe contract checks always run.
  */
 import { pathToFileURL } from "node:url";
-import "./teeth/index.ts"; // registers all teeth (side effect)
 import { teethFor, type Profile, type ToothContext } from "./teeth/registry.ts";
 import { createSandbox } from "./scenario/sandbox.ts";
 import { buildReceipt, type CheckResult, type Receipt } from "./receipt.ts";
@@ -70,8 +69,28 @@ async function runCheck(
 
 export async function runProfile(profile: Profile): Promise<Receipt> {
   const startedAtMs = Date.now();
+  const teeth = teethFor(profile);
+  // Fail-closed: an empty selection must never render as "all green"
+  // (zero teeth and all-passed are indistinguishable to CI otherwise).
+  if (teeth.length === 0) {
+    return buildReceipt({
+      mode: "profile",
+      profile,
+      target: null,
+      checks: [
+        {
+          id: "harness.empty-selection",
+          status: "fail",
+          error: `HARNESS_EMPTY_SELECTION: profile ${profile} selected 0 teeth`,
+          durationMs: 0,
+        },
+      ],
+      startedAtMs,
+      durationMs: Date.now() - startedAtMs,
+    });
+  }
   const checks: CheckResult[] = [];
-  for (const tooth of teethFor(profile)) {
+  for (const tooth of teeth) {
     checks.push(
       await runCheck(tooth.id, async () => {
         const sb = await createSandbox({ prefix: tooth.id.replaceAll(".", "-") });
@@ -109,6 +128,24 @@ export async function loadAdapter(adapterPath: string): Promise<(stateDir: strin
 export async function runAdapter(profile: Profile, adapterPath: string): Promise<Receipt> {
   const startedAtMs = Date.now();
   const factory = await loadAdapter(adapterPath);
+  // Fail-closed: an empty contract-check list must never render green.
+  if (ADAPTER_CHECKS.length === 0) {
+    return buildReceipt({
+      mode: "adapter",
+      profile,
+      target: adapterPath,
+      checks: [
+        {
+          id: "harness.empty-selection",
+          status: "fail",
+          error: `HARNESS_EMPTY_SELECTION: adapter contract subset selected 0 checks`,
+          durationMs: 0,
+        },
+      ],
+      startedAtMs,
+      durationMs: Date.now() - startedAtMs,
+    });
+  }
   const checks: CheckResult[] = [];
   for (const { id, run } of ADAPTER_CHECKS) {
     checks.push(

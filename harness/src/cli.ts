@@ -16,6 +16,7 @@
  * + CI readable (harness-design §1.3).
  */
 import { runProfile, runAdapter } from "./runner.ts";
+import "./teeth/index.ts"; // registers all teeth (side effect)
 import { runBinMode, type BinModeOptions } from "./blackbox.ts";
 import { printReceipt } from "./receipt.ts";
 import type { Profile } from "./teeth/registry.ts";

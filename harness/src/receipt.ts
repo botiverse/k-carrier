@@ -40,6 +40,9 @@ export function buildReceipt(opts: {
   const pass = opts.checks.filter((c) => c.status === "pass").length;
   const fail = opts.checks.filter((c) => c.status === "fail").length;
   const na = opts.checks.filter((c) => c.status === "na").length;
+  // Fail-closed: an empty check list is NEVER a pass — "0 checks" and
+  // "all passed" must be distinguishable to every consumer (CI included).
+  const result: "pass" | "fail" = fail > 0 || opts.checks.length === 0 ? "fail" : "pass";
   return {
     mode: opts.mode,
     profile: opts.profile,
@@ -48,7 +51,7 @@ export function buildReceipt(opts: {
     durationMs: opts.durationMs ?? 0,
     checks: opts.checks,
     summary: { pass, fail, na, total: opts.checks.length },
-    result: fail > 0 ? "fail" : "pass",
+    result,
   };
 }
 

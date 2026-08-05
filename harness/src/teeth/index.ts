@@ -6,3 +6,4 @@
 import "./m0.ts";
 import "./artifactFactory.ts";
 import "./fakeHost.ts";
+import "./selfCheck.ts";
