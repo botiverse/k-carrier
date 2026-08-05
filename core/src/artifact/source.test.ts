@@ -18,8 +18,12 @@ function manifestJson(version: string): string {
 function sourceServing(version: string): ReleaseSource {
   return staticManifestSource({
     baseUrl: "https://cdn.example/mytool/stable",
-    fetchImpl: (async () =>
-      new Response(manifestJson(version), { status: 200 })) as unknown as typeof fetch,
+    fetchImpl: (async (url: string | URL | Request) => {
+      if (String(url).endsWith(".k-sig.json")) {
+        return new Response("not found", { status: 404 }); // no signature bundle
+      }
+      return new Response(manifestJson(version), { status: 200 });
+    }) as unknown as typeof fetch,
   });
 }
 

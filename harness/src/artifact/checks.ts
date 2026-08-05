@@ -147,14 +147,18 @@ export async function checkSourceFailsClosed(
   makeSource: (served: string) => ReleaseSource = (served) =>
     staticManifestSource({
       baseUrl: "https://cdn.example/app",
-      fetchImpl: (async () =>
-        new Response(
+      fetchImpl: (async (url: string | URL | Request) => {
+        if (String(url).endsWith(".k-sig.json")) {
+          return new Response("not found", { status: 404 }); // no signature bundle
+        }
+        return new Response(
           JSON.stringify({
             version: served,
             targets: { "linux-x64": { file: `app-${served}.bin`, sha256: "a".repeat(64), size: 1 } },
           }),
           { status: 200 },
-        )) as unknown as typeof fetch,
+        );
+      }) as unknown as typeof fetch,
     }),
 ): Promise<void> {
   const ctx: ReleaseContext = { currentVersion: "1.0.0", platformKey: "linux-x64" };

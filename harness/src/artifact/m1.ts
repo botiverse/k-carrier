@@ -17,20 +17,26 @@ import { runCommand } from "../artifact-factory/run.ts";
 import { CLI_TOOL_SOURCE } from "../../../examples/swap-tool/source.ts";
 
 /** The swap-tool demo's @k-carrier/core wiring (createUpgrader module URL). */
-function coreUpgraderUrl(): string {
+export function coreUpgraderUrl(): string {
   return pathToFileURL(path.join(import.meta.dirname, "../../../core/src/createUpgrader.ts")).href;
 }
 
-function swapToolEnv(ctx: ToothContext, baseUrl: string): Record<string, string> {
+/** Root public keys the demo trusts (the serving servers' roots). */
+function rootKeysEnv(servers: FakeServer[]): Record<string, string> {
+  return { K_ROOT_KEYS: JSON.stringify(servers.map((s) => s.rootKeyPem)) };
+}
+
+export function swapToolEnv(ctx: ToothContext, baseUrl: string, servers: FakeServer[]): Record<string, string> {
   return {
     K_RELEASE_BASE: baseUrl,
     K_STATE_DIR: path.join(ctx.sandboxDir, "state"),
     K_CORE_UPGRADER: coreUpgraderUrl(),
+    ...rootKeysEnv(servers),
   };
 }
 
 /** Build the swap-tool demo binary (v1.0.0, ok) into <sandbox>/app. */
-async function buildSwapTool(ctx: ToothContext): Promise<string> {
+export async function buildSwapTool(ctx: ToothContext): Promise<string> {
   const factory = new ArtifactFactory({
     cacheDir: path.join(ctx.sandboxDir, "cache"),
     demoSource: CLI_TOOL_SOURCE,
@@ -59,7 +65,7 @@ async function buildSwapTool(ctx: ToothContext): Promise<string> {
 }
 
 /** Read the transaction state through the PUBLIC API (upgrader.state()). */
-async function readState(env: Record<string, string>): Promise<TxnState> {
+export async function readState(env: Record<string, string>): Promise<TxnState> {
   const coreSrcUrl = new URL(".", env.K_CORE_UPGRADER).href;
   const script = [
     `const { createUpgrader } = await import(${JSON.stringify(env.K_CORE_UPGRADER)});`,
@@ -78,9 +84,9 @@ async function readState(env: Record<string, string>): Promise<TxnState> {
 }
 
 /** Serve a release on a fresh fake-server (seed or target). */
-async function serveRelease(
+export async function serveRelease(
   ctx: ToothContext,
-  opts: { version: string; behavior: "ok" | "crash-on-start"; name: string },
+  opts: { version: string; behavior: "ok" | "crash-on-start"; name: string; unsigned?: boolean },
 ): Promise<FakeServer> {
   const server = new FakeServer({ storeDir: path.join(ctx.sandboxDir, `serve-${opts.name}`) });
   await server.start();
@@ -88,12 +94,14 @@ async function serveRelease(
     cacheDir: path.join(ctx.sandboxDir, `cache-${opts.name}`),
     demoSource: CLI_TOOL_SOURCE,
   });
-  await factory.makeRelease({
+  const release = {
     version: opts.version,
     behavior: opts.behavior,
     store: server.store,
     platform: currentPlatformKey(),
-  });
+    ...(opts.unsigned === true ? { unsigned: true as const } : {}),
+  };
+  await factory.makeRelease(release);
   return server;
 }
 
@@ -116,14 +124,14 @@ export async function checkSwapToolUpgradeLoop(
   });
   try {
     // seed: a real first upgrade lands stable 1.0.0
-    const seedEnv = swapToolEnv(ctx, seed.url);
+    const seedEnv = swapToolEnv(ctx, seed.url, [seed, target]);
     const seedRun = await runCommand(binPath, ["self", "upgrade"], { env: seedEnv, timeoutMs: 30000 });
     assert.equal(seedRun.code, 0, `seed upgrade must exit 0 (${seedRun.stderr.trim()})`);
     const seeded = await readState(seedEnv);
     assert.equal(seeded.stableVersion, "1.0.0", "seed upgrade must land stable 1.0.0");
 
     // the real upgrade to the served version
-    const targetEnv = swapToolEnv(ctx, target.url);
+    const targetEnv = swapToolEnv(ctx, target.url, [seed, target]);
     const up = await runCommand(binPath, ["self", "upgrade"], { env: targetEnv, timeoutMs: 30000 });
     assert.equal(
       up.code,
@@ -167,11 +175,11 @@ export async function checkSwapToolRollback(
     name: "target",
   });
   try {
-    const seedEnv = swapToolEnv(ctx, seed.url);
+    const seedEnv = swapToolEnv(ctx, seed.url, [seed, target]);
     const seedRun = await runCommand(binPath, ["self", "upgrade"], { env: seedEnv, timeoutMs: 30000 });
     assert.equal(seedRun.code, 0, `seed upgrade must exit 0 (${seedRun.stderr.trim()})`);
 
-    const targetEnv = swapToolEnv(ctx, target.url);
+    const targetEnv = swapToolEnv(ctx, target.url, [seed, target]);
     const up = await runCommand(binPath, ["self", "upgrade"], { env: targetEnv, timeoutMs: 30000 });
 
     const state = await readState(targetEnv);

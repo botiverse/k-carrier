@@ -113,11 +113,12 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
         );
         signatureVerified = true;
       } else if (release.unsigned === true) {
-        // Declared by the source's construction site, surfaced in status
-        // (`experimentSignatureVerified: false`) rather than hidden. It is NOT
-        // notified as "held": this upgrade proceeds, and a host rendering
-        // "held" here would show the opposite of what happened.
+        // Accepted by the CLIENT -- never by the manifest, which is served by
+        // the party the chain exists to distrust (artifact/sourceTrust.test.ts).
+        // Reported under its own kind: notifying "held" and then installing
+        // told hosts the opposite of what happened.
         signatureVerified = false;
+        await notify("installed-unverified", { version: release.version });
       } else {
         return {
           result: "held",
