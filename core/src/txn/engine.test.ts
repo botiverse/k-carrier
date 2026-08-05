@@ -14,6 +14,7 @@ function makeWorld(opts: {
   journal?: JournalEntry[];
   stable?: string | null;
   slots?: Record<Slot, string | null>;
+  clock?: { nowMs: () => number; after: (ms: number, fn: () => void) => () => void };
 } = {}) {
   const trace: string[] = [];
   const journal: JournalEntry[] = opts.journal ? [...opts.journal] : [];
@@ -58,7 +59,7 @@ function makeWorld(opts: {
       }),
       resume: async () => { trace.push("host:resume"); },
     },
-    clock: { nowMs: () => clockMs++, after: () => () => {} },
+    clock: opts.clock ?? { nowMs: () => clockMs++, after: () => () => {} },
     evaluatePredicates: opts.predicates ?? (async () => null),
   };
   return { deps, trace, journal, slots };
@@ -118,6 +119,29 @@ test("recover after crash mid-handover: rolls back with host restart", async () 
   const w = makeWorld({ journal: [entry(0, "staged"), entry(1, "handing-over")] });
   await new UpgradeEngine(w.deps).recover();
   assert.deepEqual(w.trace, ["journal:rolled-back", "host:stop:experiment", "host:start:stable", "host:resume", "slots:clear"]);
+});
+
+test("THE POINT: a host that HANGS fails the upgrade instead of hanging it", async () => {
+  // The wedged-half-way failure xxchan named: worse than a crash, because the
+  // process stays ALIVE holding the lock, so stale-lock takeover never fires
+  // and every later attempt queues behind it forever.
+  const w = makeWorld({
+    probe: () => new Promise<ProcessEvidence>(() => {}), // never settles
+    // The budget is virtual (5s); this fires it after a real millisecond so
+    // the test does not actually wait, and only the call that never answers
+    // reaches its deadline.
+    clock: {
+      nowMs: () => 1000,
+      after: (_ms, fn) => {
+        const t = setTimeout(fn, 1);
+        return () => clearTimeout(t);
+      },
+    },
+  });
+  const engine = new UpgradeEngine({ ...w.deps, hostCallBudgetMs: 5_000 });
+  const outcome = await engine.upgrade({ version: "2.0.0", bytesRef: "ref" });
+  assert.equal(outcome.result, "rolled-back");
+  assert.match((outcome as { reason: string }).reason, /healthProbe\(\) did not return within 5000ms/);
 });
 
 test("a handover that outlived its driver is FINISHED by the successor", async () => {
