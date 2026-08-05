@@ -23,7 +23,8 @@ Existing tools solve the two easy ends: CLI self-update libraries (`self_update`
 3. **The device owner always wins.** Consent/notification are built in and
    test-verified; remote drive is optional and policy-gated.
 4. **Generic core, zero host concepts.** Raft is the first shell, not a
-   dependency.
+   dependency — and shells live in their product's repo, consuming core;
+   this repo stays host-agnostic.
 
 ## Layers
 
@@ -44,8 +45,8 @@ core/        the framework — zero host-specific concepts (enforced by design &
 harness/     generic acceptance bed: fake-host daemon + full teeth
              (crash-injection matrix per state-machine edge, predicate teeth,
               projection-ban teeth, verified-notification tooth)
-raft-shell/  first host: Raft Computer adapters (upgradeSea / CLI / installer
-             entrypoints all delegate to the same core)
+
+
 docs/        design-v1.md · research-tailscale-datadog.md
 ```
 

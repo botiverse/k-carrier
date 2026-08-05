@@ -8,7 +8,7 @@
 
 **「个人设备上的受管常驻服务」的升级框架** —— 需求 = 并集：Datadog 级的管理能力（事务/回滚/读回/远程驱动/fleet 观测）**全要** + Tailscale 级的个人设备恭敬（同意/通知/安装所有权）**也全要** + 独有的宿主负载（agent 会话）保留。市场图两头有界（下界 self_update/CC-updater 已解决、上界 Datadog fleet 已解决），中间整段无人做。
 
-**形态**：一个仓库（= 本仓库 `botiverse/k-carrier`）、两层 —— `core`（通用框架，按开源标准写，任何 daemon 可用）+ `raft-shell`（Raft Computer 作为第一个宿主/用户）。发布时机独立决定，不挡开工。
+**形态**：一个仓库（= 本仓库 `botiverse/k-carrier`）、`core`（通用框架，按开源标准写，任何 daemon 可用）+ harness/examples；**壳（Raft Computer / raft CLI）住 slock 仓库、消费 core 作依赖**。发布时机独立决定，不挡开工。
 
 ---
 
@@ -89,14 +89,13 @@ idle → staged（experiment 槽已下载+验签）
 │  examples/          每档一个可跑 demo（cli-tool /              │
 │                     plain-daemon / managed-host）——            │
 │                     哪档没绿 demo，那档的支持 claim 不存在      │
-│  raft-shell/        壳1（managed 档）：Raft Computer 的        │
-│                     HostAdapter + upgradeSea/upgradeCli/       │
-│                     install.sh 三入口全委托 core（#395         │
-│                     canonical executor —— 单包多入口）          │
-│  （壳2 = raft CLI，cli 档：standalone 装的 `raft self          │
-│    upgrade`；Computer 注入份被 ownership 检测 held —— 落在      │
-│    raft 侧仓库，消费 core）                                    │
 └──────────────────────────────────────────────────────────────┘
+两个真实壳都**不在本仓库**（xxchan 08-05 裁定：壳代码住产品仓库、消费 core 作依赖，
+k-carrier 保持零 Raft 概念；本仓库的 managed 档证明 = examples/managed-host）：
+- 壳1（managed 档）= slock 仓库 packages/computer：HostAdapter 实现 +
+  upgradeSea/upgradeCli/install.sh 三入口全委托同一 core（#395 canonical executor）
+- 壳2（cli 档）= slock 仓库 raft CLI：`raft self upgrade`；Computer 注入份被
+  ownership 检测 held
 server 侧最小要求 = 静态文件（manifest+工件+签名）；drive 为可选增量。
 ```
 
