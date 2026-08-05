@@ -13,10 +13,13 @@ function makeWorld(opts: {
   predicates?: (e: ProcessEvidence, v: string) => Promise<string | null>;
   journal?: JournalEntry[];
   stable?: string | null;
+  slots?: Record<Slot, string | null>;
 } = {}) {
   const trace: string[] = [];
   const journal: JournalEntry[] = opts.journal ? [...opts.journal] : [];
-  const slots: Record<Slot, string | null> = { stable: opts.stable ?? "1.0.0", experiment: null };
+  const slots: Record<Slot, string | null> = opts.slots
+    ? { ...opts.slots }
+    : { stable: opts.stable ?? "1.0.0", experiment: null };
   let clockMs = 1000;
 
   const deps: EngineDeps = {
@@ -68,6 +71,9 @@ test("happy path: staged->handover->readback->promoted, WAL before every action"
   assert.deepEqual(outcome, { result: "promoted", version: "2.0.0" });
   assert.deepEqual(w.trace, [
     "journal:staged", "slots:stage",
+    // probe BEFORE the handover: records which incarnation is being replaced,
+    // so a successor can later prove the handover happened
+    "host:probe",
     "journal:handing-over", "host:quiesce", "host:stop:stable", "host:start:experiment",
     "journal:running-experiment", "host:probe",
     "journal:readback",
@@ -112,6 +118,69 @@ test("recover after crash mid-handover: rolls back with host restart", async () 
   const w = makeWorld({ journal: [entry(0, "staged"), entry(1, "handing-over")] });
   await new UpgradeEngine(w.deps).recover();
   assert.deepEqual(w.trace, ["journal:rolled-back", "host:stop:experiment", "host:start:stable", "host:resume", "slots:clear"]);
+});
+
+test("a handover that outlived its driver is FINISHED by the successor", async () => {
+  // The service profile's success path: the process driving the upgrade exits
+  // so its supervisor can respawn it from the new bytes. The successor sees a
+  // journal that stops at handing-over -- identical to a crash -- and must
+  // tell the two apart by evidence alone.
+  const w = makeWorld({
+    slots: { stable: "1.0.0", experiment: "2.0.0" },
+    journal: [entry(0, "staged"), entry(1, "handing-over", { version: "2.0.0", priorStartId: "old-1" })],
+    probe: async () => ({ version: "2.0.0", pid: 99, startId: "new-2" }),
+  });
+  await new UpgradeEngine(w.deps).recover();
+  assert.deepEqual(w.trace, ["journal:readback", "journal:promoted", "slots:promote", "host:resume"]);
+  assert.equal(w.slots.stable, "2.0.0");
+  assert.equal(w.slots.experiment, null);
+});
+
+test("THE POINT: the SAME incarnation reporting the new version is not a handover", async () => {
+  // Nothing was replaced -- the old process is still the live one and merely
+  // claims the target version. A "restart was planned" flag could not tell
+  // this apart; the incarnation identity can.
+  const w = makeWorld({
+    slots: { stable: "1.0.0", experiment: "2.0.0" },
+    journal: [entry(0, "staged"), entry(1, "handing-over", { version: "2.0.0", priorStartId: "old-1" })],
+    probe: async () => ({ version: "2.0.0", pid: 42, startId: "old-1" }),
+  });
+  await new UpgradeEngine(w.deps).recover();
+  assert.deepEqual(w.trace, ["journal:rolled-back", "host:stop:experiment", "host:start:stable", "host:resume", "slots:clear"]);
+  assert.equal(w.slots.stable, "1.0.0");
+});
+
+test("a successor running the OLD version rolls back", async () => {
+  const w = makeWorld({
+    slots: { stable: "1.0.0", experiment: "2.0.0" },
+    journal: [entry(0, "staged"), entry(1, "handing-over", { version: "2.0.0", priorStartId: "old-1" })],
+    probe: async () => ({ version: "1.0.0", pid: 99, startId: "new-2" }),
+  });
+  await new UpgradeEngine(w.deps).recover();
+  assert.equal(w.trace[0], "journal:rolled-back");
+  assert.equal(w.slots.stable, "1.0.0");
+});
+
+test("nothing alive after the handover rolls back", async () => {
+  const w = makeWorld({
+    slots: { stable: "1.0.0", experiment: "2.0.0" },
+    journal: [entry(0, "staged"), entry(1, "handing-over", { version: "2.0.0", priorStartId: "old-1" })],
+    probe: async () => { throw new Error("no socket"); },
+  });
+  await new UpgradeEngine(w.deps).recover();
+  assert.equal(w.trace[0], "journal:rolled-back");
+});
+
+test("a successor cannot promote past the host's own predicates", async () => {
+  const w = makeWorld({
+    slots: { stable: "1.0.0", experiment: "2.0.0" },
+    journal: [entry(0, "staged"), entry(1, "handing-over", { version: "2.0.0", priorStartId: "old-1" })],
+    probe: async () => ({ version: "2.0.0", pid: 99, startId: "new-2" }),
+    predicates: async () => "sessions did not come back",
+  });
+  await new UpgradeEngine(w.deps).recover();
+  assert.equal(w.trace.at(-1), "slots:clear");
+  assert.equal(w.slots.stable, "1.0.0");
 });
 
 test("recover after crash at staged: cheap undo, no host restart", async () => {

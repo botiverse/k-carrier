@@ -83,8 +83,15 @@ export class UpgradeEngine {
       case "handing-over":
       case "running-experiment":
       case "readback": {
-        // We may have died with the experiment (partially) live. Fail closed:
-        // stop whatever runs, restore stable, resume workloads.
+        // We may have died with the experiment (partially) live -- or the
+        // handover succeeded and killed the process that was driving it.
+        // EVIDENCE decides, never a "this restart was planned" flag: a flag is
+        // a claim the crash path could make just as easily.
+        if (version !== null && (await this.handoverSucceeded(last, version))) {
+          await this.finishHandover(version);
+          return;
+        }
+        // Fail closed: stop whatever runs, restore stable, resume workloads.
         await this.rollbackTo(`crash during ${last.intent}` + (version ? ` (experiment ${version})` : ""));
         return;
       }
@@ -105,7 +112,17 @@ export class UpgradeEngine {
     await this.journal("staged", { version: target.version });
     await this.deps.effects.slots.stageExperiment(target);
 
-    await this.journal("handing-over", { version: target.version });
+    // Who is handing over. Recorded BEFORE the handover because on some hosts
+    // this very process does not survive it: a service that is replaced by
+    // exiting (its supervisor respawns it from the new bytes) dies here on the
+    // SUCCESS path, and the successor -- not us -- finishes the transaction.
+    // Without this identity the successor cannot tell "the handover worked"
+    // from "we crashed mid-handover", because both leave the same journal.
+    const priorStartId = await this.probeStartId();
+    await this.journal("handing-over", {
+      version: target.version,
+      ...(priorStartId === null ? {} : { priorStartId }),
+    });
     await this.deps.host.quiesce();
     await this.deps.host.stop("stable");
     await this.deps.host.start("experiment");
@@ -128,6 +145,55 @@ export class UpgradeEngine {
     await this.deps.effects.slots.promoteExperiment();
     await this.deps.host.resume();
     return { result: "promoted", version: target.version };
+  }
+
+  /**
+   * Did the handover actually happen? True only when a live process reports
+   * the EXPERIMENT version from a DIFFERENT incarnation than the one that
+   * journaled the handover. Same incarnation answering => nothing was
+   * replaced, whatever it claims about its version.
+   */
+  private async handoverSucceeded(last: JournalEntry, experimentVersion: string): Promise<boolean> {
+    const priorStartId = last.detail.priorStartId;
+    // No recorded identity (older journal, or a host whose probe was
+    // unavailable) => we cannot prove a successor exists => fail closed.
+    if (priorStartId === undefined) return false;
+    let evidence: ProcessEvidence;
+    try {
+      evidence = await this.deps.host.healthProbe();
+    } catch {
+      return false; // nothing alive to vouch for the handover
+    }
+    return evidence.version === experimentVersion && evidence.startId !== priorStartId;
+  }
+
+  /** Finish a transaction whose handover outlived the process that began it. */
+  private async finishHandover(experimentVersion: string): Promise<void> {
+    let evidence: ProcessEvidence;
+    try {
+      evidence = await this.deps.host.healthProbe();
+    } catch (err) {
+      await this.rollbackTo(`successor probe failed: ${(err as Error).message}`);
+      return;
+    }
+    await this.journal("readback", { version: experimentVersion });
+    const refusal = await this.deps.evaluatePredicates(evidence, experimentVersion);
+    if (refusal !== null) {
+      await this.rollbackTo(`predicates refused after handover: ${refusal}`);
+      return;
+    }
+    await this.journal("promoted", { version: experimentVersion });
+    await this.deps.effects.slots.promoteExperiment();
+    await this.deps.host.resume();
+  }
+
+  /** Best-effort identity of the live process; null when nothing answers. */
+  private async probeStartId(): Promise<string | null> {
+    try {
+      return (await this.deps.host.healthProbe()).startId;
+    } catch {
+      return null;
+    }
   }
 
   private async rollbackOutcome(reason: string): Promise<EngineOutcome> {
