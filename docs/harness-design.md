@@ -69,6 +69,17 @@ harness 判定别人之前先判自己，三样本缺一不可：
 ### 1.7 接入方模式（`k-harness --profile X --adapter path`）
 同一套齿对**外部真 adapter** 跑合规子集（不跑需要故障开关的齿，跑契约齿：quiesce↔resume 等价、probe 活性、ownership 响应）。绿 = 接入方契约达标；这也是 examples 三 demo 的验收方式——**demo 和接入方走同一道门**。
 
+## 1.75 两个测试平面：黑盒优先（xxchan 08-05："就像启动一个 CLI、跑它的命令"）
+
+harness 有两个平面，**默认用外面那个**：
+
+- **黑盒平面（主平面）**：spawn **真实打包好的二进制**，只通过它的命令行驱动（`mytool self upgrade` / `mytool status`），从外面断言：exit code、输出、盘上文件、进程状态、下次运行的版本。**就是用户的用法** —— 它顺带真正验证了"每个入口构造同一 Upgrader"这类 claim（library 平面验不了打包/入口接线）。examples 三 demo 都是真 CLI，端到端齿全在这层写。
+- **library 平面（辅助）**：import core API 直驱 Upgrader——只留给黑盒够不着的内部齿（如 journal 重放细节）。
+
+**规则：能在黑盒层表达的齿必须写在黑盒层**；library 层是例外、要说明为什么外面够不着。（同我们 symptom-layer 教义：用户层的红是最不可伪造的 oracle。）
+
+接入方黑盒模式随之而来：`k-harness --profile cli --bin ./mytool` —— **零代码集成**：给你的真二进制，harness 起 fake-server、跑你的升级命令、断言下次运行版本/回滚/held。比 `--adapter` 还轻（cli 档接入方连 adapter 都不用给）。
+
 ## 1.8 透明性原则（xxchan 08-05：测试框架对升级框架透明）
 
 **core 对 harness 零感知，机械强制**：
