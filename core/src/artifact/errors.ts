@@ -1,6 +1,6 @@
 /**
  * L0 artifact layer errors — every failure is typed (fail-closed: an
- * unknown channel, a tampered artifact, a half-written swap all carry a
+ * a refused release, a tampered artifact, a half-written swap all carry a
  * machine-readable code, never a silent pass).
  */
 export type ArtifactErrorCode =

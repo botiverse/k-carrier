@@ -8,7 +8,7 @@
  *  - a tampered artifact is REFUSED (sha256) — real tamper -> real reject;
  *  - a kill mid-swap leaves the OLD bytes intact (real process, real
  *    SIGKILL — the atomicity contract lives in process reality);
- *  - unknown channel values fail closed.
+ *  - the release source fails closed instead of guessing.
  */
 import assert from "node:assert/strict";
 import * as path from "node:path";
@@ -55,7 +55,7 @@ export async function checkTamperedArtifactRefused(
     }
     // core's L0 consumer must refuse the (tampered) artifact
     await assert.rejects(
-      downloadVerified(server.url, target, { timeoutMs: 5000 }),
+      downloadVerified({ version: "1.0.0", url: `${server.url.replace(/\/$/u, "")}/${target.file}`, sha256: target.sha256, size: target.size }, { timeoutMs: 5000 }),
       /SHA256_MISMATCH/,
       "a tampered artifact must be refused (skipTamper mutation => RED)",
     );
@@ -132,7 +132,7 @@ export async function checkKillMidSwapPreservesOld(
 }
 
 // ---------------------------------------------------------------------------
-// unknown channel => fail-closed
+// source boundary => fail-closed
 // ---------------------------------------------------------------------------
 
 

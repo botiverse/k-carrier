@@ -1,5 +1,5 @@
 // @invariant — L0 manifest parsing is strict and fail-closed: malformed
-// shapes and unknown channel values are typed errors, never silent
+// shapes are typed errors, never silent
 // reinterpretation.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -12,7 +12,7 @@ const VALID = JSON.stringify({
   },
 });
 
-test("parses a valid manifest with version, targets and optional channel", () => {
+test("parses a valid manifest with version and targets", () => {
   const m = parseManifest(VALID);
   assert.equal(m.version, "1.2.3");
   const target = m.targets["darwin-arm64"];

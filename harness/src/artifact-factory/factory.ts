@@ -39,8 +39,6 @@ export interface MakeReleaseOptions {
   store: ReleaseStore;
   /** Manifest platform tag. Default: "current". */
   platform?: string;
-  /** Track the release is published under (latest | alpha). Optional. */
-  channel?: "latest" | "alpha";
 }
 
 export interface FactoryRelease {
@@ -112,7 +110,6 @@ export class ArtifactFactory {
         executable: true,
       };
       if (opts.platform !== undefined) spec.platform = opts.platform;
-      if (opts.channel !== undefined) spec.channel = opts.channel;
       await opts.store.publish(spec);
     }
 

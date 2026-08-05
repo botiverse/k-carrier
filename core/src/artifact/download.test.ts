@@ -12,6 +12,17 @@ import type { Clock } from "../clock.ts";
 
 const PAYLOAD = new TextEncoder().encode("K artifact payload");
 
+/** Build the Release a source would have returned for these bytes. */
+function releaseFor(base: string, bytes: Uint8Array, overrides: Partial<{ sha256: string; size: number; file: string }> = {}) {
+  const t = targetFor(bytes, overrides);
+  return {
+    version: "1.0.0",
+    url: `${base.replace(/\/$/u, "")}/${t.file}`,
+    sha256: overrides.sha256 ?? t.sha256,
+    size: overrides.size ?? t.size,
+  };
+}
+
 function targetFor(bytes: Uint8Array, overrides: Partial<ManifestTarget> = {}): ManifestTarget {
   return {
     file: "app.bin",
@@ -60,7 +71,7 @@ const immediateClock: Clock = {
 
 test("downloads and verifies a matching artifact", async () => {
   await withServer({ "/app.bin": { body: PAYLOAD } }, async (base) => {
-    const bytes = await downloadVerified(base, targetFor(PAYLOAD));
+    const bytes = await downloadVerified(releaseFor(base, PAYLOAD));
     assert.deepEqual(bytes, PAYLOAD);
   });
 });
@@ -72,7 +83,7 @@ test("refuses a tampered artifact (sha256 mismatch)", async () => {
   tampered[0] = first ^ 0xff;
   await withServer({ "/app.bin": { body: tampered } }, async (base) => {
     await assert.rejects(
-      downloadVerified(base, targetFor(PAYLOAD)),
+      downloadVerified(releaseFor(base, PAYLOAD)),
       /SHA256_MISMATCH/,
     );
   });
@@ -80,7 +91,7 @@ test("refuses a tampered artifact (sha256 mismatch)", async () => {
 
 test("refuses a truncated artifact (sha256 mismatch catches it)", async () => {
   await withServer({ "/app.bin": { body: PAYLOAD.slice(0, 4) } }, async (base) => {
-    await assert.rejects(downloadVerified(base, targetFor(PAYLOAD)), /SHA256_MISMATCH/);
+    await assert.rejects(downloadVerified(releaseFor(base, PAYLOAD)), /SHA256_MISMATCH/);
   });
 });
 
@@ -88,7 +99,7 @@ test("refuses when the manifest's declared size disagrees (SIZE_MISMATCH cross-c
   // same bytes (sha matches) but the manifest lies about the size
   await withServer({ "/app.bin": { body: PAYLOAD } }, async (base) => {
     await assert.rejects(
-      downloadVerified(base, targetFor(PAYLOAD, { size: PAYLOAD.length + 1 })),
+      downloadVerified(releaseFor(base, PAYLOAD, { size: PAYLOAD.length + 1 })),
       /SIZE_MISMATCH/,
     );
   });
@@ -96,14 +107,14 @@ test("refuses when the manifest's declared size disagrees (SIZE_MISMATCH cross-c
 
 test("a missing file is a typed DOWNLOAD_FAILED, not a hang", async () => {
   await withServer({}, async (base) => {
-    await assert.rejects(downloadVerified(base, targetFor(PAYLOAD)), /DOWNLOAD_FAILED.*404/);
+    await assert.rejects(downloadVerified(releaseFor(base, PAYLOAD)), /DOWNLOAD_FAILED.*404/);
   });
 });
 
 test("a hung download aborts via the clock timeout", async () => {
   await withServer({ "/app.bin": { never: true } }, async (base) => {
     await assert.rejects(
-      downloadVerified(base, targetFor(PAYLOAD), { clock: immediateClock, timeoutMs: 1 }),
+      downloadVerified(releaseFor(base, PAYLOAD), { clock: immediateClock, timeoutMs: 1 }),
       /DOWNLOAD_FAILED.*timed out/,
     );
   });

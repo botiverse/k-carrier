@@ -1,7 +1,7 @@
 /**
  * M1 artifact teeth (test-plan M1 L0 rows; archer's package spec):
  * tampered artifact => refuse install; kill mid-swap => old bytes intact;
- * unknown channel => fail-closed. Registration site only — check bodies
+ * source refuses rather than guesses. Registration site only — check bodies
  * live in harness/src/artifact/checks.ts.
  */
 import { registerTooth } from "./registry.ts";

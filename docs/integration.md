@@ -26,9 +26,14 @@ instead of re-discovering the failure modes one incident at a time.
 
 ## 2. The concepts, in one paragraph each
 
-**Channel** — which stream of releases you follow: `latest` (stable),
-`alpha` (early), or `pinned:1.2.3` (stay put). Resolved against a static
-`manifest.json` on your download server; no smart server needed.
+**Release source** — the one place K asks *your* product two questions:
+"what should this install be on?" (`checkForUpdate`) and "give me exactly
+this version" (`fetchRelease`). K holds **no versioning policy of its own** —
+what your streams are called ("stable", "nightly", "lts-2024"), which version
+counts as newest, whether you use semver or dates, and long-term pinning all
+live inside your source. A ready-made `staticManifestSource({ baseUrl })` covers
+the common case (static host, semver, no automatic downgrade) as *one policy*,
+not as a rule of the framework.
 
 **Two slots: `stable` and `experiment`** — K never overwrites your only copy.
 The running, trusted version sits in the *stable* slot. A new version is
@@ -81,13 +86,14 @@ there is a built-in no-op host (`NoResidentHost`, the default):
 
 ```ts
 const upgrader = createUpgrader({
-  releaseBase: "https://cdn.example.com/mytool",
-  channel: "latest",
+  source: staticManifestSource({ baseUrl: "https://cdn.example.com/mytool/stable" }),
   rootKeys: EMBEDDED_ROOT_KEYS,
   stateDir: "~/.mytool/k",
 });
 // wire it to a `mytool self upgrade` subcommand:
-const outcome = await upgrader.upgrade(); // effective on next run
+const outcome = await upgrader.upgrade();          // policy: what should I be on?
+// and, if you let users choose a version:
+const pinned  = await upgrader.upgradeTo("1.2.3"); // named: exactly this one
 ```
 
 You get what a `self_update`-style library gives you, **plus** the signature
@@ -225,17 +231,25 @@ Upgrader.** Your daemon's auto-update loop, your CLI subcommand, your
 install script — same object, same path. This kills the bug class where one
 entrypoint upgrades correctly and another silently doesn't.
 
-## 5. Publishing releases (static files only)
+## 5. Publishing releases
+
+If you use the built-in `staticManifestSource`, its layout is:
 
 ```
-<releaseBase>/manifest.json          version, per-target {file, sha256, size}
-<releaseBase>/<artifact>             the binaries
-<releaseBase>/<artifact>.sig         signature per artifact
-<releaseBase>/signing.pub(.sig)      rotating signing keys, root-signed
+<baseUrl>/manifest.json          version, per-target {file, sha256, size}
+<baseUrl>/<artifact>             the binaries
+<baseUrl>/<artifact>.sig         signature per artifact
+<baseUrl>/signing.pub(.sig)      rotating signing keys, root-signed
 ```
 
 Root private keys stay offline; root public keys are compiled into your app.
 Any static file host works — there is no server-side logic.
+
+**This layout belongs to that source, not to K.** Publishing from a private
+API, date-stamped paths, or an OCI registry means writing your own
+`ReleaseSource`; K only ever learns `{ version, url, sha256, size }` and never
+parses a manifest itself. Multiple streams are usually one base URL each
+(`.../stable`, `.../nightly`), which also keeps their blast radius separate.
 
 ## 6. Testing your integration
 

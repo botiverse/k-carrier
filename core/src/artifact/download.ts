@@ -10,7 +10,7 @@
 import { createHash } from "node:crypto";
 import { type Clock, systemClock } from "../clock.ts";
 import { ArtifactError } from "./errors.ts";
-import type { ManifestTarget } from "./manifest.ts";
+import type { Release } from "./source.ts";
 
 export interface DownloadOptions {
   clock?: Clock;
@@ -18,26 +18,29 @@ export interface DownloadOptions {
   timeoutMs?: number;
 }
 
+/**
+ * Fetch and verify one release's bytes. Takes a Release (url + sha256 + size)
+ * because that is exactly what a ReleaseSource returns — K does not compose
+ * URLs from a base, since it does not own the publisher's layout.
+ */
 export async function downloadVerified(
-  releaseBase: string,
-  target: ManifestTarget,
+  release: Release,
   opts: DownloadOptions = {},
 ): Promise<Uint8Array> {
-  const base = releaseBase.endsWith("/") ? releaseBase : `${releaseBase}/`;
-  const url = new URL(target.file, base).href;
+  const url = release.url;
   const bytes = await fetchWithTimeout(url, opts.clock ?? systemClock, opts.timeoutMs ?? 10000);
 
   const sha = sha256Hex(bytes);
-  if (sha !== target.sha256) {
+  if (sha !== release.sha256) {
     throw new ArtifactError(
       "SHA256_MISMATCH",
-      `sha256 of ${url} does not match manifest (got ${sha.slice(0, 12)}…, expected ${target.sha256.slice(0, 12)}…)`,
+      `sha256 of ${url} does not match the release (got ${sha.slice(0, 12)}…, expected ${release.sha256.slice(0, 12)}…)`,
     );
   }
-  if (bytes.length !== target.size) {
+  if (bytes.length !== release.size) {
     throw new ArtifactError(
       "SIZE_MISMATCH",
-      `size of ${url} (${bytes.length}) does not match manifest (${target.size})`,
+      `size of ${url} (${bytes.length}) does not match manifest (${release.size})`,
     );
   }
   return bytes;

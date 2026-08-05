@@ -15,8 +15,8 @@
 ## 1. 能力清单（六层，每层：要什么 · 怎么设计 · 抄谁/自研）
 
 ### L0 工件层（商品层，不差异化）
-**要**：版本解析（channel: `latest | alpha | pinned:X`）→ 下载 → 完整性校验 → 原子换字节（含 Windows 换运行中 exe）。
-**设计**：静态文件协议 —— server 只需 `manifest.json`（version/targets/sha256/size）+ 工件 + 签名文件；客户端轮询/被动触发。API 形状对齐 `self_update` 类库的社区习惯。
+**要**：向 **ReleaseSource** 问"该到哪版/这一版在哪" → 下载 → 完整性校验 → 原子换字节（含 Windows 换运行中 exe）。
+**设计**：**K 不持有版本策略**——`ReleaseSource` 两个方法（`checkForUpdate` 策略 / `fetchRelease` 指名）由接入方实现；channel 名字、"latest"的定义、版本方案（semver/日期）、长期 pin **全在他的 source 里**。K 附 `staticManifestSource({baseUrl})`（静态 manifest + semver + 不自动降级）作为**一种策略**，manifest 格式属于它、不属于 K。
 **来源**：= 现有 `upgradeSea` lane 通用化；对齐 jaemk/self_update、minio/selfupdate 的成熟形状，可部分吃现成。
 
 ### L0.5 供应链层
@@ -118,7 +118,7 @@ server 侧最小要求 = 静态文件（manifest+工件+签名）；drive 为可
 
 | Profile | 适用 | 用哪些层 | 要写什么 | 得到什么 |
 |---|---|---|---|---|
-| **cli** | 随便一个 CLI 工具（无常驻进程） | L0 + L0.5 + L1'（简化槽：换字节即 promote，下次运行生效）| **零 HostAdapter**（内置 `NoResidentHost` 空适配器）；只给 releaseBase/channel/rootKeys | self_update 同款体验 + 白送签名链/journal/provenance；`binary_at_target` 下次运行自证 |
+| **cli** | 随便一个 CLI 工具（无常驻进程） | L0 + L0.5 + L1'（简化槽：换字节即 promote，下次运行生效）| **零 HostAdapter**（内置 `NoResidentHost` 空适配器）；只给 source/rootKeys | self_update 同款体验 + 白送签名链/journal/provenance；`binary_at_target` 下次运行自证 |
 | **daemon** | 有常驻进程、无托管负载（如普通 agent/服务） | + 完整 L1 两槽 + L2（quiesce/resume 可为 no-op，stop/start/probe 实做）+ L3 binary 谓词 | HostAdapter 三个真方法 | 事务/回滚/crash-safe + 进程级收敛证明 |
 | **managed** | Raft Computer 级（托管负载、OS 生命周期面、fleet） | 全部六层 | HostAdapter 五方法 + 平台读回面注册 + （可选）drive | 全套：会话保留、lifecycle 收敛、同意/通知、fleet 观测 |
 
