@@ -29,6 +29,8 @@ export interface FakeServerOptions {
   keychain?: TestKeychain;
   /** Port to bind; omit for an OS-assigned ephemeral port. */
   port?: number;
+  /** Throttle artifact responses (interruptible-download tests). */
+  throttle?: { bytesPerTick: number; tickMs: number };
 }
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -43,13 +45,17 @@ export class FakeServer {
   readonly store: ReleaseStore;
   private readonly keychain: TestKeychain;
   private readonly requestedPort: number | undefined;
+  private readonly throttle: { bytesPerTick: number; tickMs: number } | undefined;
   private server: Server | null = null;
   private actualPort = 0;
+  /** Every request the server handled (for asserting Range flows). */
+  readonly requestLog: Array<{ method: string; url: string; range: string | null }> = [];
 
   constructor(opts: FakeServerOptions) {
     this.keychain = opts.keychain ?? createKeychain();
     this.store = new ReleaseStore(opts.storeDir, this.keychain);
     this.requestedPort = opts.port;
+    this.throttle = opts.throttle;
   }
 
   /** The trusted root public key (the client's compiled-in trust anchor). */
@@ -152,17 +158,57 @@ export class FakeServer {
       res.writeHead(404, { "content-type": "text/plain" }).end("not found");
       return;
     }
+    this.requestLog.push({ method: req.method, url: file, range: req.headers.range ?? null });
     try {
       const data = await fs.readFile(target);
       const ext = path.extname(file).toLowerCase();
+      const contentType = CONTENT_TYPES[ext] ?? "application/octet-stream";
+
+      // Range: bytes=N- (the single-range form the resumable download uses)
+      const rangeMatch = /^bytes=(\d+)-$/.exec(req.headers.range ?? "");
+      if (rangeMatch) {
+        const start = Number(rangeMatch[1]);
+        if (start >= data.length) {
+          res.writeHead(416, { "content-type": "text/plain" }).end("range not satisfiable");
+          return;
+        }
+        const slice = data.subarray(start);
+        res.writeHead(206, {
+          "content-type": contentType,
+          "content-range": `bytes ${start}-${data.length - 1}/${data.length}`,
+          "content-length": slice.length,
+        });
+        await this.writeBody(res, slice);
+        return;
+      }
+
       res.writeHead(200, {
-        "content-type": CONTENT_TYPES[ext] ?? "application/octet-stream",
+        "content-type": contentType,
         "content-length": data.length,
       });
-      if (req.method === "GET") res.end(data);
+      if (req.method === "GET") await this.writeBody(res, data);
       else res.end();
     } catch {
       res.writeHead(404, { "content-type": "text/plain" }).end("not found");
     }
+  }
+
+  /** Write the body, chunked and delayed when throttled (kill-window tests). */
+  private async writeBody(res: ServerResponse, data: Buffer): Promise<void> {
+    if (!this.throttle) {
+      res.end(data);
+      return;
+    }
+    const { bytesPerTick, tickMs } = this.throttle;
+    for (let off = 0; off < data.length; off += bytesPerTick) {
+      const chunk = data.subarray(off, off + bytesPerTick);
+      res.write(chunk);
+      if (off + bytesPerTick < data.length) {
+        await new Promise((r) => {
+          setTimeout(r, tickMs);
+        });
+      }
+    }
+    res.end();
   }
 }

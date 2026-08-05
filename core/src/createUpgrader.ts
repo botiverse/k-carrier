@@ -24,6 +24,7 @@ import { UpgradeEngine } from "./txn/engine.ts";
 import { fileEffects, materializeArtifact } from "./txn/fileEffects.ts";
 import { acquireUpgradeLock } from "./txn/lock.ts";
 import { downloadVerified } from "./artifact/download.ts";
+import * as path from "node:path";
 import { verifyChain } from "./distsign/verify.ts";
 import { systemClock, type Clock } from "./clock.ts";
 import { platformOpsFor } from "./platform/index.ts";
@@ -95,7 +96,13 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
         }
       }
 
-      const bytes = await downloadVerified(release, { clock });
+      // Resume support: an interrupted download (process death
+      // mid-fetch) leaves its prefix in stateDir/incoming and the next
+      // attempt continues via Range instead of restarting from zero.
+      const bytes = await downloadVerified(release, {
+        clock,
+        resumeDir: path.join(opts.stateDir, "incoming"),
+      });
 
       // AUTHENTICITY gate. The digest above only proves the bytes arrived
       // intact from wherever the source pointed; it cannot prove who made

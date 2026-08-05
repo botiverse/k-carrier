@@ -25,6 +25,7 @@ import {
   checkM3ServiceRollback,
   checkM3StuckDriverEvidence,
 } from "../artifact/m3.ts";
+import { checkDownloadResumesAfterKill } from "../artifact/m1Resume.ts";
 
 registerTooth({
   id: "artifact.tamper-refuses-install",
@@ -221,4 +222,18 @@ registerTooth({
     },
   ],
   run: checkM3StuckDriverEvidence,
+});
+
+registerTooth({
+  id: "m1.download-resumes-after-kill",
+  profiles: ["swap", "service"],
+  layers: ["L0"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "an interrupted download restarts from zero (no partial, no Range resume)",
+      caughtOnlyBy: "this", // only this tooth kills a real downloader and demands a Range resume
+    },
+  ],
+  run: checkDownloadResumesAfterKill,
 });

@@ -31,6 +31,7 @@ import {
   checkM3ServiceRollback,
   checkM3StuckDriverEvidence,
 } from "../artifact/m3.ts";
+import { checkDownloadResumesAfterKill } from "../artifact/m1Resume.ts";
 
 /**
  * Teeth whose green run lives in another file. Listing one here is a claim
@@ -74,6 +75,7 @@ const TOOTH_IDS = new Set([
   "m3.service-upgrade",
   "m3.service-rollback",
   "m3.stuck-driver-evidence-recovery",
+  "m1.download-resumes-after-kill",
 ]);
 
 async function ctxFor(prefix: string): Promise<{ ctx: ToothContext; teardown: () => Promise<void> }> {
@@ -204,6 +206,17 @@ test("known-red: m3.service-rollback catches a promoted good version (both host 
     // mutation: a GOOD version is served — it promotes, so the rollback
     // expectation goes RED on both host shapes
     await assert.rejects(checkM3ServiceRollback(ctx, { serveGoodVersion: true }), /must roll back/);
+  } finally {
+    await teardown();
+  }
+});
+
+test("known-red: m1.download-resumes-after-kill catches a restart-from-zero downloader", async () => {
+  const { ctx, teardown } = await ctxFor("red-m1-resume");
+  try {
+    // mutation: the second download uses a FRESH resume dir — no partial,
+    // no Range — so the resume assertion goes RED
+    await assert.rejects(checkDownloadResumesAfterKill(ctx, { skipResume: true }), /must issue a Range/);
   } finally {
     await teardown();
   }
