@@ -15,6 +15,14 @@ import {
   checkM6StatusReportMatchesLocal,
   checkM6StatusReportSilenceNotEvidence,
 } from "../artifact/m6Status.ts";
+import {
+  checkM6DriveStageThroughPolicy,
+  checkM6DrivePromoteThroughPolicy,
+  checkM6DriveRollbackThroughOwnership,
+  checkM6RollbackSettlesInflightOwnershipFlip,
+  checkM6PushRollbackThroughPolicy,
+  checkM6AutoRollbackNeedsNoConsent,
+} from "../artifact/m6Drive.ts";
 
 registerTooth({
   id: "m6.provenance-forward-only",
@@ -148,4 +156,104 @@ registerTooth({
     },
   ],
   run: checkM6ProvenanceRecordsEachReconcile,
+});
+
+registerTooth({
+  id: "m6.drive-stage-through-policy",
+  profiles: ["service"],
+  layers: ["L5", "L4"],
+  requiresCapability: "fleet-drive",
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "the drive path stages bytes without consent (policy=confirm is not honored)",
+      caughtOnlyBy: "this", // only this tooth pins drive stage through the policy gate
+    },
+    {
+      mutate: "a held drive stage leaves a provenance entry (it never reached the transaction)",
+      caughtOnlyBy: "this", // "reaches the transaction" is the provenance threshold
+    },
+  ],
+  run: checkM6DriveStageThroughPolicy,
+});
+
+registerTooth({
+  id: "m6.drive-promote-through-policy",
+  profiles: ["service"],
+  layers: ["L5", "L4"],
+  requiresCapability: "fleet-drive",
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "the drive path promotes without consent",
+      caughtOnlyBy: "this",
+    },
+    {
+      mutate: "the drive installs a different version than the one approved (consent does not bind)",
+      caughtOnlyBy: "this", // consent is to a VERSION, never to "the upgrade"
+    },
+  ],
+  run: checkM6DrivePromoteThroughPolicy,
+});
+
+registerTooth({
+  id: "m6.drive-rollback-through-ownership",
+  profiles: ["service"],
+  layers: ["L5", "L1"],
+  requiresCapability: "fleet-drive",
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate:
+        "a drive rollback on a managed-elsewhere machine at rest rolls back (someone else's copy modified)",
+      caughtOnlyBy: "this", // only this tooth pins the at-rest ownership gate
+    },
+  ],
+  run: checkM6DriveRollbackThroughOwnership,
+});
+
+registerTooth({
+  id: "m6.rollback-settles-inflight-ownership-flip",
+  profiles: ["service"],
+  layers: ["L1"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate:
+        "a machine with an in-flight transaction is held from settling when ownership flipped (bricked mid-transaction)",
+      caughtOnlyBy: "this", // the reverse: a held on an opened transaction is a brick
+    },
+  ],
+  run: checkM6RollbackSettlesInflightOwnershipFlip,
+});
+
+registerTooth({
+  id: "m6.push-rollback-through-policy",
+  profiles: ["service"],
+  layers: ["L5", "L4"],
+  requiresCapability: "fleet-drive",
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate:
+        "a pushed rollback of an ALREADY-PROMOTED version executes without consent (the downgrade attack by another name)",
+      caughtOnlyBy: "this", // safe direction is byte safety, not authority (archer's ruling)
+    },
+  ],
+  run: checkM6PushRollbackThroughPolicy,
+});
+
+registerTooth({
+  id: "m6.auto-rollback-needs-no-consent",
+  profiles: ["service"],
+  layers: ["L5", "L4"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate:
+        "the in-transaction auto-rollback waits for consent that never comes (the promise 'you'll always get back' is false)",
+      caughtOnlyBy: "this", // the controlling twin of push-rollback-through-policy
+    },
+  ],
+  run: checkM6AutoRollbackNeedsNoConsent,
 });
