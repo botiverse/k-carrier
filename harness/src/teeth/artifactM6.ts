@@ -208,6 +208,11 @@ registerTooth({
         "a drive rollback on a managed-elsewhere machine at rest rolls back (someone else's copy modified)",
       caughtOnlyBy: "this", // only this tooth pins the at-rest ownership gate
     },
+    {
+      mutate:
+        "a TERMINAL rolled-back state is classified as in-flight (an exclusion-list at-rest check would touch a machine that is not ours)",
+      caughtOnlyBy: "this", // the gate enumerates positively: the next terminal phase cannot silently become "in flight"
+    },
   ],
   run: checkM6DriveRollbackThroughOwnership,
 });

@@ -1,16 +1,11 @@
 /**
- * M6 drive + policy-gate acceptance checks (test-plan M6 rows: server-
- * pushed commands pass the SAME gates as local ones — stage/promote/
- * rollback are the same state-machine ops, never a bypass; the rollback
- * PAIR: a pushed rollback of a promoted version is a new change to a
- * running system (must hold under confirm), while K's own in-transaction
- * auto-rollback must never ask for consent (it fulfills "you'll always
- * get back") — the two teeth mutually control.
- *
- * The rollback ownership gate is drawn on the ACTION'S NATURE (archer):
- * settling K's own in-flight transaction is always allowed (a held
- * mid-transaction is a brick); only NEW modification of a machine at rest
- * managed elsewhere is refused.
+ * M6 drive + policy-gate acceptance checks (test-plan M6 rows). Server-
+ * pushed commands pass the SAME gates as local ones, never a bypass. The
+ * rollback PAIR mutually controls: a pushed rollback of a promoted version
+ * holds under confirm; K's own in-transaction auto-rollback never asks for
+ * consent. The ownership gate is drawn on the ACTION'S NATURE: settling an
+ * in-flight transaction is always allowed; only NEW modification of a
+ * machine at rest managed elsewhere is refused.
  */
 import assert from "node:assert/strict";
 import * as path from "node:path";
@@ -36,19 +31,15 @@ function provDir(ctx: ToothContext): string {
 
 async function assertZeroDiskSideEffects(ctx: ToothContext): Promise<void> {
   const dir = stateDir(ctx);
-  let exists = true;
   try {
     await fs.access(dir);
   } catch {
-    exists = false;
+    return;
   }
-  if (!exists) return;
-  await assert.rejects(fs.access(path.join(dir, "journal.jsonl")), "journal must not exist");
-  await assert.rejects(fs.access(path.join(dir, "slots")), "slots must not exist");
-  await assert.rejects(fs.access(path.join(dir, "incoming")), "incoming must not exist");
-  await assert.rejects(fs.access(path.join(provDir(ctx), "provenance.jsonl")), "provenance must not exist");
+  for (const p of ["journal.jsonl", "slots", "incoming", path.join("provenance", "provenance.jsonl")]) {
+    await assert.rejects(fs.access(path.join(dir, p)), `${p} must not exist`);
+  }
 }
-
 
 // ---------------------------------------------------------------------------
 // m6.drive-stage-through-policy
@@ -148,21 +139,34 @@ export async function checkM6DriveRollbackThroughOwnership(
 ): Promise<void> {
   const journal = fileProvenanceJournal(provDir(ctx), systemClock);
   const server = await serveRelease(ctx, { version: "2.0.0", behavior: "ok", name: "target" });
+  const dir = stateDir(ctx);
   try {
-    // mutation rollbackIgnoringOwnership: ownership is self — the rollback
-    // proceeds, and the typed-held assertion reds.
-    const upgrader = await makeUpgrader(ctx, server, journal, {
-      installOwnership: opts.rollbackIgnoringOwnership ? () => "self" : () => "managed-elsewhere",
-    });
-    // at rest: no in-flight transaction, so this rollback would be NEW
-    // modification of another manager's copy
-    const outcome = await upgrader.rollback("user requested");
-    assert.ok(
-      typeof outcome === "object" && outcome.held.includes("managed"),
-      "a drive rollback on a managed-elsewhere machine at rest is a typed held, never a rollback of someone else's copy (rollbackIgnoringOwnership => RED)",
-    );
-    const st = await upgrader.state();
-    assert.equal(st.experimentVersion, null, "nothing was rolled back");
+    // Every TERMINAL state (idle/promoted/rolled-back) is at rest: the
+    // gate enumerates positively over phases, so the next terminal phase
+    // cannot silently become "in flight" (an exclusion list would touch a
+    // machine that is not ours). All three are asserted, not patched one.
+    for (const terminal of ["idle", "promoted", "rolled-back"] as const) {
+      await fs.rm(dir, { recursive: true, force: true });
+      await fs.mkdir(dir, { recursive: true });
+      if (terminal !== "idle") {
+        const store = fileJournalStore(dir);
+        await store.appendAndSync({ seq: 0, timestampMs: 1, intent: terminal, detail: {} });
+      }
+      // mutation rollbackIgnoringOwnership: ownership is self — the
+      // rollback proceeds, and the typed-held assertion reds.
+      const upgrader = await makeUpgrader(ctx, server, journal, {
+        installOwnership: opts.rollbackIgnoringOwnership ? () => "self" : () => "managed-elsewhere",
+      });
+      const outcome = await upgrader.rollback("user requested");
+      assert.ok(
+        typeof outcome === "object" && outcome.held.includes("managed"),
+        `a drive rollback on a managed-elsewhere machine at terminal '${terminal}' is a typed held, never a rollback of someone else's copy (rollbackIgnoringOwnership => RED)`,
+      );
+      const st = await upgrader.state();
+      assert.equal(st.experimentVersion, null, `terminal '${terminal}': nothing was rolled back`);
+      const intents = (await fileJournalStore(dir).readAll()).map((e) => e.intent);
+      assert.equal(intents.length, terminal === "idle" ? 0 : 1, `terminal '${terminal}': held appended nothing`);
+    }
   } finally {
     await server.stop();
   }

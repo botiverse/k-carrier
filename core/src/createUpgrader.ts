@@ -7,7 +7,7 @@
  * rollback is rare, not routine.
  */
 import type { Upgrader, UpgraderConfig, UpgradeOutcome, ProvenanceIdentity } from "./upgrader.ts";
-import type { TxnState } from "./txn/state.ts";
+import { phaseAtRest, type TxnState } from "./txn/state.ts";
 import type { Release } from "./artifact/source.ts";
 import type { ProcessEvidence } from "./lifecycle/hostAdapter.ts";
 import { UpgradeEngine } from "./txn/engine.ts";
@@ -270,7 +270,7 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
         // brick); only NEW modification of a machine AT REST managed
         // elsewhere is refused.
         const last = (await effects.journal.readAll()).at(-1)?.intent;
-        const inFlight = last !== undefined && last !== "idle" && last !== "promoted";
+        const inFlight = last !== undefined && !phaseAtRest(last);
         if (!inFlight && ownership() === "managed-elsewhere") {
           await notify("held", { reason: "managed-elsewhere" });
           return { held: "this install is managed by another manager; it does not roll itself back" };
