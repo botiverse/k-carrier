@@ -14,6 +14,7 @@
 import { pathToFileURL } from "node:url";
 import { teethFor, type Profile, type ToothContext } from "./teeth/registry.ts";
 import { checkAdapterReleaseKnob } from "./adapter/releaseKnob.ts";
+import { checkAdapterProbeBindsLiveProcess } from "./adapter/probeChecks.ts";
 import { createSandbox } from "./scenario/sandbox.ts";
 import { buildReceipt, type CheckResult, type Receipt } from "./receipt.ts";
 import {
@@ -217,6 +218,10 @@ export async function runAdapter(profile: Profile, adapterPath: string): Promise
       // those controls are no-ops and the passes below mean nothing -- so this
       // is reported before them, not after.
       { id: "adapter.service-release-knob-bites", run: (ctx, f) => checkAdapterReleaseKnob(ctx, f) },
+      {
+        id: "adapter.service-probe-binds-live-process",
+        run: (ctx, f) => checkAdapterProbeBindsLiveProcess(ctx, f),
+      },
       { id: "adapter.service-upgrade", run: (ctx, f) => checkAdapterServiceUpgrade(ctx, f) },
       { id: "adapter.service-rollback", run: (ctx, f) => checkAdapterServiceRollback(ctx, f) },
       {
