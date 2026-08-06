@@ -31,7 +31,7 @@ Usage:
   k-harness --help
 
 Options:
-  --profile <p>        tier-filtered tooth set (cli | daemon | managed)
+  --profile <p>        tier-filtered tooth set (swap | service)
   --bin <path>         black-box mode: drive a real binary (k.target.ts REQUIRED)
   --adapter <path>     adapter mode: contract subset against an external adapter
                        (module default export: (stateDir) => HostDriver)
