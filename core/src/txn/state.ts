@@ -21,6 +21,38 @@ export type TxnPhase =
   | "promoted" // experiment -> stable; old stable pending GC
   | "rolled-back"; // stable restored + resumed; experiment slot cleared; reason journaled
 
+/**
+ * Is the machine AT REST in this phase — safe to REFUSE new modification
+ * (the rollback ownership gate draws on the action's nature). Exhaustive
+ * over TxnPhase: a phase added later MUST make a decision here at compile
+ * time (the `never` check in the default). An unknown phase from a NEWER
+ * core defaults to at-rest: for modification, "don't touch" is the safe
+ * default, never the exclusion-list trap where every future terminal
+ * phase silently becomes "in-flight" = allowed to modify.
+ */
+function assertNever(x: never): never {
+  throw new Error(`unknown TxnPhase ${String(x)}; refusing to classify — a phase a newer core wrote must not be touched`);
+}
+
+export function phaseAtRest(phase: TxnPhase): boolean {
+  switch (phase) {
+    case "idle":
+    case "promoted":
+    case "rolled-back":
+      return true; // stable restored; nothing in flight — touching is NEW modification
+    case "staged":
+    case "handing-over":
+    case "running-experiment":
+    case "readback":
+      return false; // K's own transaction in flight — settling is always allowed
+    default:
+      // A new TxnPhase is a compile error here (phase narrows to it and is
+      // not `never`). A phase from a NEWER core at runtime is refused —
+      // "don't touch" is the safe default, not the exclusion-list trap.
+      return assertNever(phase);
+  }
+}
+
 export interface TxnState {
   phase: TxnPhase;
   stableVersion: string;

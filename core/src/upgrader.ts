@@ -53,8 +53,17 @@ export interface Upgrader {
    */
   upgradeTo(version: string, opts?: { consented?: boolean; provenance?: ProvenanceIdentity }): Promise<UpgradeOutcome>;
 
-  /** Explicit rollback while an experiment is live (pre-promote). */
-  rollback(reason: string): Promise<void>;
+  /**
+   * Explicit rollback while an experiment is live (pre-promote).
+   *
+   * The ownership gate is drawn on the ACTION'S NATURE, not the method
+   * name: settling an in-flight transaction K itself started (recover +
+   * clear) is ALWAYS allowed — held must never land on a machine that is
+   * halfway through a transaction (that is a brick). Only NEW modification
+   * of a machine at rest that is managed elsewhere is refused, as a typed
+   * `held` — never a rollback of another manager's copy.
+   */
+  rollback(reason: string): Promise<"rolled-back" | { held: string }>;
 
   /**
    * Fail-closed retirement: retire the legacy lifecycle manager (e.g. an

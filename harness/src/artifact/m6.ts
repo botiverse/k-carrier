@@ -14,6 +14,7 @@ import * as path from "node:path";
 import { promises as fs } from "node:fs";
 import { type ToothContext } from "../teeth/registry.ts";
 import { createUpgrader, type CreateUpgraderOptions } from "../../../core/src/createUpgrader.ts";
+import type { ReleaseSource } from "../../../core/src/artifact/source.ts";
 import { staticManifestSource } from "../../../core/src/artifact/staticManifestSource.ts";
 import {
   fileProvenanceJournal,
@@ -61,17 +62,27 @@ export function hostReporting(experimentVersion: string): HostAdapter {
   };
 }
 
+export interface MakeUpgraderOpts {
+  policy?: "auto" | "confirm" | "notify-only";
+  installOwnership?: () => "self" | "managed-elsewhere";
+  notificationSink?: (event: { kind: string; detail: Record<string, string> }) => Promise<void>;
+  host?: HostAdapter;
+  source?: ReleaseSource;
+}
+
 export async function makeUpgrader(
   ctx: ToothContext,
   server: FakeServer,
   journal: ProvenanceJournal | null,
+  opts: MakeUpgraderOpts = {},
 ): Promise<ReturnType<typeof createUpgrader>> {
   const base: Omit<CreateUpgraderOptions, "provenance"> = {
-    host: hostReporting("2.0.0"),
-    source: staticManifestSource({ baseUrl: server.url }),
-    policy: "auto",
-    notificationSink: async () => {},
+    host: opts.host ?? hostReporting("2.0.0"),
+    source: opts.source ?? staticManifestSource({ baseUrl: server.url }),
+    policy: opts.policy ?? "auto",
+    notificationSink: (opts.notificationSink ?? (async () => {})) as CreateUpgraderOptions["notificationSink"],
     stateDir: stateDir(ctx),
+    ...(opts.installOwnership === undefined ? {} : { installOwnership: opts.installOwnership }),
   };
   return createUpgrader(journal === null ? base : { ...base, provenance: journal });
 }

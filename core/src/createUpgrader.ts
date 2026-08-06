@@ -1,21 +1,13 @@
 /**
  * createUpgrader — the one construction every entrypoint uses.
  *
- * Order of gates, and why each is where it is:
- *   1. lock        one transaction per service identity; two entrypoints can
- *                  fire at once.
- *   2. ownership   a copy owned by another manager never upgrades itself.
- *   3. source      what should we be on (or: this exact version)?
- *   4. policy      consent BEFORE any disk side effect.
- *   5. compat      the host's own semantic gate, before staging.
- *   6. download    fetch + verify; unverified bytes never reach a slot.
- *   7. engine      stage -> handoff -> predicates -> promote / rollback.
- *
- * Everything before (7) can only produce `held` or `up-to-date`: nothing on
- * disk has changed. A refusal is cheap; a rollback is rare, not routine.
+ * Order of gates: lock -> ownership -> source -> policy -> compat ->
+ * download -> engine. Everything before the engine can only produce `held`
+ * or `up-to-date`: nothing on disk has changed. A refusal is cheap; a
+ * rollback is rare, not routine.
  */
 import type { Upgrader, UpgraderConfig, UpgradeOutcome, ProvenanceIdentity } from "./upgrader.ts";
-import type { TxnState } from "./txn/state.ts";
+import { phaseAtRest, type TxnState } from "./txn/state.ts";
 import type { Release } from "./artifact/source.ts";
 import type { ProcessEvidence } from "./lifecycle/hostAdapter.ts";
 import { UpgradeEngine } from "./txn/engine.ts";
@@ -270,12 +262,23 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
       return retireReason(await currentReport());
     },
 
-    async rollback(reason: string): Promise<void> {
+    async rollback(reason: string): Promise<"rolled-back" | { held: string }> {
       const lock = await acquireUpgradeLock(opts.stateDir, clock.nowMs());
       try {
+        // Gate on the action's nature: settling K's own in-flight
+        // transaction is ALWAYS allowed (a held mid-transaction is a
+        // brick); only NEW modification of a machine AT REST managed
+        // elsewhere is refused.
+        const last = (await effects.journal.readAll()).at(-1)?.intent;
+        const inFlight = last !== undefined && !phaseAtRest(last);
+        if (!inFlight && ownership() === "managed-elsewhere") {
+          await notify("held", { reason: "managed-elsewhere" });
+          return { held: "this install is managed by another manager; it does not roll itself back" };
+        }
         await engine.recover();
         await effects.slots.clearExperiment();
         await notify("rolled-back", { reason });
+        return "rolled-back";
       } finally {
         await lock.release();
       }

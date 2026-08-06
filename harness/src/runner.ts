@@ -12,7 +12,7 @@
  *    workload driver; probe contract checks always run.
  */
 import { pathToFileURL } from "node:url";
-import { teethFor, type Profile, type ToothContext } from "./teeth/registry.ts";
+import { teethFor, ALL_CAPABILITIES, type Profile, type ToothContext } from "./teeth/registry.ts";
 import { checkAdapterReleaseKnob } from "./adapter/releaseKnob.ts";
 import { checkAdapterProbeBindsLiveProcess } from "./adapter/probeChecks.ts";
 import { createSandbox } from "./scenario/sandbox.ts";
@@ -77,7 +77,7 @@ async function runCheck(
 
 export async function runProfile(profile: Profile): Promise<Receipt> {
   const startedAtMs = Date.now();
-  const teeth = teethFor(profile);
+  const teeth = teethFor(profile, ALL_CAPABILITIES);
   // Fail-closed: an empty selection must never render as "all green"
   // (zero teeth and all-passed are indistinguishable to CI otherwise).
   if (teeth.length === 0) {
