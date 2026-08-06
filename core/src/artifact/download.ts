@@ -57,6 +57,14 @@ export interface DownloadOptions {
    */
   stallTimeoutMs?: number;
   /**
+   * HTTP client for the artifact bytes. `staticManifestSource` already takes
+   * one; without the same seam here an adopter can point K at their own server
+   * for the MANIFEST but not for the BYTES, which is half a seam and surprising
+   * in exactly the place it matters (proxies, custom agents, and an adopter's
+   * own integration tests all need both).
+   */
+  fetchImpl?: typeof fetch;
+  /**
    * Directory for partial-download state. When set, an interrupted download
    * leaves its prefix here and the next attempt resumes via Range.
    */
@@ -90,7 +98,8 @@ export async function downloadVerified(
   }
 
   const bytes = await fetchAndAppend(
-    url, partialPath, partialSize, clock, timeoutMs, opts.onProgress, release.size, opts.stallTimeoutMs ?? 0,
+    url, partialPath, partialSize, clock, timeoutMs, opts.onProgress, release.size,
+    opts.stallTimeoutMs ?? 0, opts.fetchImpl ?? fetch,
   );
 
   const sha = sha256Hex(bytes);
@@ -128,6 +137,7 @@ async function fetchAndAppend(
   onProgress?: (downloaded: number, total: number) => void,
   total?: number,
   stallTimeoutMs = 0,
+  doFetch: typeof fetch = fetch,
 ): Promise<Uint8Array> {
   const controller = new AbortController();
   const cancel = timeoutMs > 0 ? clock.after(timeoutMs, () => controller.abort()) : undefined;
@@ -150,7 +160,7 @@ async function fetchAndAppend(
     let res: Response;
     armStall(); // the response headers themselves must not hang forever
     try {
-      res = await fetch(url, { signal: controller.signal, headers });
+      res = await doFetch(url, { signal: controller.signal, headers });
     } catch (err) {
       const timedOut = controller.signal.aborted;
       throw new ArtifactError(
