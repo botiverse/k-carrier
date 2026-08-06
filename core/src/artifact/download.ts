@@ -37,6 +37,11 @@ import { ArtifactError } from "./errors.ts";
 import type { Release } from "./source.ts";
 
 export interface DownloadOptions {
+  /**
+   * Byte progress. `downloaded` counts bytes ON DISK including any resumed
+   * prefix, so a resumed download never appears to restart at zero.
+   */
+  onProgress?: (downloaded: number, total: number) => void;
   clock?: Clock;
   /** Abort the download after this many ms (0 = no timeout). Default 10000. */
   timeoutMs?: number;
@@ -73,7 +78,7 @@ export async function downloadVerified(
     if (partialSize >= release.size) partialSize = 0; // complete/over-long is not a resume point
   }
 
-  const bytes = await fetchAndAppend(url, partialPath, partialSize, clock, timeoutMs);
+  const bytes = await fetchAndAppend(url, partialPath, partialSize, clock, timeoutMs, opts.onProgress, release.size);
 
   const sha = sha256Hex(bytes);
   if (sha !== release.sha256) {
@@ -107,6 +112,8 @@ async function fetchAndAppend(
   partialSize: number,
   clock: Clock,
   timeoutMs: number,
+  onProgress?: (downloaded: number, total: number) => void,
+  total?: number,
 ): Promise<Uint8Array> {
   const controller = new AbortController();
   const cancel = timeoutMs > 0 ? clock.after(timeoutMs, () => controller.abort()) : undefined;
@@ -140,7 +147,16 @@ async function fetchAndAppend(
     await fs.mkdir(path.dirname(partialPath), { recursive: true });
     const fh = await fs.open(partialPath, partialSize > 0 ? "a" : "w");
     try {
-      if (res.body) await streamToFile(res.body, fh);
+      if (res.body) {
+        // Count from the resumed prefix, never from zero: a bar that restarts
+        // reads as "it lost my download" to the person watching it.
+        let onDisk = partialSize;
+        onProgress?.(onDisk, total ?? 0);
+        await streamToFile(res.body, fh, (chunk) => {
+          onDisk += chunk;
+          onProgress?.(onDisk, total ?? 0);
+        });
+      }
       await fh.sync();
     } catch (err) {
       // interrupted (abort / connection drop): the prefix stays in the
@@ -163,12 +179,16 @@ async function fetchAndAppend(
 async function streamToFile(
   body: ReadableStream<Uint8Array>,
   fh: Awaited<ReturnType<typeof fs.open>>,
+  onBytes?: (chunk: number) => void,
 ): Promise<void> {
   const reader = body.getReader();
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    if (value !== undefined) await fh.write(value);
+    if (value !== undefined) {
+      await fh.write(value);
+      onBytes?.(value.byteLength);
+    }
   }
 }
 

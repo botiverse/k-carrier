@@ -44,6 +44,25 @@ export interface HostAdapter {
   resume(): Promise<void>;
 }
 
+/**
+ * A SLOT is a place on disk that holds one version's bytes — not a channel,
+ * not a release track, not a feature flag.
+ *
+ * K keeps exactly two so that installing never destroys the thing that
+ * currently works:
+ *
+ *   stable      the version you are running and can always fall back to
+ *   experiment  the version being tried right now; discarded if it fails
+ *
+ * "Promote" means the experiment's bytes become the stable ones; "roll back"
+ * means the experiment is thrown away and stable was never touched. That is
+ * the whole reason the transaction can be safe: the fallback is not
+ * reconstructed after a failure, it was never disturbed.
+ *
+ * ⚠️ `stable` here is a POSITION, not the name of a release channel. If your
+ * product also has a channel called "stable" (ours does), they are unrelated:
+ * a channel says which stream you follow, a slot says which copy on disk.
+ */
 export type Slot = "stable" | "experiment";
 
 export interface ProcessEvidence {

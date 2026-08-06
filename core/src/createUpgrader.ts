@@ -30,6 +30,7 @@ import { systemClock, type Clock } from "./clock.ts";
 import { buildSurfaceAllowlist, evaluateLifecycleConvergence } from "./converge/lifecycle.ts";
 import type { ReadbackSurface, ConvergenceReport, PredicateResult } from "./converge/predicates.ts";
 import { platformOpsFor } from "./platform/index.ts";
+import type { UpgradeProgress } from "./progress.ts";
 import { buildConvergenceReport } from "./converge/report.ts";
 import { slotArtifactPath } from "./txn/fileEffects.ts";
 
@@ -39,6 +40,15 @@ export interface CreateUpgraderOptions extends UpgraderConfig {
   installOwnership?: () => "self" | "managed-elsewhere";
   /** Optional host semantic gate; a string result refuses the transition. */
   checkCompatibility?: (from: string, to: string) => Promise<string | null>;
+  /**
+   * Progress for a host that wants to show something while this runs.
+   *
+   * Without it, a long upgrade is indistinguishable from a hung one, and the
+   * user's remedy for "hung" is to kill the process mid-transaction. Purely
+   * observational: never awaited for control flow, and a throwing sink must
+   * not fail the upgrade.
+   */
+  onProgress?: (progress: UpgradeProgress) => void;
   /**
    * The OS-lifecycle read-back surfaces the app's platform adapter
    * declares (host_lifecycle_converged, design-v1 §L3). Each surface is
@@ -93,6 +103,15 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
     return (await effects.slots.slotVersions()).stable ?? "0.0.0";
   }
 
+  /** Report a stage. Observational only: a broken sink cannot break upgrades. */
+  function reportStage(progress: UpgradeProgress): void {
+    try {
+      opts.onProgress?.(progress);
+    } catch {
+      // a host's progress bar must never be able to fail an upgrade
+    }
+  }
+
   async function notify(kind: Parameters<UpgraderConfig["notificationSink"]>[0]["kind"], detail: Record<string, string>): Promise<void> {
     await opts.notificationSink({ kind, detail });
   }
@@ -115,6 +134,7 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
       await engine.recover(); // finish or undo anything a previous crash left
 
       const current = await currentVersion();
+      reportStage({ stage: "checking" });
       let release: Release | null;
       try {
         release = await pick(current);
@@ -153,20 +173,27 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
       // Resume support: an interrupted download (process death
       // mid-fetch) leaves its prefix in stateDir/incoming and the next
       // attempt continues via Range instead of restarting from zero.
+      reportStage({ stage: "downloading", version: release.version });
       const bytes = await downloadVerified(release, {
         clock,
         resumeDir: path.join(opts.stateDir, "incoming"),
+        onProgress: (downloaded, total) =>
+          reportStage({ stage: "downloading", version: release.version, downloaded, total }),
       });
+      reportStage({ stage: "verifying", version: release.version });
 
       // NOTE: K verifies INTEGRITY (sha256 + size) but deliberately does not
       // verify AUTHENTICITY. See docs/design-v1.md §L0.5 — signing was removed
       // on 2026-08-06 rather than shipped half-used. A digest proves the bytes
       // are the ones the manifest described; it cannot prove who produced
       // them, because it travels with them.
+      reportStage({ stage: "staging", version: release.version });
       const bytesRef = await materializeArtifact(opts.stateDir, bytes);
 
+      reportStage({ stage: "handing-over", version: release.version });
       const outcome = await engine.upgrade({ version: release.version, bytesRef });
       if (outcome.result === "promoted") {
+        reportStage({ stage: "promoted", version: outcome.version });
         await notify("promoted", { version: outcome.version });
         lastReport = buildConvergenceReport({
           version: outcome.version,
@@ -178,6 +205,7 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
         return { result: "promoted", report: lastReport };
       }
       if (outcome.result === "rolled-back") {
+        reportStage({ stage: "rolled-back", version: release.version });
         await notify("rolled-back", { reason: outcome.reason });
         return { result: "rolled-back", reason: outcome.reason, report: null };
       }
