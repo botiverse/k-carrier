@@ -43,6 +43,8 @@ const COVERED_ELSEWHERE = new Set([
   "m6.provenance-forward-only",
   "m6.provenance-genesis-not-observed",
   "m6.provenance-records-each-reconcile",
+  "m6.status-report-matches-local",
+  "m6.status-report-silence-not-evidence",
   "fake-server.serves-consistent-release",
   "fake-server.tamper-corrupt-byte",
   "fake-server.tamper-swap-artifacts",

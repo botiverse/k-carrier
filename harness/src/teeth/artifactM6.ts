@@ -11,6 +11,10 @@ import {
   checkM6ProvenanceGenesisNotObserved,
   checkM6ProvenanceRecordsEachReconcile,
 } from "../artifact/m6.ts";
+import {
+  checkM6StatusReportMatchesLocal,
+  checkM6StatusReportSilenceNotEvidence,
+} from "../artifact/m6Status.ts";
 
 registerTooth({
   id: "m6.provenance-forward-only",
@@ -67,6 +71,49 @@ registerTooth({
     },
   ],
   run: checkM6ProvenanceGenesisNotObserved,
+});
+
+registerTooth({
+  id: "m6.status-report-matches-local",
+  profiles: ["service"],
+  layers: ["L5"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "the report invents/fabricates a field (stable says X while the machine is on Y)",
+      caughtOnlyBy: "this", // only this tooth pins the read-back equality
+    },
+    {
+      mutate: "the report's predicates are not the last real evaluation's (a report from a different machine/moment)",
+      caughtOnlyBy: "this",
+    },
+  ],
+  run: checkM6StatusReportMatchesLocal,
+});
+
+registerTooth({
+  id: "m6.status-report-silence-not-evidence",
+  profiles: ["service"],
+  layers: ["L5"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate:
+        "a machine that never observed a promote reports binaryAtTarget: passed:true",
+      caughtOnlyBy: "this", // silence cannot be spent as evidence (M5 rule, fleet surface)
+    },
+    {
+      mutate:
+        "a machine that never observed a promote reports hostLifecycleConverged: passed:true",
+      caughtOnlyBy: "this",
+    },
+    {
+      mutate:
+        "a rolled-back reconcile is reported as an observed pass (failure converted into evidence)",
+      caughtOnlyBy: "this",
+    },
+  ],
+  run: checkM6StatusReportSilenceNotEvidence,
 });
 
 registerTooth({

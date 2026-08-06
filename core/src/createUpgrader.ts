@@ -34,6 +34,8 @@ import type { UpgradeProgress } from "./progress.ts";
 import { slotArtifactPath } from "./txn/fileEffects.ts";
 import { recordReconcile, type ProvenanceJournal } from "./provenance/journal.ts";
 import { finishUpgradeOutcome } from "./upgrade/outcome.ts";
+import { retireReason } from "./upgrade/retire.ts";
+import { buildStatusReport, type StatusReport } from "./status/report.ts";
 
 export interface CreateUpgraderOptions extends UpgraderConfig {
   clock?: Clock;
@@ -110,6 +112,17 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
 
   async function currentVersion(): Promise<string> {
     return (await effects.slots.slotVersions()).stable ?? "0.0.0";
+  }
+
+  async function readState(): Promise<TxnState> {
+    const slots = await effects.slots.slotVersions();
+    const intents = (await effects.journal.readAll()).map((e) => e.intent);
+    return {
+      phase: intents.at(-1) ?? "idle",
+      stableVersion: slots.stable ?? "0.0.0",
+      experimentVersion: slots.experiment,
+      rollbackReason: null,
+    };
   }
 
   /** Report a stage. Observational only: a broken sink cannot break upgrades. */
@@ -253,26 +266,7 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
     },
 
     async retireLegacyManager(): Promise<"retired" | { held: string }> {
-      // Retire the legacy lifecycle manager ONLY after convergence passed;
-      // otherwise the machine would be left with no supervisor — a HOLD.
-      const report = lastReport;
-      const lifecycle = report?.hostLifecycleConverged ?? null;
-      if (lifecycle === null) {
-        return {
-          held:
-            "cannot retire the legacy lifecycle manager before host_lifecycle_converged passed" +
-            (report === null
-              ? " (no upgrade has converged yet)"
-              : " (this app declared no OS-lifecycle read-back surface, so it was never observed)"),
-        };
-      }
-      if (!lifecycle.passed) {
-        return {
-          held:
-            "cannot retire the legacy lifecycle manager before host_lifecycle_converged passed",
-        };
-      }
-      return "retired";
+      return retireReason(lastReport);
     },
 
     async rollback(reason: string): Promise<void> {
@@ -287,14 +281,16 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
     },
 
     async state(): Promise<TxnState> {
-      const slots = await effects.slots.slotVersions();
-      const intents = (await effects.journal.readAll()).map((e) => e.intent);
-      return {
-        phase: intents.at(-1) ?? "idle",
-        stableVersion: slots.stable ?? "0.0.0",
-        experimentVersion: slots.experiment,
-        rollbackReason: null,
-      };
+      return readState();
+    },
+
+    async status(): Promise<StatusReport> {
+      return buildStatusReport({
+        state: await readState(),
+        lastReport,
+        policy: opts.policy,
+        provenance: opts.provenance ? await opts.provenance.read() : null,
+      });
     },
   };
 }
