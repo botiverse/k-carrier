@@ -16,7 +16,7 @@
  * been changed on disk yet. That is what makes a refusal cheap and a rollback
  * rare rather than routine.
  */
-import type { Upgrader, UpgraderConfig, UpgradeOutcome } from "./upgrader.ts";
+import type { Upgrader, UpgraderConfig, UpgradeOutcome, ProvenanceIdentity } from "./upgrader.ts";
 import type { TxnState } from "./txn/state.ts";
 import type { Release } from "./artifact/source.ts";
 import type { ProcessEvidence } from "./lifecycle/hostAdapter.ts";
@@ -31,8 +31,9 @@ import { buildSurfaceAllowlist, evaluateLifecycleConvergence } from "./converge/
 import type { ReadbackSurface, ConvergenceReport, PredicateResult } from "./converge/predicates.ts";
 import { platformOpsFor } from "./platform/index.ts";
 import type { UpgradeProgress } from "./progress.ts";
-import { buildConvergenceReport } from "./converge/report.ts";
 import { slotArtifactPath } from "./txn/fileEffects.ts";
+import { recordReconcile, type ProvenanceJournal } from "./provenance/journal.ts";
+import { finishUpgradeOutcome } from "./upgrade/outcome.ts";
 
 export interface CreateUpgraderOptions extends UpgraderConfig {
   clock?: Clock;
@@ -57,6 +58,14 @@ export interface CreateUpgraderOptions extends UpgraderConfig {
    * an app can only vouch for surfaces it actually ships.
    */
   lifecycleSurfaces?: ReadbackSurface[];
+  /**
+   * M6 provenance journal (L5): every reconcile that reaches the transaction
+   * records WHO drove it (who/carrier/version), write-ahead. Local
+   * auto-updates use `provenanceIdentity` (default: the local operator).
+   */
+  provenance?: ProvenanceJournal;
+  /** Identity recorded for reconciles that carry none (local auto-update). */
+  provenanceIdentity?: ProvenanceIdentity;
 }
 
 export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
@@ -122,6 +131,7 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
   async function run(
     pick: (current: string) => Promise<Release | null>,
     consented = false,
+    provenance: ProvenanceIdentity | null = null,
   ): Promise<UpgradeOutcome> {
     const owner = ownership();
     if (owner === "managed-elsewhere") {
@@ -190,26 +200,25 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
       reportStage({ stage: "staging", version: release.version });
       const bytesRef = await materializeArtifact(opts.stateDir, bytes);
 
+      // M6 provenance: record WHO drove this reconcile, write-ahead of the
+      // transaction — the entry survives even a crash or auto-rollback.
+      if (opts.provenance) {
+        await recordReconcile(opts.provenance, provenance ?? opts.provenanceIdentity, release.version);
+      }
+
       reportStage({ stage: "handing-over", version: release.version });
       const outcome = await engine.upgrade({ version: release.version, bytesRef });
-      if (outcome.result === "promoted") {
-        reportStage({ stage: "promoted", version: outcome.version });
-        await notify("promoted", { version: outcome.version });
-        lastReport = buildConvergenceReport({
-          version: outcome.version,
-          evidence: lastEvidence,
-          lifecycle: lastLifecycle,
-          declaredSurfaces: (opts.lifecycleSurfaces ?? []).length,
-          nowMs: clock.nowMs(),
-        });
-        return { result: "promoted", report: lastReport };
-      }
-      if (outcome.result === "rolled-back") {
-        reportStage({ stage: "rolled-back", version: release.version });
-        await notify("rolled-back", { reason: outcome.reason });
-        return { result: "rolled-back", reason: outcome.reason, report: null };
-      }
-      return { result: "up-to-date" };
+      const finished = await finishUpgradeOutcome(outcome, {
+        notify,
+        reportStage,
+        targetVersion: release.version,
+        declaredSurfaces: (opts.lifecycleSurfaces ?? []).length,
+        nowMs: clock.nowMs(),
+        evidence: lastEvidence,
+        lifecycle: lastLifecycle,
+      });
+      if (finished.report !== null) lastReport = finished.report;
+      return finished.outcome;
     } finally {
       await lock.release();
     }
@@ -231,7 +240,7 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
       );
     },
 
-    async upgradeTo(version: string, opts2?: { consented?: boolean }): Promise<UpgradeOutcome> {
+    async upgradeTo(version: string, opts2?: { consented?: boolean; provenance?: ProvenanceIdentity }): Promise<UpgradeOutcome> {
       return run(
         async (current) =>
           opts.source.fetchRelease(version, {
@@ -239,6 +248,7 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
             platformKey: platformOpsFor().platformKey(),
           }),
         opts2?.consented === true,
+        opts2?.provenance ?? null,
       );
     },
 
