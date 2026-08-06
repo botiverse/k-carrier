@@ -1,6 +1,7 @@
 # K (k-carrier) 升级框架 设计文档 v1.2（通用核 + Raft 壳）
 
-作者 archer · 2026-08-05 (v1.2: +§2.5 三档 profile 与 install-ownership 检测、双真实壳[raft-shell managed 档 + raft CLI cli 档 `raft self upgrade`]、examples 每档一 demo 入架构图；v1.1: 定名 k-carrier、决定记录、接口落码衔接) · 基于 xxchan DM 收敛的方向（开源 forcing-function / 并集定位 / 边做开源边做自己的）+ 源码调研（`k-updater-research-tailscale-datadog.md`）+ #395 冻结 spec + #376 载体无关不变式。
+作者 archer · 2026-08-05 起，随代码更新。
+依据：xxchan DM 收敛的方向（开源 forcing-function / 并集定位）+ 源码调研（`docs/research-tailscale-datadog.md`）+ #395 冻结 spec + #376 载体无关不变式。
 
 ---
 
@@ -164,10 +165,11 @@ server 侧最小要求 = 静态文件（manifest + 工件）；drive 为可选�
 2. **core 不含任何 Raft 概念**（无 SLOCK_HOME/机器身份/server 协议）—— 全部经 HostAdapter/配置注入；这是开源 forcing-function 的机械落点。
 3. **每层可单独关**：不用 drive = 纯本地；不用 L2 = 退化成 CLI 自升级（= 向下兼容到商品层，路径清晰）。
 
-## 2.35 lint 强度与 type-aware 的诚实结论（xxchan 08-05 要求"开更强"）
-**已开**：correctness/suspicious = error，pedantic = warn 且 `--deny-warnings`（等于 error）；`no-explicit-any` error；**import 插件**（`no-cycle` / `no-self-import`）；**`no-console` 在 core 是 error**（库不许打印；harness CLI 和 examples 例外，它们的职责就是打印——用 path override 而不是全局关掉）。
-**故意不开**：`restriction` 类（`no-async-await` 直接禁 async、`no-optional-chaining` 等，是给特定代码库的风格禁令，与我们的设计冲突）。
-**type-aware（`--tsgolint`）：装了、跑了、暂不开**——因为**它现在解析不到 `@types/node`**（`path.join` 都被判成 unsafe），2800+ 条里绝大多数是解析假阳性；更危险的是 **`no-floating-promises` 这类高价值规则报 0**——**一个瞎了的检查器的"沉默"不是通过**（同 empty-suite 假绿）。⇒ 等 tsgolint 类型解析可用再开，届时优先 `no-floating-promises`/`no-misused-promises`/`await-thenable`。**这条写下来，免得以后有人看见"type-aware 装了"就以为在生效。**
+## 2.35 lint 强度与 type-aware
+
+**已开**：correctness/suspicious = error；pedantic = warn + `--deny-warnings`；`no-explicit-any`；import 插件（`no-cycle`/`no-self-import`）；`no-console` 在 core 是 error（库不许打印，harness CLI 与 examples 用 path override 例外）。
+**不开**：`restriction` 类风格禁令，与设计冲突。
+**type-aware（`--tsgolint`）：装了、跑了、暂不开。** 它解析不到 `@types/node`（`path.join` 都判 unsafe），2800+ 条绝大多数是假阳性；更危险的是 `no-floating-promises` 这类高价值规则报 **0**——**一个瞎了的检查器的"沉默"不是通过**（同 empty-suite 假绿）。写下来是免得有人看见"装了"就以为在生效。
 
 ## 2.4 类型与接口设计原则（xxchan 08-05："写出来就是对的，问题发生在静态检查阶段"）
 - **非法状态不可表示**：discriminated union 优先（`ToothKind`/`CaughtOnlyBy`/`EngineOutcome`/`UpgradeOutcome` 已示范）——"baseline 没有失效条件"这类状态在类型上就不存在，不靠运行时查。
@@ -217,7 +219,7 @@ K                   交付低 / 保证高    单二进制；事务 + 回读 + �
 - **核实**：全包**零 rollback / 零 revert / 零装后健康检查**；签名靠**系统代码签名**（Windows Authenticode 发布者名 / mac codesign），不是自己的链。⇒ **"这一类没人做事务回滚与回读"成立。**
 - **不长成它**：`.app` / MSI / deb 的安装脏活是平台特有的，交给那些工具；K 只管事务与回滚，通过 `PlatformOps` / `HostAdapter` 调它们。
 - **灰度百分比不进核心**：按 K 自己的边界，"我该升到哪个版本"是 `ReleaseSource` 的问题 ⇒ 灰度天然属于那一层。**（这条算边界划对了的证据。）**
-- ⚠️ **已知真差距（记录，暂不做）**：**下载不可续**——进程死了要重下，而 computer 的 SEA ≈150MB，这个代价是真的。
+- ✅ **曾经的真差距已补**：下载可续传（Range + 全量校验，齿 `m1.download-resumes-after-kill`）。computer 的 SEA ≈150MB，进程死一次就重下的代价是真的。
 
 ## 4. 边界（不做什么）
 - 不替代 OS 包管理器：PM 拥有的安装交给 PM（TS 矩阵思路），core 的主 lane 是自有安装（SEA 类）。**v0 范围裁定（xxchan 08-05）：只假设官方 installer 安装；deb/RPM 等 PM 装的副本 = ownership 检测 → `held: managed-elsewhere` 即正确终态，不做接管/收编**；
@@ -233,7 +235,7 @@ K                   交付低 / 保证高    单二进制；事务 + 回读 + �
 - **API 稳定后**：发 `@k-carrier/core` 到 GitHub Packages（私有 npm）按 semver；开源后转公共 npm。
 - **两壳接法（都在 slock 仓库）**：packages/computer（managed 档）= 五方法 HostAdapter（quiesce=park agent runners / stop·start=`__service` / probe=复用 #5245 same-PID 证据 / resume）+ Electron login-item 读回面 + 三入口同一 Upgrader，状态 `SLOCK_HOME/computer/k/`；packages/cli（cli 档）= 零 adapter + ownership 探测（Computer 注入 wrapper 标记）+ `raft self upgrade`，状态 CLI 自有目录。**同 monorepo 吃同一 core 版本**（两壳永不错位）；两壳状态目录分离互不干扰。
 1. 1.0.16（已冻 #395）= L2/L3 在 Raft 壳内的第一次真实现（upgrade 入口接线 + 自启迁移 + 谓词回读）——**不等 core 成型，按本仓库已落的接口形状写**（`core/src/lifecycle/hostAdapter.ts` / `txn/state.ts` / `converge/predicates.ts` / `upgrader.ts`），之后平移进 core；
-2. K 既有产物直接归位：dark policy-row fixture（已建验）→ L5 drive 的门；channel file → L0；
+2. K 既有产物直接归位：dark policy-row fixture（已建验）→ L5 drive 的门；
 3. 本仓库 = 原"release/publish 侧 spec"的上位替代；接入方视角见 `docs/integration.md`。
 
 ## 6. 决定记录（原开放问题，已拍部分）
