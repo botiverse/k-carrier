@@ -38,17 +38,20 @@ test("no report yet => both predicates are NOT_OBSERVED (null), never fabricated
 
 test("a real report's predicates are carried, verbatim", () => {
   const report: ConvergenceReport = {
+    version: "2.0.0",
     binaryAtTarget: { passed: true, source: "host.healthProbe", observedAtMs: 1, detail: { version: "2.0.0" } },
     hostLifecycleConverged: { passed: true, source: "test.autostart", observedAtMs: 1, detail: {} },
   };
   const r = buildStatusReport({ state, lastReport: report, policy: "auto", provenance });
   assert.deepEqual(r.predicates.binaryAtTarget, report.binaryAtTarget);
   assert.deepEqual(r.predicates.hostLifecycleConverged, report.hostLifecycleConverged);
+  assert.equal(r.predicates.version, "2.0.0", "the evaluated version is the join key, passed through verbatim");
 });
 
 test("a rolled-back reconcile leaves no report => predicates stay NOT_OBSERVED", () => {
   const r = buildStatusReport({ state, lastReport: null, policy: "auto", provenance });
   assert.equal(r.predicates.hostLifecycleConverged, null);
+  assert.equal(r.predicates.version, null);
 });
 
 test("an app that never wired a journal reports provenance null (config-level absence)", () => {

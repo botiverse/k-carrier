@@ -34,5 +34,5 @@ export function buildConvergenceReport(input: {
     (declaredSurfaces > 0
       ? { passed: false, source: "not-converged", observedAtMs: nowMs, detail: {} }
       : null); // the app declared no surface: never observed, never claimed
-  return { binaryAtTarget, hostLifecycleConverged };
+  return { version, binaryAtTarget, hostLifecycleConverged };
 }

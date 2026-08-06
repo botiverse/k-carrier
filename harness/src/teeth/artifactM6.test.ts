@@ -153,6 +153,30 @@ test("known-red: records-each-reconcile catches journaling after the outcome", a
   }
 });
 
+test("known-red: status-report-matches-local catches a wrong version stamp", async () => {
+  const { ctx, teardown } = await ctxFor("red-m6-stamp");
+  try {
+    await assert.rejects(
+      checkM6StatusReportMatchesLocal(ctx, { wrongVersionStamp: true }),
+      /never be joined to the wrong version/,
+    );
+  } finally {
+    await teardown();
+  }
+});
+
+test("known-red: silence-not-evidence catches a restart erasing a real observation", async () => {
+  const { ctx, teardown } = await ctxFor("red-m6-nopersist");
+  try {
+    await assert.rejects(
+      checkM6StatusReportSilenceNotEvidence(ctx, { noPersistence: true }),
+      /survives a restart/,
+    );
+  } finally {
+    await teardown();
+  }
+});
+
 test("known-red: status-report-matches-local catches an invented stable", async () => {
   const { ctx, teardown } = await ctxFor("red-m6-status-invent");
   try {

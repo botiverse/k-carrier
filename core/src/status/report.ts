@@ -21,6 +21,13 @@ export interface StatusReport {
   stable: string;
   experiment: string | null;
   predicates: {
+    /**
+     * The version the last report evaluated — the JOIN KEY. Consumers must
+     * join predicates on this, never on the current stable/experiment: a
+     * real conclusion about 2.0.0 read as 3.0.0's is worse than a fake.
+     * null = never observed.
+     */
+    version: string | null;
     /** The last REAL binaryAtTarget evaluation; null = never observed. */
     binaryAtTarget: PredicateResult | null;
     /** The last REAL host_lifecycle_converged evaluation; null = never observed. */
@@ -45,6 +52,7 @@ export function buildStatusReport(input: {
       // A report that never happened is NOT_OBSERVED — never a fabricated
       // pass and never a fabricated failure: both would spend silence as
       // evidence.
+      version: input.lastReport?.version ?? null,
       binaryAtTarget: input.lastReport?.binaryAtTarget ?? null,
       hostLifecycleConverged: input.lastReport?.hostLifecycleConverged ?? null,
     },

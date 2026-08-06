@@ -87,6 +87,11 @@ registerTooth({
       mutate: "the report's predicates are not the last real evaluation's (a report from a different machine/moment)",
       caughtOnlyBy: "this",
     },
+    {
+      mutate:
+        "a real conclusion is attached to the wrong version (no stamp / wrong stamp — consumers cannot join correctly)",
+      caughtOnlyBy: "this", // a true fact pasted on the wrong version reads like a lie
+    },
   ],
   run: checkM6StatusReportMatchesLocal,
 });
@@ -111,6 +116,11 @@ registerTooth({
       mutate:
         "a rolled-back reconcile is reported as an observed pass (failure converted into evidence)",
       caughtOnlyBy: "this",
+    },
+    {
+      mutate:
+        "a machine that DID converge reports NOT_OBSERVED after a restart (the report is not persisted)",
+      caughtOnlyBy: "this", // "observed, I restarted" is not "never observed"
     },
   ],
   run: checkM6StatusReportSilenceNotEvidence,

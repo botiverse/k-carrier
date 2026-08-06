@@ -26,9 +26,16 @@ function inventedStatus(base: StatusReport): StatusReport {
   return { ...base, stable: "9.9.9" };
 }
 
+/** Mutation: a REAL conclusion pasted onto the WRONG version (the predicates
+ * are 2.0.0's but claim 3.0.0) — worse than a fake, because consumers join
+ * on the stamp. */
+function wrongStamp(base: StatusReport): StatusReport {
+  return { ...base, predicates: { ...base.predicates, version: "3.0.0" } };
+}
+
 export async function checkM6StatusReportMatchesLocal(
   ctx: ToothContext,
-  opts: { inventStable?: boolean } = {},
+  opts: { inventStable?: boolean; wrongVersionStamp?: boolean } = {},
 ): Promise<void> {
   const journal = fileProvenanceJournal(path.join(stateDir(ctx), "provenance"), systemClock);
   const server = await serveRelease(ctx, { version: "2.0.0", behavior: "ok", name: "target" });
@@ -56,7 +63,17 @@ export async function checkM6StatusReportMatchesLocal(
     });
     assert.equal(outcome.result, "promoted", "the reconcile must promote");
     assert.ok(outcome.report !== null, "a promoted reconcile carries a convergence report");
-    const s2 = await upgrader.status();
+    assert.equal(
+      outcome.report!.version,
+      "2.0.0",
+      "the convergence report is stamped with the version it evaluated",
+    );
+    const s2 = opts.wrongVersionStamp ? wrongStamp(await upgrader.status()) : await upgrader.status();
+    assert.equal(
+      s2.predicates.version,
+      "2.0.0",
+      "the status passes the evaluated version through verbatim — a real conclusion must never be joined to the wrong version (wrongVersionStamp => RED)",
+    );
     assert.deepEqual(
       s2.predicates.binaryAtTarget,
       outcome.report!.binaryAtTarget,
@@ -98,7 +115,12 @@ function fabricatedPass(base: StatusReport, which: "binary" | "lifecycle"): Stat
 
 export async function checkM6StatusReportSilenceNotEvidence(
   ctx: ToothContext,
-  opts: { fabricateBinaryPassed?: boolean; fabricateConvergedPassed?: boolean; fabricateAfterRollback?: boolean } = {},
+  opts: {
+    fabricateBinaryPassed?: boolean;
+    fabricateConvergedPassed?: boolean;
+    fabricateAfterRollback?: boolean;
+    noPersistence?: boolean;
+  } = {},
 ): Promise<void> {
   const journal = fileProvenanceJournal(path.join(stateDir(ctx), "provenance"), systemClock);
   const good = await serveRelease(ctx, { version: "2.0.0", behavior: "ok", name: "good" });
@@ -145,8 +167,41 @@ export async function checkM6StatusReportSilenceNotEvidence(
       "a rolled-back reconcile observes a failure, never a pass (fabricateAfterRollback => RED)",
     );
     assert.equal(s2.predicates.binaryAtTarget, null, "a rolled-back reconcile observes nothing that passed");
+
+    // A machine that DID converge must not report NOT_OBSERVED after a
+    // restart: "observed, I restarted" is not "never observed". The report
+    // is persisted at promote and loaded by a fresh upgrader on the same
+    // stateDir.
+    const promoted = await upgrader.upgradeTo("2.0.0", {
+      consented: true,
+      provenance: { who: "fleet-server", carrier: "raft-computer" },
+    });
+    assert.equal(promoted.result, "promoted", "the good reconcile must promote");
+    const restarted = await makeUpgrader(ctx, good, journal); // same stateDir: the daemon restarted
+    const afterRestart = opts.noPersistence
+      ? forgettingStatus(await restarted.status())
+      : await restarted.status();
+    assert.equal(
+      afterRestart.predicates.version,
+      "2.0.0",
+      "an observed pass survives a restart — the persisted report is loaded, never erased (noPersistence => RED)",
+    );
+    assert.equal(
+      afterRestart.predicates.binaryAtTarget?.passed,
+      true,
+      "the persisted report carries the real observed result, not a fabrication",
+    );
   } finally {
     await good.stop();
     await bad.stop();
   }
+}
+
+/** Mutation: the report lives only in memory — a restart erases the
+ * observation ("observed, I restarted" collapses into "never observed"). */
+function forgettingStatus(base: StatusReport): StatusReport {
+  return {
+    ...base,
+    predicates: { version: null, binaryAtTarget: null, hostLifecycleConverged: null },
+  };
 }

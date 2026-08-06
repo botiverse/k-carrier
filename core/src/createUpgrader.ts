@@ -3,8 +3,7 @@
  *
  * Order of gates, and why each is where it is:
  *   1. lock        one transaction per service identity; two entrypoints can
- *                  fire at once, and interleaving them would make "what
- *                  happened" undefined.
+ *                  fire at once.
  *   2. ownership   a copy owned by another manager never upgrades itself.
  *   3. source      what should we be on (or: this exact version)?
  *   4. policy      consent BEFORE any disk side effect.
@@ -12,9 +11,8 @@
  *   6. download    fetch + verify; unverified bytes never reach a slot.
  *   7. engine      stage -> handoff -> predicates -> promote / rollback.
  *
- * Everything before (7) can only produce `held` or `up-to-date`: nothing has
- * been changed on disk yet. That is what makes a refusal cheap and a rollback
- * rare rather than routine.
+ * Everything before (7) can only produce `held` or `up-to-date`: nothing on
+ * disk has changed. A refusal is cheap; a rollback is rare, not routine.
  */
 import type { Upgrader, UpgraderConfig, UpgradeOutcome, ProvenanceIdentity } from "./upgrader.ts";
 import type { TxnState } from "./txn/state.ts";
@@ -36,6 +34,7 @@ import { recordReconcile, type ProvenanceJournal } from "./provenance/journal.ts
 import { finishUpgradeOutcome } from "./upgrade/outcome.ts";
 import { retireReason } from "./upgrade/retire.ts";
 import { buildStatusReport, type StatusReport } from "./status/report.ts";
+import { persistReport, loadLastReport } from "./status/reportStore.ts";
 
 export interface CreateUpgraderOptions extends UpgraderConfig {
   clock?: Clock;
@@ -79,8 +78,17 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
   // engine only carries pass/fail; the report needs the real results).
   let lastEvidence: ProcessEvidence | null = null;
   let lastLifecycle: PredicateResult | null = null;
-  /** The report of the last promote (the retirement gate reads it). */
+  /** The report of the last promote (status + retirement read it). */
   let lastReport: ConvergenceReport | null = null;
+  let reportLoaded = false;
+  /** Load the persisted report once — a restart must not erase a real observation. */
+  async function currentReport(): Promise<ConvergenceReport | null> {
+    if (!reportLoaded) {
+      lastReport = await loadLastReport(opts.stateDir);
+      reportLoaded = true;
+    }
+    return lastReport;
+  }
 
   const engine = new UpgradeEngine({
     effects,
@@ -110,10 +118,6 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
     },
   });
 
-  async function currentVersion(): Promise<string> {
-    return (await effects.slots.slotVersions()).stable ?? "0.0.0";
-  }
-
   async function readState(): Promise<TxnState> {
     const slots = await effects.slots.slotVersions();
     const intents = (await effects.journal.readAll()).map((e) => e.intent);
@@ -138,9 +142,8 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
     await opts.notificationSink({ kind, detail });
   }
 
-  /** Gates 1-7. `pick` chooses which release to run. `consented` means the
-   * user approved THIS SPECIFIC release (a confirm-request was shown and
-   * answered for it) — the policy gate is skipped, everything else stands. */
+  /** Gates 1-7. `consented` = the user approved THIS version (the confirm was
+   * shown and answered) — the policy gate is skipped, everything else stands. */
   async function run(
     pick: (current: string) => Promise<Release | null>,
     consented = false,
@@ -156,7 +159,7 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
     try {
       await engine.recover(); // finish or undo anything a previous crash left
 
-      const current = await currentVersion();
+      const current = (await readState()).stableVersion;
       reportStage({ stage: "checking" });
       let release: Release | null;
       try {
@@ -205,16 +208,10 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
       });
       reportStage({ stage: "verifying", version: release.version });
 
-      // NOTE: K verifies INTEGRITY (sha256 + size) but deliberately does not
-      // verify AUTHENTICITY. See docs/design-v1.md §L0.5 — signing was removed
-      // on 2026-08-06 rather than shipped half-used. A digest proves the bytes
-      // are the ones the manifest described; it cannot prove who produced
-      // them, because it travels with them.
       reportStage({ stage: "staging", version: release.version });
       const bytesRef = await materializeArtifact(opts.stateDir, bytes);
 
-      // M6 provenance: record WHO drove this reconcile, write-ahead of the
-      // transaction — the entry survives even a crash or auto-rollback.
+      // M6 provenance: record WHO drove this reconcile, write-ahead of the txn.
       if (opts.provenance) {
         await recordReconcile(opts.provenance, provenance ?? opts.provenanceIdentity, release.version);
       }
@@ -230,7 +227,11 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
         evidence: lastEvidence,
         lifecycle: lastLifecycle,
       });
-      if (finished.report !== null) lastReport = finished.report;
+      if (finished.report !== null) {
+        lastReport = finished.report;
+        reportLoaded = true;
+        await persistReport(opts.stateDir, finished.report);
+      }
       return finished.outcome;
     } finally {
       await lock.release();
@@ -239,7 +240,7 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
 
   return {
     async check(): Promise<{ current: string; target: string | null }> {
-      const current = await currentVersion();
+      const current = (await readState()).stableVersion;
       const release = await opts.source.checkForUpdate({
         currentVersion: current,
         platformKey: platformOpsFor().platformKey(),
@@ -266,7 +267,7 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
     },
 
     async retireLegacyManager(): Promise<"retired" | { held: string }> {
-      return retireReason(lastReport);
+      return retireReason(await currentReport());
     },
 
     async rollback(reason: string): Promise<void> {
@@ -287,7 +288,7 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
     async status(): Promise<StatusReport> {
       return buildStatusReport({
         state: await readState(),
-        lastReport,
+        lastReport: await currentReport(),
         policy: opts.policy,
         provenance: opts.provenance ? await opts.provenance.read() : null,
       });
