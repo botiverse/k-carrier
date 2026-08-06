@@ -165,6 +165,18 @@ test("known-red: status-report-matches-local catches a wrong version stamp", asy
   }
 });
 
+test("known-red: silence-not-evidence catches an unreadable report read as genesis", async () => {
+  const { ctx, teardown } = await ctxFor("red-m6-unreadable-report");
+  try {
+    await assert.rejects(
+      checkM6StatusReportSilenceNotEvidence(ctx, { unreadableIsGenesis: true }),
+      /never genesis/,
+    );
+  } finally {
+    await teardown();
+  }
+});
+
 test("known-red: silence-not-evidence catches a restart erasing a real observation", async () => {
   const { ctx, teardown } = await ctxFor("red-m6-nopersist");
   try {
@@ -206,7 +218,7 @@ test("known-red: silence-not-evidence catches a fabricated convergence pass", as
   try {
     await assert.rejects(
       checkM6StatusReportSilenceNotEvidence(ctx, { fabricateConvergedPassed: true }),
-      /never passed:true/,
+      /never a fabricated pass/,
     );
   } finally {
     await teardown();

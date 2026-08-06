@@ -122,6 +122,11 @@ registerTooth({
         "a machine that DID converge reports NOT_OBSERVED after a restart (the report is not persisted)",
       caughtOnlyBy: "this", // "observed, I restarted" is not "never observed"
     },
+    {
+      mutate:
+        "an unreadable report is read as genesis (\"I cannot see the data\" becomes \"there is no data\" — the report store collapses to two states)",
+      caughtOnlyBy: "this", // same family as the provenance third state, one package
+    },
   ],
   run: checkM6StatusReportSilenceNotEvidence,
 });

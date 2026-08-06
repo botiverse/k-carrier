@@ -26,7 +26,7 @@ import { ArtifactError } from "./artifact/errors.ts";
 import * as path from "node:path";
 import { systemClock, type Clock } from "./clock.ts";
 import { buildSurfaceAllowlist, evaluateLifecycleConvergence } from "./converge/lifecycle.ts";
-import type { ReadbackSurface, ConvergenceReport, PredicateResult } from "./converge/predicates.ts";
+import type { ReadbackSurface, PredicateResult } from "./converge/predicates.ts";
 import { platformOpsFor } from "./platform/index.ts";
 import type { UpgradeProgress } from "./progress.ts";
 import { slotArtifactPath } from "./txn/fileEffects.ts";
@@ -34,7 +34,7 @@ import { recordReconcile, type ProvenanceJournal } from "./provenance/journal.ts
 import { finishUpgradeOutcome } from "./upgrade/outcome.ts";
 import { retireReason } from "./upgrade/retire.ts";
 import { buildStatusReport, type StatusReport } from "./status/report.ts";
-import { persistReport, loadLastReport } from "./status/reportStore.ts";
+import { persistReport, loadLastReport, type ReportRead } from "./status/reportStore.ts";
 
 export interface CreateUpgraderOptions extends UpgraderConfig {
   clock?: Clock;
@@ -78,16 +78,16 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
   // engine only carries pass/fail; the report needs the real results).
   let lastEvidence: ProcessEvidence | null = null;
   let lastLifecycle: PredicateResult | null = null;
-  /** The report of the last promote (status + retirement read it). */
-  let lastReport: ConvergenceReport | null = null;
+  /** The report state of the last promote (status + retirement read it). */
+  let lastReport: ReportRead | null = null;
   let reportLoaded = false;
   /** Load the persisted report once — a restart must not erase a real observation. */
-  async function currentReport(): Promise<ConvergenceReport | null> {
+  async function currentReport(): Promise<ReportRead> {
     if (!reportLoaded) {
       lastReport = await loadLastReport(opts.stateDir);
       reportLoaded = true;
     }
-    return lastReport;
+    return lastReport ?? { kind: "genesis" };
   }
 
   const engine = new UpgradeEngine({
@@ -228,7 +228,7 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
         lifecycle: lastLifecycle,
       });
       if (finished.report !== null) {
-        lastReport = finished.report;
+        lastReport = { kind: "observed", report: finished.report };
         reportLoaded = true;
         await persistReport(opts.stateDir, finished.report);
       }

@@ -13,26 +13,36 @@
  *    null when the app never wired a journal.
  */
 import type { TxnState } from "../txn/state.ts";
-import type { ConvergenceReport, PredicateResult } from "../converge/predicates.ts";
+import type { PredicateResult } from "../converge/predicates.ts";
 import type { ProvenanceRead } from "../provenance/journal.ts";
+import type { ReportRead } from "./reportStore.ts";
+
+/**
+ * The predicates' state — three shapes, mechanically distinct:
+ *  - genesis: no report was ever written. The machine NEVER OBSERVED a
+ *    promote — NOT_OBSERVED, never a fabricated pass.
+ *  - unreadable: a report exists but cannot be read (EACCES/corrupt). The
+ *    machine DID observe; its record is hidden, not absent. "I cannot see
+ *    the data" is not "there is no data".
+ *  - observed: the last real report, verbatim — `version` is the JOIN KEY
+ *    (consumers join on it, never on the current stable/experiment: a real
+ *    conclusion about 2.0.0 read as 3.0.0's is worse than a fake).
+ */
+export type StatusPredicates =
+  | { kind: "genesis" }
+  | { kind: "unreadable"; reason: string }
+  | {
+      kind: "observed";
+      version: string;
+      binaryAtTarget: PredicateResult;
+      hostLifecycleConverged: PredicateResult | null;
+    };
 
 export interface StatusReport {
   phase: TxnState["phase"];
   stable: string;
   experiment: string | null;
-  predicates: {
-    /**
-     * The version the last report evaluated — the JOIN KEY. Consumers must
-     * join predicates on this, never on the current stable/experiment: a
-     * real conclusion about 2.0.0 read as 3.0.0's is worse than a fake.
-     * null = never observed.
-     */
-    version: string | null;
-    /** The last REAL binaryAtTarget evaluation; null = never observed. */
-    binaryAtTarget: PredicateResult | null;
-    /** The last REAL host_lifecycle_converged evaluation; null = never observed. */
-    hostLifecycleConverged: PredicateResult | null;
-  };
+  predicates: StatusPredicates;
   policy: "auto" | "confirm" | "notify-only";
   /** The provenance journal read; null = the app never wired a journal. */
   provenance: ProvenanceRead | null;
@@ -40,7 +50,7 @@ export interface StatusReport {
 
 export function buildStatusReport(input: {
   state: TxnState;
-  lastReport: ConvergenceReport | null;
+  lastReport: ReportRead;
   policy: "auto" | "confirm" | "notify-only";
   provenance: ProvenanceRead | null;
 }): StatusReport {
@@ -48,15 +58,19 @@ export function buildStatusReport(input: {
     phase: input.state.phase,
     stable: input.state.stableVersion,
     experiment: input.state.experimentVersion,
-    predicates: {
-      // A report that never happened is NOT_OBSERVED — never a fabricated
-      // pass and never a fabricated failure: both would spend silence as
-      // evidence.
-      version: input.lastReport?.version ?? null,
-      binaryAtTarget: input.lastReport?.binaryAtTarget ?? null,
-      hostLifecycleConverged: input.lastReport?.hostLifecycleConverged ?? null,
-    },
+    predicates: reportPredicates(input.lastReport),
     policy: input.policy,
     provenance: input.provenance,
+  };
+}
+
+function reportPredicates(read: ReportRead): StatusPredicates {
+  if (read.kind === "genesis") return { kind: "genesis" };
+  if (read.kind === "unreadable") return { kind: "unreadable", reason: read.reason };
+  return {
+    kind: "observed",
+    version: read.report.version,
+    binaryAtTarget: read.report.binaryAtTarget,
+    hostLifecycleConverged: read.report.hostLifecycleConverged,
   };
 }

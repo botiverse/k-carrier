@@ -1,8 +1,7 @@
 // @invariant — report store unit invariants: the last convergence report
-// survives restarts (persist + load round-trip), a missing report reads
-// null (never a fabricated pass), and a corrupt report reads null
-// (fail-safe — the provenance journal is the durable record of whether
-// reconciliation happened at all).
+// survives restarts (persist + load round-trip); the read is THREE-state —
+// genesis (never promoted) / observed / unreadable (EACCES or corrupt) —
+// because "I cannot read it" is not "it never happened".
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { promises as fs } from "node:fs";
@@ -31,41 +30,57 @@ test("persist + load round-trips the report (a restart must not erase it)", asyn
   await withDir(async (dir) => {
     await persistReport(dir, report);
     const loaded = await loadLastReport(dir);
-    assert.deepEqual(loaded, report);
+    assert.equal(loaded.kind, "observed");
+    if (loaded.kind === "observed") assert.deepEqual(loaded.report, report);
   });
 });
 
-test("a machine that never promoted reads null — never a fabricated pass", async () => {
+test("a machine that never promoted reads genesis — NOT_OBSERVED, never a fabricated pass", async () => {
   await withDir(async (dir) => {
-    assert.equal(await loadLastReport(dir), null);
+    const loaded = await loadLastReport(dir);
+    assert.equal(loaded.kind, "genesis");
   });
 });
 
-test("a corrupt report reads null (fail-safe; the journal is the truth)", async () => {
+test("a corrupt report reads unreadable — never genesis (the record exists but cannot be read)", async () => {
   await withDir(async (dir) => {
     await persistReport(dir, report);
     await fs.writeFile(path.join(dir, "report.json"), '{"version": "2.0.0", "binaryAtTarget": BROKEN', "utf8");
-    assert.equal(await loadLastReport(dir), null);
+    const loaded = await loadLastReport(dir);
+    assert.equal(loaded.kind, "unreadable");
+    if (loaded.kind === "unreadable") assert.ok(loaded.reason.length > 0);
   });
 });
 
-test("a report missing its version stamp reads null (consumers cannot join)", async () => {
+test("an unreadable file (EISDIR) reads unreadable — never genesis", async () => {
+  await withDir(async (dir) => {
+    await persistReport(dir, report);
+    await fs.rm(path.join(dir, "report.json"), { force: true });
+    await fs.mkdir(path.join(dir, "report.json"));
+    const loaded = await loadLastReport(dir);
+    assert.equal(loaded.kind, "unreadable");
+  });
+});
+
+test("a report missing its version stamp reads unreadable (consumers cannot join)", async () => {
   await withDir(async (dir) => {
     await fs.writeFile(
       path.join(dir, "report.json"),
       JSON.stringify({ binaryAtTarget: report.binaryAtTarget, hostLifecycleConverged: null }),
       "utf8",
     );
-    assert.equal(await loadLastReport(dir), null);
+    const loaded = await loadLastReport(dir);
+    assert.equal(loaded.kind, "unreadable");
   });
 });
 
-test("persist is atomic (tmp + rename): a crash mid-write leaves the old report", async () => {
+test("persist is atomic AND durable (tmp + fsync + rename): a torn tmp leaves the old report", async () => {
   await withDir(async (dir) => {
     await persistReport(dir, report);
     // simulate a torn tmp from a crashed persist: the target must be intact
     await fs.writeFile(path.join(dir, "report.json.tmp"), '{"version":', "utf8");
     const loaded = await loadLastReport(dir);
-    assert.deepEqual(loaded, report, "the committed report survives a torn tmp");
+    assert.equal(loaded.kind, "observed");
+    if (loaded.kind === "observed") assert.deepEqual(loaded.report, report);
   });
 });
