@@ -25,6 +25,13 @@ export interface PredicateResult {
 }
 
 export interface ConvergenceReport {
+  /**
+   * The version this report evaluated (binary_at_target's TARGET — the
+   * experiment). Consumers MUST join on this, never on the status's
+   * current experiment/stable: a real conclusion pasted onto the wrong
+   * version reads like a lie and is harder to spot than a fake.
+   */
+  version: string;
   binaryAtTarget: PredicateResult;
   /**
    * null = the app declared no OS-lifecycle read-back surface, so this was

@@ -35,7 +35,7 @@ import {
   promoteOnlyJournal,
 } from "./m6Mutations.ts";
 
-function stateDir(ctx: ToothContext): string {
+export function stateDir(ctx: ToothContext): string {
   return path.join(ctx.sandboxDir, "state");
 }
 
@@ -44,7 +44,7 @@ function provenanceFile(ctx: ToothContext): string {
 }
 
 /** A host whose probe reports the experiment's (configured) version. */
-function hostReporting(experimentVersion: string): HostAdapter {
+export function hostReporting(experimentVersion: string): HostAdapter {
   let version = "1.0.0";
   let startId = "init";
   return {
@@ -61,7 +61,7 @@ function hostReporting(experimentVersion: string): HostAdapter {
   };
 }
 
-async function makeUpgrader(
+export async function makeUpgrader(
   ctx: ToothContext,
   server: FakeServer,
   journal: ProvenanceJournal | null,

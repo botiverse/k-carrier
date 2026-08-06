@@ -11,6 +11,10 @@ import {
   checkM6ProvenanceGenesisNotObserved,
   checkM6ProvenanceRecordsEachReconcile,
 } from "../artifact/m6.ts";
+import {
+  checkM6StatusReportMatchesLocal,
+  checkM6StatusReportSilenceNotEvidence,
+} from "../artifact/m6Status.ts";
 
 registerTooth({
   id: "m6.provenance-forward-only",
@@ -67,6 +71,64 @@ registerTooth({
     },
   ],
   run: checkM6ProvenanceGenesisNotObserved,
+});
+
+registerTooth({
+  id: "m6.status-report-matches-local",
+  profiles: ["service"],
+  layers: ["L5"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "the report invents/fabricates a field (stable says X while the machine is on Y)",
+      caughtOnlyBy: "this", // only this tooth pins the read-back equality
+    },
+    {
+      mutate: "the report's predicates are not the last real evaluation's (a report from a different machine/moment)",
+      caughtOnlyBy: "this",
+    },
+    {
+      mutate:
+        "a real conclusion is attached to the wrong version (no stamp / wrong stamp — consumers cannot join correctly)",
+      caughtOnlyBy: "this", // a true fact pasted on the wrong version reads like a lie
+    },
+  ],
+  run: checkM6StatusReportMatchesLocal,
+});
+
+registerTooth({
+  id: "m6.status-report-silence-not-evidence",
+  profiles: ["service"],
+  layers: ["L5"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate:
+        "a machine that never observed a promote reports binaryAtTarget: passed:true",
+      caughtOnlyBy: "this", // silence cannot be spent as evidence (M5 rule, fleet surface)
+    },
+    {
+      mutate:
+        "a machine that never observed a promote reports hostLifecycleConverged: passed:true",
+      caughtOnlyBy: "this",
+    },
+    {
+      mutate:
+        "a rolled-back reconcile is reported as an observed pass (failure converted into evidence)",
+      caughtOnlyBy: "this",
+    },
+    {
+      mutate:
+        "a machine that DID converge reports NOT_OBSERVED after a restart (the report is not persisted)",
+      caughtOnlyBy: "this", // "observed, I restarted" is not "never observed"
+    },
+    {
+      mutate:
+        "an unreadable report is read as genesis (\"I cannot see the data\" becomes \"there is no data\" — the report store collapses to two states)",
+      caughtOnlyBy: "this", // same family as the provenance third state, one package
+    },
+  ],
+  run: checkM6StatusReportSilenceNotEvidence,
 });
 
 registerTooth({

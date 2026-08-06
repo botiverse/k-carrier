@@ -12,11 +12,17 @@ import {
   checkM6ProvenanceGenesisNotObserved,
   checkM6ProvenanceRecordsEachReconcile,
 } from "../artifact/m6.ts";
+import {
+  checkM6StatusReportMatchesLocal,
+  checkM6StatusReportSilenceNotEvidence,
+} from "../artifact/m6Status.ts";
 
 const TOOTH_IDS = new Set([
   "m6.provenance-forward-only",
   "m6.provenance-genesis-not-observed",
   "m6.provenance-records-each-reconcile",
+  "m6.status-report-matches-local",
+  "m6.status-report-silence-not-evidence",
 ]);
 
 const ctxFor = async (prefix: string): Promise<{ ctx: ToothContext; teardown: () => Promise<void> }> => {
@@ -26,7 +32,7 @@ const ctxFor = async (prefix: string): Promise<{ ctx: ToothContext; teardown: ()
 
 test("known-green: every M6 tooth passes on a clean sandbox", async () => {
   const teeth = allTeeth().filter((t) => TOOTH_IDS.has(t.id));
-  assert.equal(teeth.length, 3, "all three M6 teeth must be registered");
+  assert.equal(teeth.length, 5, "all five M6 teeth must be registered");
   for (const tooth of teeth) {
     const { ctx, teardown } = await ctxFor(tooth.id.replaceAll(".", "-"));
     try {
@@ -147,6 +153,90 @@ test("known-red: records-each-reconcile catches journaling after the outcome", a
   }
 });
 
+test("known-red: status-report-matches-local catches a wrong version stamp", async () => {
+  const { ctx, teardown } = await ctxFor("red-m6-stamp");
+  try {
+    await assert.rejects(
+      checkM6StatusReportMatchesLocal(ctx, { wrongVersionStamp: true }),
+      /never be joined to the wrong version/,
+    );
+  } finally {
+    await teardown();
+  }
+});
+
+test("known-red: silence-not-evidence catches an unreadable report read as genesis", async () => {
+  const { ctx, teardown } = await ctxFor("red-m6-unreadable-report");
+  try {
+    await assert.rejects(
+      checkM6StatusReportSilenceNotEvidence(ctx, { unreadableIsGenesis: true }),
+      /never genesis/,
+    );
+  } finally {
+    await teardown();
+  }
+});
+
+test("known-red: silence-not-evidence catches a restart erasing a real observation", async () => {
+  const { ctx, teardown } = await ctxFor("red-m6-nopersist");
+  try {
+    await assert.rejects(
+      checkM6StatusReportSilenceNotEvidence(ctx, { noPersistence: true }),
+      /survives a restart/,
+    );
+  } finally {
+    await teardown();
+  }
+});
+
+test("known-red: status-report-matches-local catches an invented stable", async () => {
+  const { ctx, teardown } = await ctxFor("red-m6-status-invent");
+  try {
+    await assert.rejects(
+      checkM6StatusReportMatchesLocal(ctx, { inventStable: true }),
+      /never an invention/,
+    );
+  } finally {
+    await teardown();
+  }
+});
+
+test("known-red: silence-not-evidence catches a fabricated binary pass", async () => {
+  const { ctx, teardown } = await ctxFor("red-m6-silence-binary");
+  try {
+    await assert.rejects(
+      checkM6StatusReportSilenceNotEvidence(ctx, { fabricateBinaryPassed: true }),
+      /never a fabricated pass/,
+    );
+  } finally {
+    await teardown();
+  }
+});
+
+test("known-red: silence-not-evidence catches a fabricated convergence pass", async () => {
+  const { ctx, teardown } = await ctxFor("red-m6-silence-lifecycle");
+  try {
+    await assert.rejects(
+      checkM6StatusReportSilenceNotEvidence(ctx, { fabricateConvergedPassed: true }),
+      /never a fabricated pass/,
+    );
+  } finally {
+    await teardown();
+  }
+});
+
+test("known-red: silence-not-evidence catches a rollback reported as a pass", async () => {
+  const { ctx, teardown } = await ctxFor("red-m6-silence-rollback");
+  try {
+    await assert.rejects(
+      checkM6StatusReportSilenceNotEvidence(ctx, { fabricateAfterRollback: true }),
+      /never a pass/,
+    );
+  } finally {
+    await teardown();
+  }
+});
+
 test("known-red: records-each-reconcile catches a reconcile with no journaling", async () => {
   const { ctx, teardown } = await ctxFor("red-m6-nojournal");
   try {
@@ -181,4 +271,6 @@ test("tooth run functions are the exported checks (single source of truth)", () 
   assert.equal(byId.get("m6.provenance-forward-only")!.run, checkM6ProvenanceForwardOnly);
   assert.equal(byId.get("m6.provenance-genesis-not-observed")!.run, checkM6ProvenanceGenesisNotObserved);
   assert.equal(byId.get("m6.provenance-records-each-reconcile")!.run, checkM6ProvenanceRecordsEachReconcile);
+  assert.equal(byId.get("m6.status-report-matches-local")!.run, checkM6StatusReportMatchesLocal);
+  assert.equal(byId.get("m6.status-report-silence-not-evidence")!.run, checkM6StatusReportSilenceNotEvidence);
 });

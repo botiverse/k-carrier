@@ -1,6 +1,7 @@
 import type { HostAdapter } from "./lifecycle/hostAdapter.js";
 import type { TxnState } from "./txn/state.js";
 import type { ConvergenceReport } from "./converge/predicates.js";
+import type { StatusReport } from "./status/report.js";
 import type { ReleaseSource } from "./artifact/source.js";
 
 /**
@@ -66,6 +67,14 @@ export interface Upgrader {
 
   /** Current transaction + slot state, readable at any time. */
   state(): Promise<TxnState>;
+
+  /**
+   * M6 fleet read-back (L5): what this machine reports about itself —
+   * {phase, stable, experiment, predicates, policy, provenance}, read from
+   * the LIVE sources at this moment. Predicates a machine never observed
+   * are null (NOT_OBSERVED), never a fabricated pass.
+   */
+  status(): Promise<StatusReport>;
 }
 
 export type UpgradeOutcome =
