@@ -2,6 +2,7 @@
  * POSIX implementation of the platform seam (linux, darwin).
  * The only place in core allowed to name rename/signals.
  */
+import { execFileSync } from "node:child_process";
 import { promises as fs } from "node:fs";
 import type { PlatformOps } from "./ops.ts";
 
@@ -33,6 +34,46 @@ async function atomicReplace(filePath: string, data: Uint8Array): Promise<void> 
   }
 }
 
+/**
+ * Does this Mac have arm64 hardware, whatever this process is running as?
+ *
+ * Untestable on a non-Mac, so it is one line delegating to the OS while the
+ * DECISION it feeds lives in `platformKeyFor`, which is pure and pinned.
+ */
+function hardwareSupportsDarwinArm64(): boolean {
+  try {
+    return (
+      execFileSync("/usr/sbin/sysctl", ["-in", "hw.optional.arm64"], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim() === "1"
+    );
+  } catch {
+    return false; // not a Mac, sysctl missing, or no such key
+  }
+}
+
+/**
+ * Which manifest target this machine should be served.
+ *
+ * The one non-obvious case is Rosetta: an x64 Node on Apple Silicon reports
+ * `process.arch === "x64"`, so the naive `platform-arch` picks the x64 target
+ * FOREVER. The machine never moves to the native build, and an adopter who
+ * publishes arm64 sees it silently ignored on exactly the hardware it is for.
+ * Nothing errors -- the wrong artifact is a perfectly valid artifact.
+ *
+ * So on darwin+x64 we ask the HARDWARE, not the process.
+ */
+export function platformKeyFor(
+  platform: string,
+  processArch: string,
+  supportsDarwinArm64: () => boolean,
+): string {
+  const arch =
+    platform === "darwin" && processArch === "x64" && supportsDarwinArm64() ? "arm64" : processArch;
+  return `${platform}-${arch}`;
+}
+
 export const posixOps: PlatformOps = {
   swapExecutable: atomicReplace,
   isProcessAlive(pid) {
@@ -53,6 +94,6 @@ export const posixOps: PlatformOps = {
     await fs.chmod(filePath, 0o755);
   },
   platformKey() {
-    return `${process.platform}-${process.arch}`;
+    return platformKeyFor(process.platform, process.arch, hardwareSupportsDarwinArm64);
   },
 };
