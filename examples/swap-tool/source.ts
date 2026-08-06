@@ -36,8 +36,6 @@ const RELEASE_BASE = process.env.K_RELEASE_BASE;
 const STATE_DIR = process.env.K_STATE_DIR ?? path.join(path.dirname(process.argv[1]), "state");
 const CORE_UPGRADER = process.env.K_CORE_UPGRADER;
 // Trust anchor: the app compiles root public keys in; the demo (not
-// packaged) gets them via K_ROOT_KEYS (JSON array of PEMs).
-const ROOT_KEYS = process.env.K_ROOT_KEYS ? JSON.parse(process.env.K_ROOT_KEYS) : [];
 const args = process.argv.slice(2);
 const startId = process.pid + "-" + process.hrtime.bigint().toString(36);
 // Synchronous writes: process.exit() can truncate buffered pipe writes,
@@ -99,22 +97,12 @@ async function selfUpgrade() {
     async resume() {},
   };
 
-  // Accepting bytes nobody vouched for is a CLIENT decision, so it is made
-  // here in the adopter's code -- never by an option on the source and never
-  // by a field in the manifest (the manifest is served by the very party the
-  // signature chain exists to distrust; see core/src/artifact/sourceTrust.test.ts).
-  // Real products sign; this switch exists so the harness can exercise the
-  // "no signing story yet" posture deliberately.
-  const published = staticManifestSource({ baseUrl: RELEASE_BASE });
-  const source = process.env.K_ACCEPT_UNSIGNED === "1"
-    ? {
-        checkForUpdate: async (ctx) => {
-          const r = await published.checkForUpdate(ctx);
-          return r === null ? null : { ...r, unsigned: true };
-        },
-        fetchRelease: async (v, ctx) => ({ ...(await published.fetchRelease(v, ctx)), unsigned: true }),
-      }
-    : published;
+  // K verifies integrity (sha256) but not authenticity: it does not check who
+  // produced these bytes (design-v1 §L0.5). For a real product that decision
+  // belongs to the adopter, in code like this one -- never to an option on the
+  // source and never to a field in the manifest, which is served by the very
+  // party such a check would exist to distrust.
+  const source = staticManifestSource({ baseUrl: RELEASE_BASE });
 
   const upgrader = createUpgrader({
     host,

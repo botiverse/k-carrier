@@ -112,7 +112,6 @@ export async function checkCliToolBlackbox(
       env: {
         [RELEASE_BASE_ENV]: server.url,
         K_CORE_UPGRADER: coreUpgraderUrl(),
-        K_ROOT_KEYS: JSON.stringify([server.rootKeyPem]),
       },
     });
     assert.equal(up.code, 0, `self upgrade must exit 0 (${up.stderr.trim()})`);
@@ -237,7 +236,6 @@ export async function checkPlainDaemonContract(
       env: {
         [RELEASE_BASE_ENV]: server.url,
         K_CORE_UPGRADER: coreUpgraderUrl(),
-        K_ROOT_KEYS: JSON.stringify([server.rootKeyPem]),
         K_STATE_DIR: stateDir,
         K_HOST_SHAPE: "spawn",
       },

@@ -15,16 +15,15 @@ import { type ToothContext } from "../teeth/registry.ts";
 import { ArtifactFactory, type Behavior } from "./factory.ts";
 import { runArtifact } from "./run.ts";
 import { ReleaseStore } from "../fake-server/store.ts";
-import { createKeychain } from "../fake-server/keychain.ts";
-import { MANIFEST_FILE, sigFileFor } from "../fake-server/manifest.ts";
+import { MANIFEST_FILE } from "../fake-server/manifest.ts";
 
-function storeFor(dir: string, name: string, keychain?: ReturnType<typeof createKeychain>): ReleaseStore {
-  return new ReleaseStore(path.join(dir, name), keychain ?? createKeychain());
+function storeFor(dir: string, name: string): ReleaseStore {
+  return new ReleaseStore(path.join(dir, name));
 }
 
 /**
  * Two independent factories (fresh caches) with the same input must produce
- * byte-identical artifacts, signatures and manifests. `secondFactory`
+ * byte-identical artifacts and manifests. `secondFactory`
  * overrides factory B for known-red driving.
  */
 export async function checkDeterministicBuild(
@@ -33,9 +32,8 @@ export async function checkDeterministicBuild(
 ): Promise<void> {
   const factoryA = new ArtifactFactory({ cacheDir: path.join(ctx.sandboxDir, "cache-a") });
   const factoryB = secondFactory ?? new ArtifactFactory({ cacheDir: path.join(ctx.sandboxDir, "cache-b") });
-  const keychain = createKeychain();
-  const storeA = storeFor(ctx.sandboxDir, "store-a", keychain);
-  const storeB = storeFor(ctx.sandboxDir, "store-b", keychain);
+  const storeA = storeFor(ctx.sandboxDir, "store-a");
+  const storeB = storeFor(ctx.sandboxDir, "store-b");
   const a = await factoryA.makeRelease({ version: "2.0.0", behavior: "ok", store: storeA });
   const b = await factoryB.makeRelease({ version: "2.0.0", behavior: "ok", store: storeB });
   assert.deepEqual(
@@ -43,9 +41,6 @@ export async function checkDeterministicBuild(
     a.artifactBytes,
     "same version+behavior must stamp byte-identical artifacts",
   );
-  const sigA = await storeA.readFile(sigFileFor(a.artifactFile));
-  const sigB = await storeB.readFile(sigFileFor(b.artifactFile));
-  assert.deepEqual(sigB, sigA, "signatures must be deterministic (Ed25519)");
   const manifestA = await storeA.readFile(MANIFEST_FILE);
   const manifestB = await storeB.readFile(MANIFEST_FILE);
   assert.deepEqual(manifestB, manifestA, "manifests must be byte-identical");

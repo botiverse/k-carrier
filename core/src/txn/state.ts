@@ -14,7 +14,7 @@
  */
 export type TxnPhase =
   | "idle" // stable running; no experiment staged
-  | "staged" // experiment slot populated + signature-verified; stable still running
+  | "staged" // experiment slot populated + sha256-verified; stable still running
   | "handing-over" // stable quiesced/stopped; experiment starting
   | "running-experiment" // experiment process up; predicates not yet evaluated
   | "readback" // predicates evaluating (same-source, live-process evidence)

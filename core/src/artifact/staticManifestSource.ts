@@ -39,18 +39,18 @@ export interface Manifest {
 }
 
 /**
- * NOTE: there is deliberately no `unsigned` field here.
+ * NOTE: no field here may weaken a check K performs.
  *
- * The manifest is served BY the release source, which is exactly the party the
- * signature chain exists to distrust. A manifest-declared `unsigned: true`
- * would let anyone who controls (or compromises) the source turn off signature
- * verification for every client, by serving one extra JSON field -- the whole
- * two-tier chain bypassed without breaking any crypto.
+ * K does not verify authenticity today (see design-v1 §L0.5), but the rule
+ * outlives that decision: the manifest is served BY the release source, i.e.
+ * exactly the party a signature chain would exist to distrust. An earlier
+ * version honoured a manifest-declared `unsigned: true`, which let anyone who
+ * controlled the source turn verification off for every client with one extra
+ * JSON field -- no crypto broken.
  *
- * "We accept bytes nobody vouched for" is a decision only the CLIENT can make,
- * so it lives in the adopter's own code, next to their compiled-in root keys
- * (see examples/swap-tool). A source can offer bytes; it cannot grant itself
- * trust.
+ * "We accept bytes nobody vouched for" is a decision only the CLIENT can make.
+ * If signing ever lands, the opt-out belongs in the adopter's own code, never
+ * in the payload. A source can offer bytes; it cannot grant itself trust.
  */
 
 const SHA256_RE = /^[0-9a-f]{64}$/;

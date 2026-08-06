@@ -7,9 +7,9 @@ import "./m0.ts"; // registers the teeth
 import { allTeeth, exportForMutationRunner, type ToothContext } from "./registry.ts";
 import { createSandbox } from "../scenario/sandbox.ts";
 import {
-  checkServesVerifiableRelease,
+  checkServesConsistentRelease,
   checkCorruptByteRejects,
-  checkSwapSigRejects,
+  checkSwapArtifactsRejects,
   checkServeOlderVersion,
   checkDropFileRemoves,
   checkSandboxIsolation,
@@ -18,12 +18,11 @@ import {
   assertDirGone,
   M0_ARTIFACT,
 } from "./checks.ts";
-import { sigFileFor } from "../fake-server/manifest.ts";
 
 const M0_TOOTH_IDS = new Set([
-  "fake-server.serves-verifiable-release",
+  "fake-server.serves-consistent-release",
   "fake-server.tamper-corrupt-byte",
-  "fake-server.tamper-swap-sig",
+  "fake-server.tamper-swap-artifacts",
   "fake-server.tamper-serve-older-version",
   "fake-server.tamper-drop-file",
   "scenario.sandbox-isolation",
@@ -58,15 +57,15 @@ test("known-green: every M0 tooth passes on a clean sandbox", async () => {
 // known-red: each tooth must go red under its declared must-red mutation
 // ---------------------------------------------------------------------------
 
-test("known-red: serves-verifiable-release catches a release missing artifact signatures", async () => {
-  const { ctx, teardown } = await ctxFor("red-unsigned");
+test("known-red: serves-consistent-release catches a manifest that lies about the bytes", async () => {
+  const { ctx, teardown } = await ctxFor("red-inconsistent");
   try {
-    // mutation: publish a release and drop its artifact .sig before serving
+    // mutation: the served artifact no longer hashes to the manifest digest
     await assert.rejects(
-      checkServesVerifiableRelease(ctx, async (s) => {
-        await s.dropFile(sigFileFor(M0_ARTIFACT));
+      checkServesConsistentRelease(ctx, async (s) => {
+        await s.corruptByte(M0_ARTIFACT, 0);
       }),
-      /must be served|must verify/,
+      /served bytes must match manifest sha256|must be served/,
     );
   } finally {
     await teardown();
@@ -78,19 +77,19 @@ test("known-red: tamper-corruptByte catches a no-op corruptByte", async () => {
   try {
     await assert.rejects(
       checkCorruptByteRejects(ctx, async () => {}), // mutation: corruptByte does nothing
-      /FAIL signature verification/,
+      /must no longer hash to the published digest/,
     );
   } finally {
     await teardown();
   }
 });
 
-test("known-red: tamper-swapSig catches a no-op swapSig", async () => {
+test("known-red: tamper-swap-artifacts catches a no-op swap", async () => {
   const { ctx, teardown } = await ctxFor("red-swap");
   try {
     await assert.rejects(
-      checkSwapSigRejects(ctx, async () => {}), // mutation: swapSig does nothing
-      /FAIL verification/,
+      checkSwapArtifactsRejects(ctx, async () => {}), // mutation: swapFiles does nothing
+      /must no longer hash to its published digest/,
     );
   } finally {
     await teardown();
@@ -173,9 +172,9 @@ test("M0 teeth are registered with full discipline (profiles/layers/kind/mustRed
 
 test("tooth run functions are the exported checks (single source of truth)", () => {
   const byId = new Map(allTeeth().map((t) => [t.id, t] as const));
-  assert.equal(byId.get("fake-server.serves-verifiable-release")!.run, checkServesVerifiableRelease);
+  assert.equal(byId.get("fake-server.serves-consistent-release")!.run, checkServesConsistentRelease);
   assert.equal(byId.get("fake-server.tamper-corrupt-byte")!.run, checkCorruptByteRejects);
-  assert.equal(byId.get("fake-server.tamper-swap-sig")!.run, checkSwapSigRejects);
+  assert.equal(byId.get("fake-server.tamper-swap-artifacts")!.run, checkSwapArtifactsRejects);
   assert.equal(byId.get("fake-server.tamper-serve-older-version")!.run, checkServeOlderVersion);
   assert.equal(byId.get("fake-server.tamper-drop-file")!.run, checkDropFileRemoves);
   assert.equal(byId.get("scenario.sandbox-isolation")!.run, checkSandboxIsolation);

@@ -6,10 +6,6 @@ import {
   buildManifest,
   compareVersions,
   sha256Hex,
-  sigFileFor,
-  MANIFEST_FILE,
-  SIGNING_PUB_FILE,
-  SIGNING_PUB_SIG_FILE,
 } from "./manifest.ts";
 
 test("buildManifest carries version and per-platform targets", () => {
@@ -20,13 +16,6 @@ test("buildManifest carries version and per-platform targets", () => {
   const target = m.targets["darwin-arm64"];
   assert.ok(target);
   assert.equal(target.file, "app-1.2.3.bin");
-});
-
-test("signature file naming follows the .sig convention", () => {
-  assert.equal(sigFileFor("app.bin"), "app.bin.sig");
-  assert.equal(sigFileFor(MANIFEST_FILE), "manifest.json.sig");
-  assert.equal(SIGNING_PUB_FILE, "signing.pub");
-  assert.equal(SIGNING_PUB_SIG_FILE, "signing.pub.sig");
 });
 
 test("sha256Hex matches the well-known empty-string digest", () => {

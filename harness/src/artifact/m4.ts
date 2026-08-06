@@ -26,7 +26,6 @@ function swapEnv(ctx: ToothContext, baseUrl: string, servers: FakeServer[], extr
     K_RELEASE_BASE: baseUrl,
     K_STATE_DIR: path.join(ctx.sandboxDir, "state"),
     K_CORE_UPGRADER: coreUpgraderUrl(),
-    K_ROOT_KEYS: JSON.stringify(servers.map((s) => s.rootKeyPem)),
     ...extra,
   };
 }

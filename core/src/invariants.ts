@@ -70,8 +70,6 @@ export interface WorldSnapshot {
    * happened rather than trusting a version string (Raft #5245 family).
    */
   priorIncarnationStartId?: string;
-  /** Did the artifact currently in the experiment slot pass the signature chain? */
-  experimentSignatureVerified?: boolean;
   /** Who owns this install: ourselves, or an external manager (PM/injector)? */
   installOwnership?: "self" | "managed-elsewhere";
 }
@@ -182,14 +180,6 @@ export const terminalLeavesNoExperiment: Invariant = {
       ? `phase ${s.phase} but experiment slot still holds ${s.slots.experiment}`
       : null,
 };
-
-/**
- * Nothing occupies the experiment slot without a verified signature chain.
- * Fires only when verification is explicitly reported false — a host that
- * does not report verification at all is NOT silently treated as verified;
- * it is simply outside this invariant's knowledge (see undeclared handling).
- */
-
 
 /** A copy owned by another manager never upgrades itself. */
 export const managedCopyNeverSelfUpgrades: Invariant = {

@@ -31,7 +31,7 @@ function stateDir(ctx: ToothContext): string {
   return path.join(ctx.sandboxDir, "state");
 }
 
-function makeUpgrader(ctx: ToothContext, adapter: HostAdapter, baseUrl: string, rootKeyPem: string, surfaces?: ReadbackSurface[]) {
+function makeUpgrader(ctx: ToothContext, adapter: HostAdapter, baseUrl: string, surfaces?: ReadbackSurface[]) {
   const opts: import("../../../core/src/createUpgrader.ts").CreateUpgraderOptions = {
     host: adapter,
     source: staticManifestSource({ baseUrl }),
@@ -72,7 +72,7 @@ export async function checkAdapterServiceUpgrade(
   });
   try {
     // seed: a real upgrade with the adapter host lands stable 1.0.0
-    const seedUp = makeUpgrader(ctx, adapter, seed.url, seed.rootKeyPem);
+    const seedUp = makeUpgrader(ctx, adapter, seed.url);
     const seeded = await seedUp.upgrade();
     assert.equal(seeded.result, "promoted", `seed upgrade must promote (${seeded.result})`);
 
@@ -80,7 +80,7 @@ export async function checkAdapterServiceUpgrade(
     assert.ok(processAlive(old.pid), "the seeded successor must be alive");
 
     // the real upgrade: same adapter, new release
-    const up = makeUpgrader(ctx, adapter, target.url, target.rootKeyPem);
+    const up = makeUpgrader(ctx, adapter, target.url);
     const outcome = await up.upgrade();
     if (opts.serveBadVersion) {
       // mutation: a bad version — the adapter's probe fails, auto-rollback,
@@ -133,12 +133,12 @@ export async function checkAdapterServiceRollback(
     source: PLAIN_DAEMON_SOURCE,
   });
   try {
-    const seedUp = makeUpgrader(ctx, adapter, seed.url, seed.rootKeyPem);
+    const seedUp = makeUpgrader(ctx, adapter, seed.url);
     const seeded = await seedUp.upgrade();
     assert.equal(seeded.result, "promoted", `seed upgrade must promote (${seeded.result})`);
     const old = await successorEvidence(adapter);
 
-    const up = makeUpgrader(ctx, adapter, target.url, target.rootKeyPem);
+    const up = makeUpgrader(ctx, adapter, target.url);
     await up.upgrade();
     const st = await up.state();
     if (opts.serveGoodVersion) {
@@ -199,11 +199,11 @@ export async function checkAdapterLifecycleConverged(
     source: PLAIN_DAEMON_SOURCE,
   });
   try {
-    const seedUp = makeUpgrader(ctx, adapter, seed.url, seed.rootKeyPem, surfacesToUse);
+    const seedUp = makeUpgrader(ctx, adapter, seed.url, surfacesToUse);
     const seeded = await seedUp.upgrade();
     assert.equal(seeded.result, "promoted", `seed upgrade must promote (${seeded.result})`);
 
-    const up = makeUpgrader(ctx, adapter, target.url, target.rootKeyPem, surfacesToUse);
+    const up = makeUpgrader(ctx, adapter, target.url, surfacesToUse);
     const outcome = await up.upgrade();
     if (opts.staleSurface) {
       // mutation: the surface reads back the OLD path — convergence fails,

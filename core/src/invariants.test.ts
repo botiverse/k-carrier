@@ -76,7 +76,7 @@ test("terminal-leaves-no-experiment catches a leftover experiment slot", () => {
 
 test("managed-copy-never-self-upgrades fires when a managed install transacts", () => {
   const v = checkInvariants(
-    healthy({ phase: "staged", journalIntents: ["staged"], slots: { stable: "1.0.0", experiment: "2.0.0" }, experimentSignatureVerified: true, installOwnership: "managed-elsewhere" }),
+    healthy({ phase: "staged", journalIntents: ["staged"], slots: { stable: "1.0.0", experiment: "2.0.0" }, installOwnership: "managed-elsewhere" }),
   );
   assert.deepEqual(v.map((x) => x.invariantId), ["k.managed-copy-never-self-upgrades"]);
 });

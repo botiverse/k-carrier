@@ -11,9 +11,9 @@
  */
 import { registerTooth } from "./registry.ts";
 import {
-  checkServesVerifiableRelease,
+  checkServesConsistentRelease,
   checkCorruptByteRejects,
-  checkSwapSigRejects,
+  checkSwapArtifactsRejects,
   checkServeOlderVersion,
   checkDropFileRemoves,
   checkSandboxIsolation,
@@ -21,17 +21,17 @@ import {
 } from "./checks.ts";
 
 registerTooth({
-  id: "fake-server.serves-verifiable-release",
+  id: "fake-server.serves-consistent-release",
   profiles: ["swap", "service"],
-  layers: ["L0", "L0.5"],
+  layers: ["L0"],
   kind: { kind: "invariant" },
   mustRed: [
     {
-      mutate: "serve a release whose artifacts have no .sig files",
-      caughtOnlyBy: "this", // no other tooth checks publish-time chain completeness
+      mutate: "publish writes a manifest whose sha256 is not the artifact's",
+      caughtOnlyBy: "this", // no other tooth checks publish-time manifest/bytes agreement
     },
     {
-      mutate: "point the manifest target at a different artifact than the signed one",
+      mutate: "point the manifest target at a different artifact than the published one",
       caughtOnlyBy: {
         alsoCaughtBy: "core artifact L0 sha256 integrity check (when landed)",
         whyStillNeeded:
@@ -39,13 +39,13 @@ registerTooth({
       },
     },
   ],
-  run: checkServesVerifiableRelease,
+  run: checkServesConsistentRelease,
 });
 
 registerTooth({
   id: "fake-server.tamper-corrupt-byte",
   profiles: ["swap", "service"],
-  layers: ["L0", "L0.5"],
+  layers: ["L0"],
   kind: { kind: "invariant" },
   mustRed: [
     {
@@ -57,23 +57,23 @@ registerTooth({
 });
 
 registerTooth({
-  id: "fake-server.tamper-swap-sig",
+  id: "fake-server.tamper-swap-artifacts",
   profiles: ["swap", "service"],
-  layers: ["L0", "L0.5"],
+  layers: ["L0"],
   kind: { kind: "invariant" },
   mustRed: [
     {
-      mutate: "swapSig serves each artifact its own signature",
+      mutate: "swapFiles serves each artifact its own bytes back",
       caughtOnlyBy: "this", // only this tooth asserts the swap is a real cross-swap
     },
   ],
-  run: checkSwapSigRejects,
+  run: checkSwapArtifactsRejects,
 });
 
 registerTooth({
   id: "fake-server.tamper-serve-older-version",
   profiles: ["swap", "service"],
-  layers: ["L0", "L0.5"],
+  layers: ["L0"],
   kind: { kind: "invariant" },
   mustRed: [
     {
@@ -87,7 +87,7 @@ registerTooth({
 registerTooth({
   id: "fake-server.tamper-drop-file",
   profiles: ["swap", "service"],
-  layers: ["L0", "L0.5"],
+  layers: ["L0"],
   kind: { kind: "invariant" },
   mustRed: [
     {

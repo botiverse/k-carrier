@@ -40,8 +40,6 @@ export interface MakeReleaseOptions {
   /** Manifest platform tag. Default: "current". */
   platform?: string;
   /** Track the release is published under (latest | alpha). Optional. */
-  /** Explicit opt-out of the signature chain (never a silent default). */
-  unsigned?: boolean;
 }
 
 export interface FactoryRelease {
@@ -113,7 +111,6 @@ export class ArtifactFactory {
         executable: true,
       };
       if (opts.platform !== undefined) spec.platform = opts.platform;
-      if (opts.unsigned !== undefined) spec.unsigned = opts.unsigned;
       await opts.store.publish(spec);
     }
 

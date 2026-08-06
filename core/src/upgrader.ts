@@ -79,7 +79,7 @@ export interface UpgraderConfig {
   policy: "auto" | "confirm" | "notify-only";
   /** Where consent prompts / failure notifications are delivered. */
   notificationSink: (event: NotificationEvent) => Promise<void>;
-  /** Root public keys for signature verification (compiled into the app). */
+  /** Directory K owns for its journal, slots and staging area. */
   stateDir: string;
 }
 

@@ -51,7 +51,7 @@ async function runUpgradeShape(
     source: PLAIN_DAEMON_SOURCE,
   });
   const { seedChild, seedPid } = await seedService(shapeCtx, shape, binPath, seed);
-  const env = serviceEnv(shapeCtx, shape, target.url, [seed, target]);
+  const env = serviceEnv(shapeCtx, shape, target.url);
   let respawned: Awaited<ReturnType<typeof respawnUntilUp>> | null = null;
   try {
     const before = await readIncarnation(shapeCtx);
@@ -134,7 +134,7 @@ async function runRollbackShape(
     source: PLAIN_DAEMON_SOURCE,
   });
   const { seedChild, seedPid } = await seedService(shapeCtx, shape, binPath, seed);
-  const env = serviceEnv(shapeCtx, shape, target.url, [seed, target]);
+  const env = serviceEnv(shapeCtx, shape, target.url);
   let respawned: Awaited<ReturnType<typeof respawnUntilUp>> | null = null;
   try {
     const before = await readIncarnation(shapeCtx);
@@ -229,7 +229,7 @@ export async function checkM3StuckDriverEvidence(
     source: PLAIN_DAEMON_SOURCE,
   });
   const { seedChild, seedPid } = await seedService(shapeCtx, shape, binPath, seed);
-  const env = serviceEnv(shapeCtx, shape, target.url, [seed, target]);
+  const env = serviceEnv(shapeCtx, shape, target.url);
   let oldPid: number | null = null;
   try {
     const before = await readIncarnation(shapeCtx);

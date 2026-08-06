@@ -21,17 +21,11 @@ export function coreUpgraderUrl(): string {
   return pathToFileURL(path.join(import.meta.dirname, "../../../core/src/createUpgrader.ts")).href;
 }
 
-/** Root public keys the demo trusts (the serving servers' roots). */
-function rootKeysEnv(servers: FakeServer[]): Record<string, string> {
-  return { K_ROOT_KEYS: JSON.stringify(servers.map((s) => s.rootKeyPem)) };
-}
-
-export function swapToolEnv(ctx: ToothContext, baseUrl: string, servers: FakeServer[]): Record<string, string> {
+export function swapToolEnv(ctx: ToothContext, baseUrl: string): Record<string, string> {
   return {
     K_RELEASE_BASE: baseUrl,
     K_STATE_DIR: path.join(ctx.sandboxDir, "state"),
     K_CORE_UPGRADER: coreUpgraderUrl(),
-    ...rootKeysEnv(servers),
   };
 }
 
@@ -73,7 +67,7 @@ export async function readState(env: Record<string, string>): Promise<TxnState> 
     `const u = createUpgrader({`,
     `  host: { quiesce: async () => {}, stop: async () => {}, start: async () => {}, healthProbe: async () => ({ version: "x", pid: 0, startId: "x" }), resume: async () => {} },`,
     `  source: staticManifestSource({ baseUrl: ${JSON.stringify("http://127.0.0.1:1")} }),`,
-    `  policy: "auto", notificationSink: async () => {}, rootKeys: [],`,
+    `  policy: "auto", notificationSink: async () => {},`,
     `  stateDir: ${JSON.stringify(env.K_STATE_DIR)},`,
     `});`,
     `process.stdout.write(JSON.stringify(await u.state()));`,
@@ -90,7 +84,6 @@ export async function serveRelease(
     version: string;
     behavior: "ok" | "crash-on-start";
     name: string;
-    unsigned?: boolean;
     /** The demo source the release is stamped from. Default: swap-tool. */
     source?: string;
   },
@@ -106,7 +99,6 @@ export async function serveRelease(
     behavior: opts.behavior,
     store: server.store,
     platform: currentPlatformKey(),
-    ...(opts.unsigned === true ? { unsigned: true as const } : {}),
   };
   await factory.makeRelease(release);
   return server;
@@ -131,14 +123,14 @@ export async function checkSwapToolUpgradeLoop(
   });
   try {
     // seed: a real first upgrade lands stable 1.0.0
-    const seedEnv = swapToolEnv(ctx, seed.url, [seed, target]);
+    const seedEnv = swapToolEnv(ctx, seed.url);
     const seedRun = await runCommand(binPath, ["self", "upgrade"], { env: seedEnv, timeoutMs: 30000 });
     assert.equal(seedRun.code, 0, `seed upgrade must exit 0 (${seedRun.stderr.trim()})`);
     const seeded = await readState(seedEnv);
     assert.equal(seeded.stableVersion, "1.0.0", "seed upgrade must land stable 1.0.0");
 
     // the real upgrade to the served version
-    const targetEnv = swapToolEnv(ctx, target.url, [seed, target]);
+    const targetEnv = swapToolEnv(ctx, target.url);
     const up = await runCommand(binPath, ["self", "upgrade"], { env: targetEnv, timeoutMs: 30000 });
     assert.equal(
       up.code,
@@ -182,11 +174,11 @@ export async function checkSwapToolRollback(
     name: "target",
   });
   try {
-    const seedEnv = swapToolEnv(ctx, seed.url, [seed, target]);
+    const seedEnv = swapToolEnv(ctx, seed.url);
     const seedRun = await runCommand(binPath, ["self", "upgrade"], { env: seedEnv, timeoutMs: 30000 });
     assert.equal(seedRun.code, 0, `seed upgrade must exit 0 (${seedRun.stderr.trim()})`);
 
-    const targetEnv = swapToolEnv(ctx, target.url, [seed, target]);
+    const targetEnv = swapToolEnv(ctx, target.url);
     const up = await runCommand(binPath, ["self", "upgrade"], { env: targetEnv, timeoutMs: 30000 });
 
     const state = await readState(targetEnv);

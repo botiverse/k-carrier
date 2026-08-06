@@ -1,6 +1,6 @@
 /**
  * ReleaseStore — on-disk release store behind the fake-server: publish
- * (manifest + artifacts + two-level signature chain), pristine copies,
+ * (manifest + artifacts), pristine copies,
  * file-level tamper ops and version switching. Pure filesystem semantics,
  * no HTTP; the FakeServer in server.ts is the HTTP layer over this.
  *
@@ -9,13 +9,8 @@
  */
 import { promises as fs } from "node:fs";
 import * as path from "node:path";
-import { signData, type TestKeychain } from "./keychain.ts";
 import {
   MANIFEST_FILE,
-  SIGNING_PUB_FILE,
-  SIGNING_PUB_SIG_FILE,
-  sigFileFor,
-  sigBundleFileFor,
   buildManifest,
   sha256Hex,
   compareVersions,
@@ -34,8 +29,6 @@ export interface PublishReleaseSpec {
   makeActive?: boolean;
   /** chmod +x every artifact file (real binaries need to be runnable). */
   executable?: boolean;
-  /** Explicit opt-out of the signature chain (never a silent default). */
-  unsigned?: boolean;
 }
 
 export interface PublishedRelease {
@@ -47,14 +40,12 @@ export interface PublishedRelease {
 
 export class ReleaseStore {
   private readonly storeDir: string;
-  private readonly keychain: TestKeychain;
   private activeVersion: string | null = null;
   /** version -> file -> pristine bytes, for restore(). */
   private readonly pristine = new Map<string, Map<string, Uint8Array>>();
 
-  constructor(storeDir: string, keychain: TestKeychain) {
+  constructor(storeDir: string) {
     this.storeDir = storeDir;
-    this.keychain = keychain;
   }
 
   get active(): string | null {
@@ -68,7 +59,7 @@ export class ReleaseStore {
 
   /**
    * Publish a release into the store: writes artifacts + manifest + the
-   * full signature chain, and makes it the active release (unless
+   * manifest, and makes it the active release (unless
    * makeActive is false).
    */
   async publish(spec: PublishReleaseSpec): Promise<PublishedRelease> {
@@ -109,31 +100,7 @@ export class ReleaseStore {
     const manifest = buildManifest(version, targets);
     const manifestJson = new TextEncoder().encode(JSON.stringify(manifest, null, 2));
 
-    // Signature chain files.
-    const signingPub = new TextEncoder().encode(this.keychain.signing.publicKeyPem);
-    await fs.writeFile(path.join(releaseDir, SIGNING_PUB_FILE), signingPub);
-    await fs.writeFile(
-      path.join(releaseDir, SIGNING_PUB_SIG_FILE),
-      signData(this.keychain.root, signingPub),
-    );
     await fs.writeFile(path.join(releaseDir, MANIFEST_FILE), manifestJson);
-    await fs.writeFile(
-      path.join(releaseDir, sigFileFor(MANIFEST_FILE)),
-      signData(this.keychain.signing, manifestJson),
-    );
-    for (const name of artifactNames) {
-      const data = bytes.get(name);
-      if (!data) throw new Error(`missing bytes for ${name}`);
-      if (spec.unsigned === true) continue; // no signing story: nothing to verify against
-      await fs.writeFile(path.join(releaseDir, sigFileFor(name)), signData(this.keychain.signing, data));
-      // Machine-readable signature bundle the release source consumes.
-      const bundle = {
-        signingKeyPem: this.keychain.signing.publicKeyPem,
-        signingKeySignatureB64: Buffer.from(signData(this.keychain.root, signingPub)).toString("base64"),
-        artifactSignatureB64: Buffer.from(signData(this.keychain.signing, data)).toString("base64"),
-      };
-      await fs.writeFile(path.join(releaseDir, sigBundleFileFor(name)), JSON.stringify(bundle));
-    }
 
     // Pristine copy for restore().
     const pristineFiles = new Map<string, Uint8Array>();
@@ -141,28 +108,7 @@ export class ReleaseStore {
       const data = bytes.get(name);
       if (data) pristineFiles.set(name, data);
     }
-    pristineFiles.set(SIGNING_PUB_FILE, signingPub);
-    pristineFiles.set(
-      SIGNING_PUB_SIG_FILE,
-      new Uint8Array(await fs.readFile(path.join(releaseDir, SIGNING_PUB_SIG_FILE))),
-    );
     pristineFiles.set(MANIFEST_FILE, manifestJson);
-    pristineFiles.set(
-      sigFileFor(MANIFEST_FILE),
-      new Uint8Array(await fs.readFile(path.join(releaseDir, sigFileFor(MANIFEST_FILE)))),
-    );
-    if (spec.unsigned !== true) {
-      for (const name of artifactNames) {
-        pristineFiles.set(
-          sigFileFor(name),
-          new Uint8Array(await fs.readFile(path.join(releaseDir, sigFileFor(name)))),
-        );
-        pristineFiles.set(
-          sigBundleFileFor(name),
-          new Uint8Array(await fs.readFile(path.join(releaseDir, sigBundleFileFor(name)))),
-        );
-      }
-    }
     this.pristine.set(version, pristineFiles);
 
     if (spec.makeActive !== false) this.activeVersion = version;
@@ -192,8 +138,8 @@ export class ReleaseStore {
   }
 
   /**
-   * Swap two files' contents (signature-swap attack: each file now carries
-   * the other's signature, so a verifier rejects both).
+   * Swap two files' contents: each file now holds the other's bytes, so a
+   * sha256 that was correct for one file is presented against the other.
    */
   async swapFiles(fileA: string, fileB: string): Promise<void> {
     const a = await this.resolveFile(fileA);

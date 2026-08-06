@@ -7,10 +7,9 @@ import { promises as fs } from "node:fs";
 import { ArtifactFactory, artifactFileName, stamp, type Behavior } from "./factory.ts";
 import { DEMO_SOURCE } from "./demo.ts";
 import { ReleaseStore } from "../fake-server/store.ts";
-import { createKeychain } from "../fake-server/keychain.ts";
 import { createSandbox } from "../scenario/sandbox.ts";
 import { runArtifact } from "./run.ts";
-import { MANIFEST_FILE, sigFileFor } from "../fake-server/manifest.ts";
+import { MANIFEST_FILE } from "../fake-server/manifest.ts";
 
 async function withSandbox<T>(fn: (dir: string) => Promise<T>): Promise<T> {
   const sb = await createSandbox({ prefix: "factory" });
@@ -22,7 +21,7 @@ async function withSandbox<T>(fn: (dir: string) => Promise<T>): Promise<T> {
 }
 
 function storeFor(dir: string, name: string): ReleaseStore {
-  return new ReleaseStore(path.join(dir, name), createKeychain());
+  return new ReleaseStore(path.join(dir, name));
 }
 
 test("stamp injects version and behavior into the artifact bytes", () => {
@@ -42,11 +41,10 @@ test("makeRelease publishes artifact + manifest + chain into the store", async (
     assert.equal(rel.artifactFile, artifactFileName("1.0.0"));
     assert.equal(store.active, "1.0.0");
     assert.ok(store.has("1.0.0"));
-    // manifest + artifact + chain are all served from the store
+    // manifest + artifact are both served from the store
     const manifest = JSON.parse(new TextDecoder().decode(await store.readFile(MANIFEST_FILE)));
     assert.equal(manifest.version, "1.0.0");
     assert.deepEqual(await store.readFile(rel.artifactFile), rel.artifactBytes);
-    await store.readFile(sigFileFor(rel.artifactFile)); // exists, signed
     // published artifact is executable
     const mode = (await fs.stat(path.join(dir, "store", "releases", "1.0.0", rel.artifactFile))).mode;
     assert.ok(mode & 0o100, "artifact must be executable");
@@ -114,15 +112,12 @@ test("stamping is deterministic across two factories with fresh caches", async (
   await withSandbox(async (dir) => {
     const fa = new ArtifactFactory({ cacheDir: path.join(dir, "cache-a") });
     const fb = new ArtifactFactory({ cacheDir: path.join(dir, "cache-b") });
-    const keychain = createKeychain();
-    const sa = new ReleaseStore(path.join(dir, "sa"), keychain);
-    const sb = new ReleaseStore(path.join(dir, "sb"), keychain);
+    const sa = new ReleaseStore(path.join(dir, "sa"));
+    const sb = new ReleaseStore(path.join(dir, "sb"));
     const a = await fa.makeRelease({ version: "1.0.0", behavior: "ok", store: sa });
     const b = await fb.makeRelease({ version: "1.0.0", behavior: "ok", store: sb });
     assert.deepEqual(b.artifactBytes, a.artifactBytes);
-    // Same keychain + deterministic stamping => Ed25519 signatures match too
-    const sigA = await sa.readFile(sigFileFor(a.artifactFile));
-    const sigB = await sb.readFile(sigFileFor(b.artifactFile));
-    assert.deepEqual(sigB, sigA);
+    // Deterministic stamping => byte-identical manifests too
+    assert.deepEqual(await sb.readFile(MANIFEST_FILE), await sa.readFile(MANIFEST_FILE));
   });
 });

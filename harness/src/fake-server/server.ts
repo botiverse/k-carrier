@@ -2,13 +2,13 @@
  * fake-server — local static publishing server (harness-design §1.2).
  *
  * A REAL HTTP static server (node:http, zero deps) that serves a release:
- * manifest.json + artifacts + the two-level signature chain. It is the
+ * manifest.json + artifacts. It is the
  * black-box plane's publishing endpoint — DST's in-memory disk is a
  * separate component (archer, §1.45); this one serves real bytes over a
  * real socket.
  *
  * Tamper API — the supply-chain teeth's whole point is "real tamper ->
- * real reject": corruptByte / swapSig / serveOlderVersion / dropFile all
+ * real reject": corruptByte / swapFiles / serveOlderVersion / dropFile all
  * mutate what the client actually downloads, and the teeth verify that a
  * real chain verifier rejects the result. No verification function is
  * mocked anywhere. The on-disk release semantics live in ReleaseStore
@@ -17,7 +17,6 @@
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from "node:http";
 import { promises as fs } from "node:fs";
 import * as path from "node:path";
-import { createKeychain, type TestKeychain } from "./keychain.ts";
 import { ReleaseStore, type PublishReleaseSpec, type PublishedRelease } from "./store.ts";
 
 export type { PublishReleaseSpec, PublishedRelease };
@@ -25,8 +24,6 @@ export type { PublishReleaseSpec, PublishedRelease };
 export interface FakeServerOptions {
   /** Directory that will hold the release store (usually inside a sandbox). */
   storeDir: string;
-  /** Keychain for signing; omit to auto-generate one. */
-  keychain?: TestKeychain;
   /** Port to bind; omit for an OS-assigned ephemeral port. */
   port?: number;
   /** Throttle artifact responses (interruptible-download tests). */
@@ -43,7 +40,6 @@ const CONTENT_TYPES: Record<string, string> = {
 export class FakeServer {
   /** The release store backing this server (the factory's publish target). */
   readonly store: ReleaseStore;
-  private readonly keychain: TestKeychain;
   private readonly requestedPort: number | undefined;
   private readonly throttle: { bytesPerTick: number; tickMs: number } | undefined;
   private server: Server | null = null;
@@ -52,15 +48,9 @@ export class FakeServer {
   readonly requestLog: Array<{ method: string; url: string; range: string | null }> = [];
 
   constructor(opts: FakeServerOptions) {
-    this.keychain = opts.keychain ?? createKeychain();
-    this.store = new ReleaseStore(opts.storeDir, this.keychain);
+    this.store = new ReleaseStore(opts.storeDir);
     this.requestedPort = opts.port;
     this.throttle = opts.throttle;
-  }
-
-  /** The trusted root public key (the client's compiled-in trust anchor). */
-  get rootKeyPem(): string {
-    return this.keychain.root.publicKeyPem;
   }
 
   get url(): string {
@@ -110,7 +100,8 @@ export class FakeServer {
     return this.store.corruptByte(file, offset);
   }
 
-  async swapSig(fileA: string, fileB: string): Promise<void> {
+  /** Serve each file the other's bytes: both then fail their own sha256. */
+  async swapFiles(fileA: string, fileB: string): Promise<void> {
     return this.store.swapFiles(fileA, fileB);
   }
 

@@ -64,14 +64,12 @@ export function serviceEnv(
   ctx: ToothContext,
   shape: HostShape,
   baseUrl: string,
-  servers: FakeServer[],
 ): Record<string, string> {
   return {
     K_RELEASE_BASE: baseUrl,
     K_STATE_DIR: stateDir(ctx),
     K_HOST_SHAPE: shape,
     K_CORE_UPGRADER: coreUpgraderUrl(),
-    K_ROOT_KEYS: JSON.stringify(servers.map((s) => s.rootKeyPem)),
     // Every process this tooth spawns — and, via inheritance, every process
     // the driver spawns — carries the sandbox marker, so the sandbox
     // teardown's verifyProcessTreeDead is the backstop for any leak: a "red"
@@ -220,7 +218,7 @@ export async function seedService(
   binPath: string,
   seedServer: FakeServer,
 ): Promise<{ seedChild: ChildProcess; seedPid: number }> {
-  const env = serviceEnv(ctx, shape, seedServer.url, [seedServer]);
+  const env = serviceEnv(ctx, shape, seedServer.url);
   const { child, pid } = spawnService(binPath, env);
   const ready = JSON.parse(await readLine(child, "ready")) as Incarnation;
   assert.equal(ready.version, "1.0.0", "seed service must run v1");

@@ -3,7 +3,7 @@
  *
  * A release is described by `manifest.json`: version + per-platform targets
  * (artifact filename, sha256, size). The fake-server serves this plus the
- * artifacts and the full two-level signature chain (keychain.ts).
+ * artifacts.
  *
  * The exact JSON shape here IS the wire contract the core artifact layer
  * will consume; kept in the harness first so the harness is the first
@@ -13,18 +13,6 @@
 import { createHash } from "node:crypto";
 
 export const MANIFEST_FILE = "manifest.json";
-/** Signing public key the client needs to verify artifacts (served). */
-export const SIGNING_PUB_FILE = "signing.pub";
-/** Root's signature over signing.pub — the two-level chain's link. */
-export const SIGNING_PUB_SIG_FILE = "signing.pub.sig";
-/** Every signed file gets a detached signature next to it. */
-export function sigFileFor(file: string): string {
-  return `${file}.sig`;
-}
-/** Machine-readable signature bundle per artifact (consumed by the source). */
-export function sigBundleFileFor(file: string): string {
-  return `${file}.k-sig.json`;
-}
 
 /** One platform's binary target inside a manifest. */
 export interface ManifestTarget {

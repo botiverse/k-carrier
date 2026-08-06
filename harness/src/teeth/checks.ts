@@ -8,9 +8,11 @@
  * shared dir) — the tooth must throw then, exactly like the mutation-runner
  * will demand.
  *
- * The chain verifier used here is the harness's own (keychain.ts): the
- * "downstream validation tooth" of test-plan M0 is literally these checks
- * until core distsign lands and mirrors the same shape.
+ * The oracle is sha256: K verifies integrity, not authenticity (design-v1
+ * §L0.5), so every tamper op here is judged by "do the served bytes still
+ * hash to what the manifest promises". Signature-chain checks lived here
+ * until 2026-08-06 and were removed with the feature -- a tooth for a
+ * guarantee the product does not make is worse than no tooth.
  */
 import assert from "node:assert/strict";
 import { promises as fs } from "node:fs";
@@ -18,15 +20,7 @@ import * as path from "node:path";
 import { type ToothContext } from "./registry.ts";
 import { FakeServer, type PublishedRelease } from "../fake-server/server.ts";
 import {
-  createKeychain,
-  verifyChain,
-  type TestKeychain,
-} from "../fake-server/keychain.ts";
-import {
   MANIFEST_FILE,
-  SIGNING_PUB_FILE,
-  SIGNING_PUB_SIG_FILE,
-  sigFileFor,
   compareVersions,
   sha256Hex,
   type Manifest,
@@ -40,7 +34,6 @@ const PAYLOAD_V2 = "K fake-server payload v2";
 
 export interface ReleaseFixture {
   server: FakeServer;
-  keychain: TestKeychain;
   artifact: string;
   artifactBytes: Uint8Array;
   manifest: Manifest;
@@ -56,8 +49,7 @@ export async function setupRelease(
     binary?: string;
   } = {},
 ): Promise<ReleaseFixture> {
-  const keychain = createKeychain();
-  const server = new FakeServer({ storeDir: path.join(ctx.sandboxDir, "store"), keychain });
+  const server = new FakeServer({ storeDir: path.join(ctx.sandboxDir, "store") });
   await server.start();
   const artifacts = opts.artifacts ?? { [M0_ARTIFACT]: PAYLOAD };
   const names = Object.keys(artifacts);
@@ -73,7 +65,6 @@ export async function setupRelease(
   });
   return {
     server,
-    keychain,
     artifact,
     artifactBytes: new TextEncoder().encode(content),
     manifest: released.manifest,
@@ -89,32 +80,27 @@ export async function fetchBytes(
 }
 
 /**
- * Verify `data`+`sig` through the chain as SERVED: signing.pub and its
- * root signature are fetched from the server, not taken from local state —
- * a tampered signing.pub would fail here too.
+ * Does the file the server currently serves still hash to `expected`?
+ *
+ * Fetch failures return false rather than throwing: for these checks a file
+ * that cannot be fetched is as much a mismatch as wrong bytes, and both are
+ * reported by the caller's own assertion message.
  */
-export async function verifyServed(
-  fx: ReleaseFixture,
-  data: Uint8Array,
-  sig: Uint8Array,
+export async function servedHashMatches(
+  server: FakeServer,
+  file: string,
+  expected: string,
 ): Promise<boolean> {
-  const pub = await fetchBytes(fx.server, SIGNING_PUB_FILE);
-  const pubSig = await fetchBytes(fx.server, SIGNING_PUB_SIG_FILE);
-  if (pub.status !== 200 || pubSig.status !== 200) return false;
-  return verifyChain({
-    root: fx.keychain.root,
-    signingPub: pub.body,
-    signingPubSig: pubSig.body,
-    data,
-    dataSig: sig,
-  });
+  const res = await fetchBytes(server, file);
+  if (res.status !== 200) return false;
+  return sha256Hex(res.body) === expected;
 }
 
 // ---------------------------------------------------------------------------
 // Checks (exported for known-red driving). Each throws on violation.
 // ---------------------------------------------------------------------------
 
-export async function checkServesVerifiableRelease(
+export async function checkServesConsistentRelease(
   ctx: ToothContext,
   mutate?: (server: FakeServer, fx: ReleaseFixture) => Promise<void>,
 ): Promise<void> {
@@ -133,23 +119,12 @@ export async function checkServesVerifiableRelease(
 
     const art = await fetchBytes(fx.server, fx.artifact);
     assert.equal(art.status, 200, "artifact must be served");
-    assert.deepEqual(art.body, fx.artifactBytes);
+    // sha256, not deepEqual: a byte-equality assertion here would fire FIRST
+    // and report "bytes differ" for a corruption whose tested property is
+    // manifest/bytes disagreement -- an unrelated earlier reason masking the
+    // one under test.
     assert.equal(sha256Hex(art.body), target.sha256, "served bytes must match manifest sha256");
 
-    const mSig = await fetchBytes(fx.server, sigFileFor(MANIFEST_FILE));
-    assert.equal(mSig.status, 200, "manifest signature must be served");
-    assert.equal(
-      await verifyServed(fx, m.body, mSig.body),
-      true,
-      "manifest must verify through the served chain",
-    );
-    const aSig = await fetchBytes(fx.server, sigFileFor(fx.artifact));
-    assert.equal(aSig.status, 200, "artifact signature must be served");
-    assert.equal(
-      await verifyServed(fx, art.body, aSig.body),
-      true,
-      "artifact must verify through the served chain",
-    );
   } finally {
     await fx.server.stop();
   }
@@ -163,46 +138,50 @@ export async function checkCorruptByteRejects(
   try {
     if (mutate) await mutate(fx.server);
     else await fx.server.corruptByte(fx.artifact, 0);
-    const art = await fetchBytes(fx.server, fx.artifact);
-    const sig = await fetchBytes(fx.server, sigFileFor(fx.artifact));
+    const published = sha256Hex(fx.artifactBytes);
     assert.equal(
-      await verifyServed(fx, art.body, sig.body),
+      await servedHashMatches(fx.server, fx.artifact, published),
       false,
-      "corrupted artifact must FAIL signature verification",
+      "corrupted artifact must no longer hash to the published digest",
     );
-    // isolation: untouched files must still verify
+    // isolation: untouched files must still be intact
     const m = await fetchBytes(fx.server, MANIFEST_FILE);
-    const mSig = await fetchBytes(fx.server, sigFileFor(MANIFEST_FILE));
+    assert.equal(m.status, 200, "untampered manifest must still be served");
+    const manifest = JSON.parse(new TextDecoder().decode(m.body)) as Manifest;
     assert.equal(
-      await verifyServed(fx, m.body, mSig.body),
-      true,
-      "untampered files must still verify",
+      manifest.targets["darwin-arm64"]?.sha256,
+      published,
+      "tampering the artifact must not have rewritten the manifest",
     );
   } finally {
     await fx.server.stop();
   }
 }
 
-export async function checkSwapSigRejects(
+export async function checkSwapArtifactsRejects(
   ctx: ToothContext,
   mutate?: (server: FakeServer) => Promise<void>,
 ): Promise<void> {
+  const bytesB = "K fake-server payload B";
   const fx = await setupRelease(ctx, {
-    artifacts: { [M0_ARTIFACT]: PAYLOAD, [M0_ARTIFACT_B]: "K fake-server payload B" },
+    artifacts: { [M0_ARTIFACT]: PAYLOAD, [M0_ARTIFACT_B]: bytesB },
     binary: M0_ARTIFACT,
   });
+  const expected = new Map([
+    [M0_ARTIFACT, sha256Hex(fx.artifactBytes)],
+    [M0_ARTIFACT_B, sha256Hex(new TextEncoder().encode(bytesB))],
+  ]);
   try {
     if (mutate) await mutate(fx.server);
-    else {
-      await fx.server.swapSig(sigFileFor(M0_ARTIFACT), sigFileFor(M0_ARTIFACT_B));
-    }
-    for (const name of [M0_ARTIFACT, M0_ARTIFACT_B]) {
-      const art = await fetchBytes(fx.server, name);
-      const sig = await fetchBytes(fx.server, sigFileFor(name));
+    else await fx.server.swapFiles(M0_ARTIFACT, M0_ARTIFACT_B);
+    // Both names must be wrong, not just one: a swap that moved a single file
+    // would leave the other intact, and a check that only looked at the binary
+    // would call that a detected swap.
+    for (const [name, digest] of expected) {
       assert.equal(
-        await verifyServed(fx, art.body, sig.body),
+        await servedHashMatches(fx.server, name, digest),
         false,
-        `swapped signature for ${name} must FAIL verification`,
+        `swapped artifact ${name} must no longer hash to its published digest`,
       );
     }
   } finally {
@@ -214,8 +193,7 @@ export async function checkServeOlderVersion(
   ctx: ToothContext,
   mutate?: (server: FakeServer) => Promise<string>,
 ): Promise<void> {
-  const keychain = createKeychain();
-  const server = new FakeServer({ storeDir: path.join(ctx.sandboxDir, "store"), keychain });
+  const server = new FakeServer({ storeDir: path.join(ctx.sandboxDir, "store") });
   await server.start();
   try {
     await server.publishRelease({

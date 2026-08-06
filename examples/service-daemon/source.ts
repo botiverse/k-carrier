@@ -22,7 +22,7 @@
  * Dependency wiring (the example's "@k-carrier/core" stand-in):
  * `K_CORE_UPGRADER` = file URL of core/src/createUpgrader.ts; siblings are
  * derived from it. `K_RELEASE_BASE` = releaseBase, `K_STATE_DIR` =
- * stateDir (default `<binDir>/state`), `K_ROOT_KEYS` = the compiled-in
+ * stateDir (default `<binDir>/state`)
  * trust anchor (JSON array of PEMs), `K_HOST_SHAPE` = spawn|respawn.
  */
 export const PLAIN_DAEMON_SOURCE = `#!/usr/bin/env node
@@ -36,7 +36,6 @@ const { spawn } = require("node:child_process");
 const RELEASE_BASE = process.env.K_RELEASE_BASE;
 const STATE_DIR = process.env.K_STATE_DIR ?? path.join(path.dirname(process.argv[1]), "state");
 const CORE_UPGRADER = process.env.K_CORE_UPGRADER;
-const ROOT_KEYS = process.env.K_ROOT_KEYS ? JSON.parse(process.env.K_ROOT_KEYS) : [];
 const HOST_SHAPE = process.env.K_HOST_SHAPE ?? "spawn"; // spawn | respawn
 const args = process.argv.slice(2);
 const startId = process.pid + "-" + process.hrtime.bigint().toString(36);
