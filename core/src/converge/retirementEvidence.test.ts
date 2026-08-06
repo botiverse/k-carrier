@@ -53,7 +53,6 @@ test("THE POINT: declaring no lifecycle surface must not unlock retirement", asy
       },
       policy: "auto",
       notificationSink: async () => {},
-      rootKeys: [],
       stateDir,
     });
 

@@ -119,7 +119,7 @@ about that line is part of the contract.
 | K guarantees (mechanically, with teeth) | You must guarantee (K can't see it) |
 |---|---|
 | the transition itself: never two incarnations live, never an unbootable host, crash at any step recovers | that version N+1 can *read* what version N wrote (your data, DB schema, caches) |
-| the artifact is authentic (signature chain) and byte-complete | that N+1 speaks a protocol your server still accepts (and N does too, if you may roll back) |
+| the artifact is byte-complete (sha256 + size) — **authenticity is NOT checked; see §Trust** | that N+1 speaks a protocol your server still accepts (and N does too, if you may roll back) |
 | the *binary* is restorable — rollback returns the exact bytes that were running | that rolling the binary back is *meaningful* — **K restores your binary, not your data**. If N+1 migrated the user's database, rolling back to N leaves N facing N+1-shaped data |
 | proof the new version is actually live and OS lifecycle converged | what `quiesce` must park durably, and what `resume` must bring back |
 | the owner's consent policy is honored | whether this upgrade is *safe to offer* at all (feature flags, in-flight work, licence state) |
@@ -193,7 +193,7 @@ to K and it becomes enforced rather than hoped for.
             YOUR APP                    |              K CORE
                                         |
   daemon ──┐                            |   ┌─ artifact (channel/download/verify/swap)
-  CLI `myapp self upgrade` ──┤ construct|   ├─ distsign (2-tier signature client)
+  CLI `myapp self upgrade` ──┤ construct|   ├─ (no signature client — see §Trust)
   install script ──┘    the same        |   ├─ txn (two-slot + journal + state machine)
                         ┌────────────┐  |   ├─ lifecycle (handoff orchestration)
                         │  Upgrader  │──┼──►├─ converge (predicates + readback)
@@ -214,8 +214,6 @@ If you use the built-in `staticManifestSource`, its layout is:
 ```
 <baseUrl>/manifest.json          version, per-target {file, sha256, size}
 <baseUrl>/<artifact>             the binaries
-<baseUrl>/<artifact>.sig         signature per artifact
-<baseUrl>/signing.pub(.sig)      rotating signing keys, root-signed
 ```
 
 Root private keys stay offline; root public keys are compiled into your app.
@@ -227,41 +225,38 @@ API, date-stamped paths, or an OCI registry means writing your own
 parses a manifest itself. Multiple streams are usually one base URL each
 (`.../stable`, `.../nightly`), which also keeps their blast radius separate.
 
-### The trust boundary, and the mistake it is easy to make
+### Trust: what K checks, and what it does not
+
+**K verifies integrity, not authenticity.** It checks `sha256` + `size` on the
+assembled bytes. It does **not** verify who produced them: there is no
+signature chain and no trust root (removed 2026-08-06 — `docs/design-v1.md`
+§L0.5 has the decision).
 
 A digest is not a signature. `sha256` proves the bytes you received are the
 bytes the manifest described — but the manifest comes from the same place the
-bytes do, so a source serving you malicious bytes will happily serve a matching
-digest for them. Only the signature chain answers *who made this*, and its
-whole purpose is to hold up **when the release source itself is compromised**.
+bytes do, so a source serving malicious bytes will serve a matching digest for
+them just as happily.
 
-That has one consequence worth stating plainly, because it is the mistake we
-made and caught during development:
+⚠️ **So this is yours to think about, not K's:**
 
-> **Nothing the source says may weaken the check the source is being checked by.**
+| Threat | Covered by K? |
+|--------|---------------|
+| corruption in transit | ✅ (and your HTTPS already covers it) |
+| a wrong artifact on your CDN — leaked publish credentials, misconfigured bucket, poisoned pipeline | ❌ **not covered** — the check passes and every client installs |
 
-So K will refuse a release that carries no signature — and the way to say
-"install it anyway" is in **your** code, next to your compiled-in root keys:
+**OS code signing is a different guarantee, not a substitute.** Authenticode /
+codesign / notarization answer "is this program signed by a recognisable
+vendor", enforced by the OS on the install paths it controls. A distribution
+signature answers "**is this the exact artifact we published**", enforced by
+your app before the bytes reach a slot. If you ship through an app store or a
+platform installer you get some of the former for free; if you ship a plain
+binary from a CDN, as raft-computer does, you get neither automatically.
 
-```ts
-// your code, not K's: you are taking responsibility for these bytes
-const published = staticManifestSource({ baseUrl: RELEASE_BASE });
-const source = {
-  checkForUpdate: async (ctx) => {
-    const r = await published.checkForUpdate(ctx);
-    return r === null ? null : { ...r, unsigned: true };
-  },
-  fetchRelease: async (v, ctx) => ({ ...(await published.fetchRelease(v, ctx)), unsigned: true }),
-};
-```
-
-There is deliberately **no** `allowUnsigned` option on the source and **no**
-`unsigned` field in the manifest. Either one would let whoever controls the
-release source disable signature verification for every client by adding a
-field — no crypto broken, root keys still in place. Writing those six lines
-yourself is the intended friction. K reports the result under its own
-notification kind (`installed-unverified`), so an install you accepted without
-attribution is visible rather than indistinguishable from a verified one.
+If you need authenticity today, do it in your own `ReleaseSource`: verify
+before returning the `Release`, and refuse rather than return unverified bytes.
+⚠️ And if you build it, remember the trap this project already hit: **"accept
+unsigned" may only be declared by YOUR code, never by a field in the manifest**
+— the manifest is served by the very party a signature chain exists to distrust.
 
 ## 6. Testing your integration
 

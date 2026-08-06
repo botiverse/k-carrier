@@ -127,21 +127,11 @@ function compareSemver(a: string, b: string): number {
   return 0;
 }
 
-/** The machine-readable signature bundle sidecar served next to an artifact. */
-const SIG_BUNDLE_SUFFIX = ".k-sig.json";
-
-interface SignatureBundleWire {
-  signingKeyPem: string;
-  signingKeySignatureB64: string;
-  artifactSignatureB64: string;
-}
-
-async function releaseFrom(
+function releaseFrom(
   manifest: Manifest,
   baseUrl: string,
   platformKey: string,
-  doFetch: typeof fetch,
-): Promise<Release> {
+): Release {
   const target = manifest.targets[platformKey];
   if (!target) {
     throw new ArtifactError(
@@ -157,25 +147,6 @@ async function releaseFrom(
     size: target.size,
   };
 
-  // A signed release carries a per-artifact signature bundle. Absent =
-  // neither signed nor declared unsigned: the upgrader refuses such bytes.
-  const res = await doFetch(`${base}/${target.file}${SIG_BUNDLE_SUFFIX}`);
-  if (res.ok) {
-    const wire = (await res.json()) as SignatureBundleWire;
-    if (
-      typeof wire.signingKeyPem !== "string" ||
-      typeof wire.signingKeySignatureB64 !== "string" ||
-      typeof wire.artifactSignatureB64 !== "string"
-    ) {
-      throw new ArtifactError("DOWNLOAD_FAILED", `signature bundle for ${target.file} is malformed`);
-    }
-    release.signature = wire;
-  } else if (res.status !== 404) {
-    throw new ArtifactError(
-      "DOWNLOAD_FAILED",
-      `signature bundle fetch for ${target.file} failed: HTTP ${res.status}`,
-    );
-  }
   return release;
 }
 
@@ -197,7 +168,7 @@ export function staticManifestSource(opts: StaticManifestSourceOptions): Release
       // POLICY: only move forward. A served version older than ours is not an
       // "update" — taking it silently would be an automatic downgrade.
       if (compareSemver(manifest.version, ctx.currentVersion) <= 0) return null;
-      return releaseFrom(manifest, base, ctx.platformKey, doFetch);
+      return releaseFrom(manifest, base, ctx.platformKey);
     },
 
     async fetchRelease(version: string, ctx: ReleaseContext): Promise<Release> {
@@ -208,7 +179,7 @@ export function staticManifestSource(opts: StaticManifestSourceOptions): Release
           `asked for ${version} but this source serves ${manifest.version}`,
         );
       }
-      return releaseFrom(manifest, base, ctx.platformKey, doFetch);
+      return releaseFrom(manifest, base, ctx.platformKey);
     },
   };
 }

@@ -27,12 +27,6 @@ export interface TxnState {
   experimentVersion: string | null;
   /** Why the last rollback happened; null unless phase === "rolled-back". */
   rollbackReason: string | null;
-  /**
-   * Did the artifact in the experiment slot pass the signature chain?
-   * undefined when no experiment is staged. This feeds
-   * k.no-unverified-artifact, which was inert while nothing reported it.
-   */
-  experimentSignatureVerified?: boolean;
 }
 
 /** Append-only, write-ahead journal entry. fsync'd before the action runs. */

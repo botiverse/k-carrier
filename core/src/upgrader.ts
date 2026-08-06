@@ -80,7 +80,6 @@ export interface UpgraderConfig {
   /** Where consent prompts / failure notifications are delivered. */
   notificationSink: (event: NotificationEvent) => Promise<void>;
   /** Root public keys for signature verification (compiled into the app). */
-  rootKeys: string[];
   stateDir: string;
 }
 

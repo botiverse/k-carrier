@@ -73,17 +73,6 @@ test("terminal-leaves-no-experiment catches a leftover experiment slot", () => {
   assert.deepEqual(v.map((x) => x.invariantId), ["k.terminal-leaves-no-experiment"]);
 });
 
-test("no-unverified-artifact fires when an unverified artifact occupies the slot", () => {
-  const v = checkInvariants(
-    healthy({ phase: "staged", journalIntents: ["staged"], slots: { stable: "1.0.0", experiment: "2.0.0" }, experimentSignatureVerified: false }),
-  );
-  assert.deepEqual(v.map((x) => x.invariantId), ["k.no-unverified-artifact"]);
-  // verified => quiet
-  assert.deepEqual(
-    checkInvariants(healthy({ phase: "staged", journalIntents: ["staged"], slots: { stable: "1.0.0", experiment: "2.0.0" }, experimentSignatureVerified: true })),
-    [],
-  );
-});
 
 test("managed-copy-never-self-upgrades fires when a managed install transacts", () => {
   const v = checkInvariants(

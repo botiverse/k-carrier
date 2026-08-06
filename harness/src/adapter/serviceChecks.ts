@@ -37,7 +37,6 @@ function makeUpgrader(ctx: ToothContext, adapter: HostAdapter, baseUrl: string, 
     source: staticManifestSource({ baseUrl }),
     policy: "auto",
     notificationSink: async () => {},
-    rootKeys: [rootKeyPem],
     stateDir: stateDir(ctx),
   };
   if (surfaces !== undefined) opts.lifecycleSurfaces = surfaces;

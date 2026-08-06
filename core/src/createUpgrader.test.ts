@@ -62,7 +62,6 @@ async function baseOpts(dir: string, url: string): Promise<CreateUpgraderOptions
     source: sourceServing("2.0.0", url),
     policy: "auto",
     notificationSink: async () => {},
-    rootKeys: [],
     stateDir: dir,
   };
 }

@@ -27,26 +27,18 @@ export interface ReleaseContext {
   platformKey: string;
 }
 
-/** Everything K needs to fetch and verify one release's bytes. */
+/**
+ * Everything K needs to fetch and verify one release's bytes.
+ *
+ * ⚠️ There is deliberately no signature field: K checks integrity (sha256 +
+ * size) and does not verify who produced the artifact. Removed 2026-08-06;
+ * rationale and the OS-code-signing comparison live in docs/design-v1.md §L0.5.
+ */
 export interface Release {
   version: string;
   url: string;
   sha256: string;
   size: number;
-  /**
-   * Signature material for this artifact. A digest proves the bytes did not
-   * corrupt in transit; it cannot prove WHO produced them, because it comes
-   * from the same place they do. Sources that genuinely have no signing story
-   * set `unsigned: true` and K records that in status rather than pretending
-   * the artifact was verified.
-   */
-  signature?: {
-    signingKeyPem: string;
-    signingKeySignatureB64: string;
-    artifactSignatureB64: string;
-  };
-  /** Explicit opt-out, visible in code and in status. Never a silent default. */
-  unsigned?: boolean;
 }
 
 export interface ReleaseSource {

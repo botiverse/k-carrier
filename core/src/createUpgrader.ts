@@ -26,7 +26,6 @@ import { acquireUpgradeLock } from "./txn/lock.ts";
 import { downloadVerified } from "./artifact/download.ts";
 import { ArtifactError } from "./artifact/errors.ts";
 import * as path from "node:path";
-import { verifyChain } from "./distsign/verify.ts";
 import { systemClock, type Clock } from "./clock.ts";
 import { buildSurfaceAllowlist, evaluateLifecycleConvergence } from "./converge/lifecycle.ts";
 import type { ReadbackSurface, ConvergenceReport, PredicateResult } from "./converge/predicates.ts";
@@ -98,9 +97,6 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
     await opts.notificationSink({ kind, detail });
   }
 
-  /** Whether the artifact now in the experiment slot passed the chain. */
-  let signatureVerified = false;
-
   /** Gates 1-7. `pick` chooses which release to run. `consented` means the
    * user approved THIS SPECIFIC release (a confirm-request was shown and
    * answered for it) — the policy gate is skipped, everything else stands. */
@@ -162,37 +158,11 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
         resumeDir: path.join(opts.stateDir, "incoming"),
       });
 
-      // AUTHENTICITY gate. The digest above only proves the bytes arrived
-      // intact from wherever the source pointed; it cannot prove who made
-      // them. Nothing unverified may reach a slot, and "unsigned" must be an
-      // explicit, recorded choice rather than an absent field.
-      if (release.signature !== undefined) {
-        verifyChain(
-          bytes,
-          {
-            signingKeyPem: release.signature.signingKeyPem,
-            signingKeySignature: Buffer.from(release.signature.signingKeySignatureB64, "base64"),
-            artifactSignature: Buffer.from(release.signature.artifactSignatureB64, "base64"),
-          },
-          opts.rootKeys,
-        );
-        signatureVerified = true;
-      } else if (release.unsigned === true) {
-        // Accepted by the CLIENT -- never by the manifest, which is served by
-        // the party the chain exists to distrust (artifact/sourceTrust.test.ts).
-        // Reported under its own kind: notifying "held" and then installing
-        // told hosts the opposite of what happened.
-        signatureVerified = false;
-        await notify("installed-unverified", { version: release.version });
-      } else {
-        return {
-          result: "held",
-          reason:
-            `release ${release.version} carries no signature and did not declare unsigned:true — ` +
-            `K will not install bytes it cannot attribute`,
-        };
-      }
-
+      // NOTE: K verifies INTEGRITY (sha256 + size) but deliberately does not
+      // verify AUTHENTICITY. See docs/design-v1.md §L0.5 — signing was removed
+      // on 2026-08-06 rather than shipped half-used. A digest proves the bytes
+      // are the ones the manifest described; it cannot prove who produced
+      // them, because it travels with them.
       const bytesRef = await materializeArtifact(opts.stateDir, bytes);
 
       const outcome = await engine.upgrade({ version: release.version, bytesRef });
@@ -286,7 +256,6 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
         stableVersion: slots.stable ?? "0.0.0",
         experimentVersion: slots.experiment,
         rollbackReason: null,
-        ...(slots.experiment === null ? {} : { experimentSignatureVerified: signatureVerified }),
       };
     },
   };

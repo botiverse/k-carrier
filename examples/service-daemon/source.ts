@@ -156,7 +156,6 @@ async function runRecovery() {
     source: nullSource,
     policy: "auto",
     notificationSink: async () => {},
-    rootKeys: [],
     stateDir: STATE_DIR,
   });
   try {
@@ -243,7 +242,6 @@ async function selfUpgrade() {
       const reason = ev.detail.reason !== undefined ? ": " + ev.detail.reason : "";
       wsync(2, "notify " + ev.kind + reason);
     },
-    rootKeys: ROOT_KEYS,
     stateDir: STATE_DIR,
   });
 

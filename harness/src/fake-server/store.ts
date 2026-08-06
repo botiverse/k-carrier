@@ -34,8 +34,6 @@ export interface PublishReleaseSpec {
   makeActive?: boolean;
   /** chmod +x every artifact file (real binaries need to be runnable). */
   executable?: boolean;
-  /** Track the release is published under (latest | alpha). Optional. */
-  channel?: "latest" | "alpha";
   /** Explicit opt-out of the signature chain (never a silent default). */
   unsigned?: boolean;
 }
@@ -108,7 +106,7 @@ export class ReleaseStore {
       sha256: sha256Hex(binaryData),
       size: binaryData.length,
     };
-    const manifest = buildManifest(version, targets, spec.channel);
+    const manifest = buildManifest(version, targets);
     const manifestJson = new TextEncoder().encode(JSON.stringify(manifest, null, 2));
 
     // Signature chain files.

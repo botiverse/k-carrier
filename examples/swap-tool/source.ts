@@ -125,7 +125,6 @@ async function selfUpgrade() {
       const reason = ev.detail.reason !== undefined ? ": " + ev.detail.reason : "";
       fs.writeSync(2, "notify " + ev.kind + ver + reason + "\\n");
     },
-    rootKeys: ROOT_KEYS,
     stateDir: STATE_DIR,
   });
 
@@ -168,7 +167,6 @@ async function confirmUpgrade(version) {
       const ver = ev.detail.version !== undefined ? " v" + ev.detail.version : "";
       fs.writeSync(2, "notify " + ev.kind + ver + "\\n");
     },
-    rootKeys: ROOT_KEYS,
     stateDir: STATE_DIR,
   });
   const outcome = await upgrader.upgradeTo(version, { consented: true });

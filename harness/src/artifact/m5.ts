@@ -72,7 +72,6 @@ function makeUpgrader(
     source: staticManifestSource({ baseUrl: server.url }),
     policy: "auto",
     notificationSink: async () => {},
-    rootKeys: [server.rootKeyPem],
     stateDir: stateDir(ctx),
     lifecycleSurfaces: surfaces,
   };

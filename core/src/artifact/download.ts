@@ -1,5 +1,5 @@
 /**
- * L0 download + integrity (test-plan M1: sha256 不符拒装), with RESUME
+ * L0 download + INTEGRITY only, with RESUME
  * (断点续传 — computer's 150MB SEA case: a process that dies mid-download
  * must not restart from zero).
  *
@@ -16,6 +16,18 @@
  *
  * Time goes through the injected Clock (the core clock seam); a hung
  * download aborts after the timeout instead of hanging the caller.
+ *
+ * ⚠️ K verifies INTEGRITY, never AUTHENTICITY. sha256 + size prove the bytes
+ * are the ones the manifest described; they cannot prove WHO produced them,
+ * because the digest travels with the artifact from the same place. Signing
+ * (a trust root of our own) was implemented and then REMOVED on 2026-08-06 —
+ * see docs/design-v1.md §L0.5 for the decision and for why OS code signing
+ * (Authenticode / codesign) is a different guarantee, not a substitute.
+ *
+ * Consequence worth stating where it is used: if the release bucket itself
+ * serves wrong bytes — leaked CI credentials, a misconfigured bucket, a
+ * poisoned publish pipeline — this check passes and every client installs
+ * them.
  */
 import { promises as fs } from "node:fs";
 import * as path from "node:path";

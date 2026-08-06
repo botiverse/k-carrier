@@ -21,12 +21,6 @@ import {
   checkSwapToolRollback,
 } from "../artifact/m1.ts";
 import {
-  checkM2UntrustedSignerRefused,
-  checkM2TamperedArtifactRefused,
-  checkM2UnsignedExplicitAccepted,
-  checkM2UnsignedRefusedByDefault,
-} from "../artifact/m2.ts";
-import {
   checkM3ServiceUpgrade,
   checkM3ServiceRollback,
   checkM3StuckDriverEvidence,
@@ -76,10 +70,6 @@ const TOOTH_IDS = new Set([
   "artifact.source-fails-closed",
   "m1.swap-tool-upgrade",
   "m1.swap-tool-rollback",
-  "m2.untrusted-signer-refused",
-  "m2.tampered-artifact-refused",
-  "m2.unsigned-explicit-accepted",
-  "m2.unsigned-refused-by-default",
   "m3.service-upgrade",
   "m3.service-rollback",
   "m3.stuck-driver-evidence-recovery",
@@ -176,26 +166,7 @@ test("known-red: m1.swap-tool-rollback catches a promoted bad version", async ()
   }
 });
 
-test("known-red: m2.untrusted-signer-refused catches a trusted attacker root", async () => {
-  const { ctx, teardown } = await ctxFor("red-m2-signer");
-  try {
-    // mutation: the attacker's root is added to the trusted set — the
-    // compromised release installs, so the refusal assertion goes RED
-    await assert.rejects(checkM2UntrustedSignerRefused(ctx, { trustAttacker: true }), /must not land/);
-  } finally {
-    await teardown();
-  }
-});
 
-test("known-red: m2.tampered-artifact-refused catches an untouched artifact", async () => {
-  const { ctx, teardown } = await ctxFor("red-m2-tamper");
-  try {
-    // mutation: no tamper — the 2.0.0 installs, so the refusal goes RED
-    await assert.rejects(checkM2TamperedArtifactRefused(ctx, { skipTamper: true }), /must not land/);
-  } finally {
-    await teardown();
-  }
-});
 
 test("known-red: m3.service-upgrade catches an upgrade that never lands (both host shapes)", async () => {
   const { ctx, teardown } = await ctxFor("red-m3-upgrade");
@@ -240,32 +211,7 @@ test("known-red: m3.stuck-driver-evidence-recovery catches a successor that neve
   }
 });
 
-test("known-red: m2.unsigned-explicit-accepted catches a signed release", async () => {
-  const { ctx, teardown } = await ctxFor("red-m2-unsigned");
-  try {
-    // mutation: a SIGNED release is served — no unsigned record, so the
-    // unverified-notification assertion goes RED
-    await assert.rejects(checkM2UnsignedExplicitAccepted(ctx, { serveSigned: true }));
-  } finally {
-    await teardown();
-  }
-});
 
-test("known-red: m2.unsigned-refused-by-default catches a client that accepts", async () => {
-  const { ctx, teardown } = await ctxFor("red-m2-default");
-  try {
-    // mutation: the CLIENT accepts unattributable bytes (K_ACCEPT_UNSIGNED=1),
-    // so the unsigned release installs and the refusal assertion goes RED.
-    // This is what makes the tooth non-vacuous: without it, "refuses unsigned"
-    // and "refuses nothing" would look the same.
-    await assert.rejects(
-      checkM2UnsignedRefusedByDefault(ctx, { clientAccepts: true }),
-      /must NOT install/,
-    );
-  } finally {
-    await teardown();
-  }
-});
 
 test("registration discipline: profiles/layers/kind/mustRed all answered", () => {
   const teeth = allTeeth().filter((t) => TOOTH_IDS.has(t.id));
@@ -291,7 +237,4 @@ test("tooth run functions are the exported checks (single source of truth)", () 
   assert.equal(byId.get("artifact.source-fails-closed")!.run, checkSourceFailsClosed);
   assert.equal(byId.get("m1.swap-tool-upgrade")!.run, checkSwapToolUpgradeLoop);
   assert.equal(byId.get("m1.swap-tool-rollback")!.run, checkSwapToolRollback);
-  assert.equal(byId.get("m2.untrusted-signer-refused")!.run, checkM2UntrustedSignerRefused);
-  assert.equal(byId.get("m2.tampered-artifact-refused")!.run, checkM2TamperedArtifactRefused);
-  assert.equal(byId.get("m2.unsigned-explicit-accepted")!.run, checkM2UnsignedExplicitAccepted);
 });

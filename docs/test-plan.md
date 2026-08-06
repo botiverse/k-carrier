@@ -40,7 +40,7 @@
 | root 轮换 | 多 root 并存期新旧 root 签的 signing.pub 都可验 | 已移除 root 签的 ⇒ 拒 |
 | 防回滚 | manifest 版本低于当前且非 pinned ⇒ 默认拒（显式降级需 typed 确认） | 静默接受更低版本 ⇒ 红 |
 
-**已落地齿**：`m2.untrusted-signer-refused`（未被 root 背书的签名密钥 ⇒ 拒装；must-red：信任攻击者 root）、`m2.tampered-artifact-refused`（篡改字节 + 自洽 digest ⇒ 签名门拒；must-red：只查 digest 不查签名）、`m2.unsigned-refused-by-default`（无签名且未显式 `unsigned:true` ⇒ 默认拒；must-red：客户端接受即红）、`m2.unsigned-explicit-accepted`（客户端显式接受 ⇒ 装但记 `installed-unverified`；must-red：静默当 unsigned）。core 对抗驻留：`core/src/artifact/sourceTrust.test.ts`（**发布源不能自我授予信任**——manifest 声明的 `unsigned:true` 被无视）、`core/src/distsign/verify.test.ts`（SIGNING_KEY_NOT_ROOT_SIGNED / ARTIFACT_SIGNATURE_INVALID / NO_ROOT_KEYS）。
+**状态：不适用 —— L0.5 供应链层已于 2026-08-06 移除**（xxchan 决定：不支持签名）。K 只验完整性（sha256 + size），不验来源真实性；原 `m2.*` 四颗齿与 `core/src/distsign/` 一并删除。理由与它和 OS 代码签名的区别见 `docs/design-v1.md` §L0.5。
 
 ## M3 — L2 生命周期 + L3 收敛（出口：`examples/service-daemon` 绿 = daemon 档成立）
 

@@ -189,14 +189,7 @@ export const terminalLeavesNoExperiment: Invariant = {
  * does not report verification at all is NOT silently treated as verified;
  * it is simply outside this invariant's knowledge (see undeclared handling).
  */
-export const noUnverifiedArtifact: Invariant = {
-  id: "k.no-unverified-artifact",
-  description: "an artifact only occupies the experiment slot after its signature chain verified",
-  check: (s) =>
-    s.slots.experiment !== null && s.experimentSignatureVerified === false
-      ? `experiment slot holds ${s.slots.experiment} but its signature chain was not verified`
-      : null,
-};
+
 
 /** A copy owned by another manager never upgrades itself. */
 export const managedCopyNeverSelfUpgrades: Invariant = {
@@ -215,7 +208,6 @@ export const BUILT_IN_INVARIANTS: readonly Invariant[] = [
   liveProcessMatchesSlot,
   journalPrecedesPhase,
   terminalLeavesNoExperiment,
-  noUnverifiedArtifact,
   managedCopyNeverSelfUpgrades,
 ];
 
