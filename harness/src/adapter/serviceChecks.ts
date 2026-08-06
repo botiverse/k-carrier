@@ -7,7 +7,16 @@
  * test backdoors (transparency §1.8).
  *
  * These drive createUpgrader in-process (the library plane) against the
- * adapter's host + a real signed fake-server release.
+ * adapter's host + a real fake-server release.
+ *
+ * The release is the ADOPTER'S app when they supply `releaseSource`, and the
+ * demo daemon otherwise. That hook is load-bearing, not a convenience: the
+ * teeth assert the successor's version through the ADOPTER'S probe, so an
+ * adopter whose probe reads its own evidence format (raft-computer reads its
+ * machine-attestation IPC) can never pass against a demo binary. Swapping the
+ * host while pinning the artifact only ever accepted adopters that happened to
+ * speak the demo's evidence format -- which is not a contract, it is a
+ * coincidence.
  */
 import assert from "node:assert/strict";
 import * as path from "node:path";
@@ -25,13 +34,31 @@ import { PLAIN_DAEMON_SOURCE } from "../../../examples/service-daemon/source.ts"
 /** The adopter module's factory contract for the service tier. */
 export type ServiceAdapterFactory = (stateDir: string) => HostDriver & {
   lifecycleSurfaces?: () => ReadbackSurface[];
+  /**
+   * The SOURCE TEXT of a release of the ADOPTER'S app (not a path to it — the
+   * artifact factory stamps text, exactly as it does for the demos). The
+   * harness substitutes `__K_VERSION__` and `__K_BEHAVIOR__` and serves the
+   * result. Omit to be tested against the demo daemon.
+   *
+   * `__K_BEHAVIOR__` is not optional to honour. Every negative control in
+   * this file works by serving a `crash-on-start` release, so a source that
+   * ignores the knob turns all of them into no-ops -- the tooth would pass
+   * whether or not the property held. checkAdapterReleaseKnob proves the
+   * knob bites before any of them is trusted.
+   */
+  releaseSource?: () => string;
 };
 
-function stateDir(ctx: ToothContext): string {
+export function stateDir(ctx: ToothContext): string {
   return path.join(ctx.sandboxDir, "state");
 }
 
-function makeUpgrader(ctx: ToothContext, adapter: HostAdapter, baseUrl: string, surfaces?: ReadbackSurface[]) {
+/** The adopter's own app source TEXT when supplied, else the demo daemon. */
+export function releaseSourceFor(adapter: { releaseSource?: () => string }): string {
+  return adapter.releaseSource ? adapter.releaseSource() : PLAIN_DAEMON_SOURCE;
+}
+
+export function makeUpgrader(ctx: ToothContext, adapter: HostAdapter, baseUrl: string, surfaces?: ReadbackSurface[]) {
   const opts: import("../../../core/src/createUpgrader.ts").CreateUpgraderOptions = {
     host: adapter,
     source: staticManifestSource({ baseUrl }),
@@ -62,13 +89,13 @@ export async function checkAdapterServiceUpgrade(
     version: "1.0.0",
     behavior: "ok",
     name: "adapter-seed",
-    source: PLAIN_DAEMON_SOURCE,
+    source: releaseSourceFor(adapter),
   });
   const target = await serveRelease(ctx, {
     version: "2.0.0",
     behavior: opts.serveBadVersion ? "crash-on-start" : "ok",
     name: "adapter-target",
-    source: PLAIN_DAEMON_SOURCE,
+    source: releaseSourceFor(adapter),
   });
   try {
     // seed: a real upgrade with the adapter host lands stable 1.0.0
@@ -124,13 +151,13 @@ export async function checkAdapterServiceRollback(
     version: "1.0.0",
     behavior: "ok",
     name: "adapter-seed",
-    source: PLAIN_DAEMON_SOURCE,
+    source: releaseSourceFor(adapter),
   });
   const target = await serveRelease(ctx, {
     version: "2.0.0",
     behavior: opts.serveGoodVersion ? "ok" : "crash-on-start",
     name: "adapter-target",
-    source: PLAIN_DAEMON_SOURCE,
+    source: releaseSourceFor(adapter),
   });
   try {
     const seedUp = makeUpgrader(ctx, adapter, seed.url);
@@ -190,13 +217,13 @@ export async function checkAdapterLifecycleConverged(
     version: "1.0.0",
     behavior: "ok",
     name: "adapter-seed",
-    source: PLAIN_DAEMON_SOURCE,
+    source: releaseSourceFor(adapter),
   });
   const target = await serveRelease(ctx, {
     version: "2.0.0",
     behavior: "ok",
     name: "adapter-target",
-    source: PLAIN_DAEMON_SOURCE,
+    source: releaseSourceFor(adapter),
   });
   try {
     const seedUp = makeUpgrader(ctx, adapter, seed.url, surfacesToUse);

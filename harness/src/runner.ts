@@ -13,6 +13,7 @@
  */
 import { pathToFileURL } from "node:url";
 import { teethFor, type Profile, type ToothContext } from "./teeth/registry.ts";
+import { checkAdapterReleaseKnob } from "./adapter/releaseKnob.ts";
 import { createSandbox } from "./scenario/sandbox.ts";
 import { buildReceipt, type CheckResult, type Receipt } from "./receipt.ts";
 import {
@@ -206,17 +207,42 @@ export async function runAdapter(profile: Profile, adapterPath: string): Promise
   // adapter without them is a contract-subset-only host and the checks are
   // skipped (like the ledger checks' driver skip).
   if (profile === "service") {
-    const serviceChecks: Array<{ id: string; run: (ctx: ToothContext, f: ServiceAdapterFactory) => Promise<void> }> = [
+    const serviceChecks: Array<{
+      id: string;
+      needsSurfaces?: boolean;
+      run: (ctx: ToothContext, f: ServiceAdapterFactory) => Promise<void>;
+    }> = [
+      // First: every check below has a negative control that works by serving
+      // a crash-on-start release. If the adopter's source ignores the knob,
+      // those controls are no-ops and the passes below mean nothing -- so this
+      // is reported before them, not after.
+      { id: "adapter.service-release-knob-bites", run: (ctx, f) => checkAdapterReleaseKnob(ctx, f) },
       { id: "adapter.service-upgrade", run: (ctx, f) => checkAdapterServiceUpgrade(ctx, f) },
       { id: "adapter.service-rollback", run: (ctx, f) => checkAdapterServiceRollback(ctx, f) },
-      { id: "adapter.lifecycle-converged", run: (ctx, f) => checkAdapterLifecycleConverged(ctx, f) },
+      {
+        id: "adapter.lifecycle-converged",
+        // Lifecycle convergence is an opt-in CAPABILITY, not part of being a
+        // service. An adopter that drives no OS-lifecycle surface (a plain
+        // detached owner, say) has nothing to converge, and failing it for
+        // that would push adopters toward declaring a surface they do not
+        // actually read -- the projection L3 bans, invited by the harness.
+        //
+        // It reports `na`, never `pass`: exactly what core does with
+        // `hostLifecycleConverged: null`. Silence keeps its own value here too,
+        // so a receipt can never be read as "convergence checked".
+        needsSurfaces: true,
+        run: (ctx, f) => checkAdapterLifecycleConverged(ctx, f),
+      },
     ];
-    for (const { id, run } of serviceChecks) {
+    for (const { id, needsSurfaces, run } of serviceChecks) {
       checks.push(
         await runCheck(id, async () => {
           const sb = await createSandbox({ prefix: id.replaceAll(".", "-") });
           try {
             if (!serviceTier) return { skipped: true };
+            if (needsSurfaces === true && (factory(sb.dir).lifecycleSurfaces?.() ?? []).length === 0) {
+              return { skipped: true };
+            }
             await run({ profile, sandboxDir: sb.dir }, factory);
           } finally {
             await sb.teardown();
