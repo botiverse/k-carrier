@@ -46,6 +46,17 @@ export interface DownloadOptions {
   /** Abort the download after this many ms (0 = no timeout). Default 10000. */
   timeoutMs?: number;
   /**
+   * Abort after this many ms with NO bytes arriving (0 = off). Default 0.
+   *
+   * Distinct from `timeoutMs`, and for large artifacts the more useful of the
+   * two: a total budget must either be big enough for the slowest acceptable
+   * download of a 150MB binary -- in which case a wedged connection holds for
+   * just as long -- or small enough to kill a slow one that was making steady
+   * progress. Bounding SILENCE instead follows liveness, so the limit does not
+   * have to encode a guess about size or bandwidth.
+   */
+  stallTimeoutMs?: number;
+  /**
    * Directory for partial-download state. When set, an interrupted download
    * leaves its prefix here and the next attempt resumes via Range.
    */
@@ -78,7 +89,9 @@ export async function downloadVerified(
     if (partialSize >= release.size) partialSize = 0; // complete/over-long is not a resume point
   }
 
-  const bytes = await fetchAndAppend(url, partialPath, partialSize, clock, timeoutMs, opts.onProgress, release.size);
+  const bytes = await fetchAndAppend(
+    url, partialPath, partialSize, clock, timeoutMs, opts.onProgress, release.size, opts.stallTimeoutMs ?? 0,
+  );
 
   const sha = sha256Hex(bytes);
   if (sha !== release.sha256) {
@@ -114,20 +127,39 @@ async function fetchAndAppend(
   timeoutMs: number,
   onProgress?: (downloaded: number, total: number) => void,
   total?: number,
+  stallTimeoutMs = 0,
 ): Promise<Uint8Array> {
   const controller = new AbortController();
   const cancel = timeoutMs > 0 ? clock.after(timeoutMs, () => controller.abort()) : undefined;
+  // Rearmed on every chunk; fires only if the gap between chunks exceeds the
+  // budget. `stalled` records WHY we aborted, because the abort itself cannot
+  // say -- a stall and a total-timeout abort look identical at the signal.
+  let stalled = false;
+  let stallTimer: (() => void) | undefined;
+  const armStall = (): void => {
+    if (stallTimeoutMs <= 0) return;
+    stallTimer?.();
+    stallTimer = clock.after(stallTimeoutMs, () => {
+      stalled = true;
+      controller.abort();
+    });
+  };
   try {
     const headers: Record<string, string> = {};
     if (partialSize > 0) headers["Range"] = `bytes=${partialSize}-`;
     let res: Response;
+    armStall(); // the response headers themselves must not hang forever
     try {
       res = await fetch(url, { signal: controller.signal, headers });
     } catch (err) {
       const timedOut = controller.signal.aborted;
       throw new ArtifactError(
         "DOWNLOAD_FAILED",
-        timedOut ? `download timed out after ${timeoutMs}ms: ${url}` : `fetch failed: ${url}`,
+        stalled
+          ? `download stalled: nothing received for ${stallTimeoutMs}ms (awaiting response): ${url}`
+          : timedOut
+            ? `download timed out after ${timeoutMs}ms: ${url}`
+            : `fetch failed: ${url}`,
         { cause: err },
       );
     }
@@ -136,7 +168,12 @@ async function fetchAndAppend(
     }
 
     if (partialPath === null) {
-      return new Uint8Array(await res.arrayBuffer());
+      // Stream even with nowhere to resume to. `res.arrayBuffer()` is one
+      // opaque await: no chunk boundaries, so neither the stall timer nor the
+      // progress sink can observe anything -- a download without a resumeDir
+      // silently had no byte progress and no stall detection at all, while
+      // both looked configured.
+      return collectStream(res.body, total, onProgress, armStall);
     }
 
     // Resume semantics: only a 206 proves the server honored the Range.
@@ -152,8 +189,10 @@ async function fetchAndAppend(
         // reads as "it lost my download" to the person watching it.
         let onDisk = partialSize;
         onProgress?.(onDisk, total ?? 0);
+        armStall();
         await streamToFile(res.body, fh, (chunk) => {
           onDisk += chunk;
+          armStall();
           onProgress?.(onDisk, total ?? 0);
         });
       }
@@ -164,7 +203,11 @@ async function fetchAndAppend(
       const timedOut = controller.signal.aborted;
       throw new ArtifactError(
         "DOWNLOAD_FAILED",
-        timedOut ? `download timed out after ${timeoutMs}ms: ${url}` : `download interrupted: ${url}`,
+        stalled
+          ? `download stalled: nothing received for ${stallTimeoutMs}ms (mid-body): ${url}`
+          : timedOut
+            ? `download timed out after ${timeoutMs}ms: ${url}`
+            : `download interrupted: ${url}`,
         { cause: err },
       );
     } finally {
@@ -173,7 +216,39 @@ async function fetchAndAppend(
     return new Uint8Array(await fs.readFile(partialPath));
   } finally {
     cancel?.();
+    stallTimer?.();
   }
+}
+
+/** Read a body into memory, keeping chunk boundaries visible to the caller. */
+async function collectStream(
+  body: ReadableStream<Uint8Array> | null,
+  total: number | undefined,
+  onProgress: ((downloaded: number, total: number) => void) | undefined,
+  onChunk: () => void,
+): Promise<Uint8Array> {
+  const parts: Uint8Array[] = [];
+  let got = 0;
+  onProgress?.(0, total ?? 0);
+  const reader = body?.getReader();
+  if (reader) {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value === undefined) continue;
+      parts.push(value);
+      got += value.byteLength;
+      onChunk();
+      onProgress?.(got, total ?? 0);
+    }
+  }
+  const all = new Uint8Array(got);
+  let at = 0;
+  for (const part of parts) {
+    all.set(part, at);
+    at += part.byteLength;
+  }
+  return all;
 }
 
 async function streamToFile(
