@@ -89,8 +89,6 @@ export interface NotificationEvent {
     | "upgrade-failed"
     | "rolled-back"
     | "held"
-    | "promoted"
-    /** Installing bytes the client chose to accept without attribution. */
-    | "installed-unverified";
+    | "promoted";
   detail: Record<string, string>;
 }
