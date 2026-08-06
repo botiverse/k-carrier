@@ -10,7 +10,7 @@ import { checkMissingTargetFails } from "../targetCheck.ts";
 registerTooth({
   id: "blackbox.missing-target-fails",
   profiles: ["swap", "service"],
-  layers: ["L0", "L0.5", "L1p"],
+  layers: ["L0", "L1p"],
   kind: { kind: "invariant" },
   mustRed: [
     {

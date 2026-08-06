@@ -94,7 +94,7 @@ test("tier boundary: a cli-tagged tooth exercising L2 is rejected at registratio
   );
   // cli-tagged tooth within cli layers is fine
   registerTooth(
-    validSpec({ id: "ok.cli-tooth", profiles: ["swap"], layers: ["L0", "L0.5", "L1p"] }),
+    validSpec({ id: "ok.cli-tooth", profiles: ["swap"], layers: ["L0", "L1p"] }),
   );
   assert.equal(teethFor("swap").length, 1);
 });

@@ -13,7 +13,7 @@ import {
 registerTooth({
   id: "examples.swap-tool-blackbox",
   profiles: ["swap"],
-  layers: ["L0", "L0.5", "L1p"],
+  layers: ["L0", "L1p"],
   kind: { kind: "invariant" },
   mustRed: [
     {
@@ -31,7 +31,7 @@ registerTooth({
 registerTooth({
   id: "examples.service-daemon-contract",
   profiles: ["service"],
-  layers: ["L0", "L0.5", "L2", "L3"],
+  layers: ["L0", "L2", "L3"],
   kind: { kind: "invariant" },
   mustRed: [
     {

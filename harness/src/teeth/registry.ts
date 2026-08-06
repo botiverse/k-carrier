@@ -1,3 +1,5 @@
+import * as path from "node:path";
+
 /**
  * Teeth registry — the discipline carrier of the harness (harness-design §1.5).
  *
@@ -59,7 +61,13 @@ export const ALL_CAPABILITIES: readonly Capability[] = [
 ];
 
 /** L1p = the simplified cli-profile slot model ("swap is promote"). */
-export type Layer = "L0" | "L0.5" | "L1p" | "L1" | "L2" | "L3" | "L4" | "L5";
+/**
+ * Design-doc layers a tooth exercises. L0.5 (supply chain / signing) was
+ * removed with the feature on 2026-08-06 and is deliberately absent: a tag
+ * for a layer that does not exist makes a tooth look like it covers ground
+ * nobody is standing on.
+ */
+export type Layer = "L0" | "L1p" | "L1" | "L2" | "L3" | "L4" | "L5";
 
 /** Which layers each profile is allowed to exercise (design §2.5). */
 /**
@@ -73,8 +81,8 @@ export type Layer = "L0" | "L0.5" | "L1p" | "L1" | "L2" | "L3" | "L4" | "L5";
  *           OS lifecycle state that must converge.
  */
 export const PROFILE_LAYERS: Record<Profile, ReadonlySet<Layer>> = {
-  swap: new Set<Layer>(["L0", "L0.5", "L1p"]),
-  service: new Set<Layer>(["L0", "L0.5", "L1p", "L1", "L2", "L3", "L4", "L5"]),
+  swap: new Set<Layer>(["L0", "L1p"]),
+  service: new Set<Layer>(["L0", "L1p", "L1", "L2", "L3", "L4", "L5"]),
 };
 
 export type ToothKind =
@@ -110,6 +118,14 @@ export interface ToothSpec {
   kind: ToothKind;
   mustRed: MustRed[];
   run: (ctx: ToothContext) => Promise<void>;
+  /**
+   * Where registerTooth was called, as `file:line`. Captured from the stack
+   * at registration, never written by hand: an explicit field would be one
+   * more thing to forget, and a stale pointer to a test case is worse than
+   * none. Presentation only -- `k-harness --list` prints it so "which cases
+   * exist and where do I read one" is answerable without grepping.
+   */
+  registeredAt?: string;
 }
 
 export type RegistrationErrorCode =
@@ -135,6 +151,19 @@ export class ToothRegistrationError extends Error {
 const ID_RE = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
 
 const registry = new Map<string, ToothSpec>();
+
+/** The first stack frame outside this file = the registration site. */
+function callerSite(): string | undefined {
+  const stack = new Error().stack?.split("\n").slice(1) ?? [];
+  for (const frame of stack) {
+    const m = /\(?((?:file:\/\/)?\/[^\s()]+):(\d+):\d+\)?$/.exec(frame.trim());
+    if (!m) continue;
+    const file = m[1]!.replace(/^file:\/\//, "");
+    if (file.endsWith("/registry.ts")) continue;
+    return `${path.relative(process.cwd(), file)}:${m[2]}`;
+  }
+  return undefined;
+}
 
 export function registerTooth(spec: ToothSpec): void {
   if (!spec.id || !ID_RE.test(spec.id)) {
@@ -189,7 +218,8 @@ export function registerTooth(spec: ToothSpec): void {
       }
     }
   }
-  registry.set(spec.id, spec);
+  const site = callerSite();
+  registry.set(spec.id, site === undefined ? { ...spec } : { ...spec, registeredAt: site });
 }
 
 /**

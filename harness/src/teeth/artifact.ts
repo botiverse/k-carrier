@@ -79,7 +79,7 @@ registerTooth({
 registerTooth({
   id: "m1.swap-tool-upgrade",
   profiles: ["swap"],
-  layers: ["L0", "L0.5", "L1p"],
+  layers: ["L0", "L1p"],
   kind: { kind: "invariant" },
   mustRed: [
     {
@@ -93,7 +93,7 @@ registerTooth({
 registerTooth({
   id: "m1.swap-tool-rollback",
   profiles: ["swap"],
-  layers: ["L0", "L0.5", "L1p"],
+  layers: ["L0", "L1p"],
   kind: { kind: "invariant" },
   mustRed: [
     {
@@ -115,7 +115,7 @@ registerTooth({
 registerTooth({
   id: "m3.service-upgrade",
   profiles: ["service"],
-  layers: ["L0", "L0.5", "L1", "L2", "L3"],
+  layers: ["L0", "L1", "L2", "L3"],
   kind: { kind: "invariant" },
   mustRed: [
     {
@@ -133,7 +133,7 @@ registerTooth({
 registerTooth({
   id: "m3.service-rollback",
   profiles: ["service"],
-  layers: ["L0", "L0.5", "L1", "L2", "L3"],
+  layers: ["L0", "L1", "L2", "L3"],
   kind: { kind: "invariant" },
   mustRed: [
     {
@@ -147,7 +147,7 @@ registerTooth({
 registerTooth({
   id: "m3.stuck-driver-evidence-recovery",
   profiles: ["service"],
-  layers: ["L0", "L0.5", "L1", "L2", "L3"],
+  layers: ["L0", "L1", "L2", "L3"],
   kind: { kind: "invariant" },
   mustRed: [
     {
@@ -175,7 +175,7 @@ registerTooth({
 registerTooth({
   id: "m4.confirm-no-consent-zero-side-effects",
   profiles: ["service"],
-  layers: ["L0", "L0.5", "L1", "L4"],
+  layers: ["L0", "L1", "L4"],
   kind: { kind: "invariant" },
   mustRed: [
     {
@@ -189,7 +189,7 @@ registerTooth({
 registerTooth({
   id: "m4.consent-binds-version",
   profiles: ["service"],
-  layers: ["L0", "L0.5", "L1", "L4"],
+  layers: ["L0", "L1", "L4"],
   kind: { kind: "invariant" },
   mustRed: [
     {
@@ -203,7 +203,7 @@ registerTooth({
 registerTooth({
   id: "m4.notify-only-reports-installable-version",
   profiles: ["service"],
-  layers: ["L0", "L0.5", "L1", "L4"],
+  layers: ["L0", "L1", "L4"],
   kind: { kind: "invariant" },
   mustRed: [
     {
