@@ -13,7 +13,7 @@
 | 测什么 | 怎么算过 | must-red |
 |---|---|---|
 | fake-host（实现 HostAdapter 的最小假宿主，带可注入故障开关） | 五方法可被编排调用、故障开关能让任一方法定点失败 | 关掉故障开关注入 ⇒ 对应齿必须转绿（证明齿测的是故障不是常态） |
-| fake 静态 server（manifest+工件+签名，可篡改） | 正常链路可走通 | 篡改任一字节 ⇒ 下游校验齿红 |
+| fake 静态 server（manifest+工件，认 Range，可篡改） | 正常链路可走通 | 篡改任一字节 ⇒ 下游校验齿红 |
 | **harness 自验**（mutation 契约 §自验承重墙） | 内置已知红/已知绿样例各≥1 + **1 个对抗样例**（结构过 fixture、违真 oracle） | 对抗样例被判 EFFECTIVE ⇒ harness 不上线 |
 | profile 分档执行器 | `--profile swap|daemon|managed` 只跑该档齿集 | cli 档误跑 L2 齿 ⇒ 计划红（档界齿） |
 
@@ -26,21 +26,20 @@
 | journal 性质 | append-only、意图先于动作（WAL）、重放幂等 | 乱序/覆写 journal ⇒ 重放拒绝 |
 | 回滚对称性 | rolled-back 后 stable 完整可跑、experiment 槽清空、原因入 journal | 回滚后 experiment 残留可执行 ⇒ 红 |
 | config 同轨 | 配置 experiment/promote/rollback 走同一状态机 | config 绕过状态机直写 ⇒ 红 |
-| L0 channel 解析 | latest/alpha/pinned:X 三态 + Version XOR Track 语义 | 未知 channel 值 fail-closed |
 | L0 校验+原子换 | sha256 不符拒装；换字节原子（半写不可见）；Windows 运行中自替换 | 篡改工件 ⇒ 拒；swap 中途 kill ⇒ 旧字节完好 |
 | cli 档端到端 | swap-tool demo：升级→下次运行是新版；`held/rolled-back/up-to-date` 四态出口都可构造 | — |
 
-**已落地齿**（`pnpm check` 实际注册）：`artifact.tamper-refuses-install`（篡改工件 ⇒ SHA256_MISMATCH 拒装；must-red：跳过 sha256 校验）、`artifact.atomic-swap-crash-safe`（64MiB 真进程中途 SIGKILL ⇒ 旧字节完好 + 恢复；must-red：就地写无 tmp+rename）、`artifact.source-fails-closed`（未知平台/指名版本 ⇒ 拒）、`m1.swap-tool-upgrade`（`k-harness --bin` 等价黑盒闭环：真升级 → 下次运行新版本 → state promoted；must-red：升级不到 stable 槽）、`m1.swap-tool-rollback`（crash-on-start 坏版本 ⇒ 自动回滚 + 旧可用 + experiment 清空；must-red：坏版本被 promote）、`m1.download-resumes-after-kill`（下载中途 SIGKILL ⇒ Range 续传 + 全量验证；must-red：从头重下无 Range）。core 单测：`core/src/artifact/{manifest,channel,download,downloadResume,swap}.test.ts`。
+**已落地齿**（`pnpm check` 实际注册）：`artifact.tamper-refuses-install`（篡改工件 ⇒ SHA256_MISMATCH 拒装；must-red：跳过 sha256 校验）、`artifact.atomic-swap-crash-safe`（64MiB 真进程中途 SIGKILL ⇒ 旧字节完好 + 恢复；must-red：就地写无 tmp+rename）、`artifact.source-fails-closed`（未知平台/指名版本 ⇒ 拒）、`m1.swap-tool-upgrade`（`k-harness --bin` 等价黑盒闭环：真升级 → 下次运行新版本 → state promoted；must-red：升级不到 stable 槽）、`m1.swap-tool-rollback`（crash-on-start 坏版本 ⇒ 自动回滚 + 旧可用 + experiment 清空；must-red：坏版本被 promote）、`m1.download-resumes-after-kill`（下载中途 SIGKILL ⇒ Range 续传 + 全量验证；must-red：从头重下无 Range）。core 单测：`core/src/artifact/{download,downloadResume,swap,source,staticManifestSource.manifest}.test.ts`。
 
-## M2 — L0.5 供应链
+## M2 — L0.5 供应链：**不做**
 
-| 测什么 | 怎么算过 | must-red |
-|---|---|---|
-| 两级签名链 | root→signing.pub→file 全链验过才装 | 篡改 file/sig/signing.pub 任一 ⇒ 拒；无签名 ⇒ 拒（**无 AllowUnsigned 后门——测试恒用完整测试签名链**，透明性原则） |
-| root 轮换 | 多 root 并存期新旧 root 签的 signing.pub 都可验 | 已移除 root 签的 ⇒ 拒 |
-| 防回滚 | manifest 版本低于当前且非 pinned ⇒ 默认拒（显式降级需 typed 确认） | 静默接受更低版本 ⇒ 红 |
+L0.5 已于 2026-08-06 移除（xxchan 决定：不支持签名）。K 只验完整性（sha256 +
+size），不验来源真实性；原两级签名链、`m2.*` 四颗齿与 harness 的测试密钥链一并
+删除。留一个没人接的签名接口比没有更糟——接入方会以为来路已经有人管了。理由，
+以及它与 OS 代码签名的区别，见 `docs/design-v1.md` §L0.5。
 
-**状态：不适用 —— L0.5 供应链层已于 2026-08-06 移除**（xxchan 决定：不支持签名）。K 只验完整性（sha256 + size），不验来源真实性；原 `m2.*` 四颗齿与 `core/src/distsign/` 一并删除。理由与它和 OS 代码签名的区别见 `docs/design-v1.md` §L0.5。
+**防回滚不在这层**：manifest 版本低于当前且非 pinned ⇒ 默认拒，这是 L0 的
+`source-fails-closed` 管的，与签名无关。
 
 ## M3 — L2 生命周期 + L3 收敛（出口：`examples/service-daemon` 绿 = daemon 档成立）
 

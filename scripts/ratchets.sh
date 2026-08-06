@@ -86,5 +86,44 @@ then
   say "docs/test-plan.md cites a tooth that is not registered"
 fi
 
+# 8) Docs may not cite a source file that does not exist.
+#    Same failure as 7 one level down: ratchet 7 found ghost TEETH while
+#    docs/test-plan.md was citing core/src/artifact/{manifest,channel}.test.ts,
+#    neither of which was ever written. A named file reads as harder evidence
+#    than a named tooth -- a reviewer checks a tooth list, but takes a file
+#    path on faith.
+#    Brace expansion in prose (a/{b,c}.test.ts) is expanded before checking,
+#    or the citation form that actually appears in the docs would be skipped.
+#    A path that is DELIBERATELY gone (documenting a removal) must say so on
+#    the same line: "removed" / "deleted" / "删除" / "移除". The marker is the
+#    exemption, so the reader sees the same thing the checker does -- an
+#    exemption the checker infers silently is one the reader never learns.
+#    Known limit: a line that cites a LIVE path and happens to contain one of
+#    those words is exempt too, so a later deletion of that path would go
+#    unflagged. Narrow enough to accept; widening the marker to a dedicated
+#    token would cost every removal note a magic string.
+if ! node --input-type=module -e '
+import { readFileSync, existsSync } from "node:fs";
+import { readdirSync } from "node:fs";
+const docs = readdirSync("docs").filter((f) => f.endsWith(".md")).map((f) => "docs/" + f);
+const missing = [];
+for (const doc of [...docs, "README.md"]) {
+  const text = readFileSync(doc, "utf8");
+  for (const m of text.matchAll(/`((?:core|harness|examples|scripts)\/[^`\s]+)`/g)) {
+    const cited = m[1];
+    const brace = /^(.*)\{([^}]+)\}(.*)$/.exec(cited);
+    const paths = brace ? brace[2].split(",").map((x) => brace[1] + x.trim() + brace[3]) : [cited];
+    const line = text.slice(0, m.index).split("\n").length - 1;
+    const lineText = text.split("\n")[line] ?? "";
+    if (/removed|deleted|删除|移除/.test(lineText)) continue;
+    for (const p of paths) if (!existsSync(p.replace(/\/$/, ""))) missing.push(doc + " -> " + p);
+  }
+}
+if (missing.length) { console.log("docs cite nonexistent paths:\n  " + missing.join("\n  ")); process.exit(1); }
+' 2>&1
+then
+  say "a doc cites a source path that does not exist"
+fi
+
 [ $fail -eq 0 ] && echo "ratchets: all green"
 exit $fail

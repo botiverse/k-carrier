@@ -17,7 +17,7 @@ harness/
 │   ├─ inproc.ts     进程内 HostAdapter 实现（快速单元级）
 │   └─ daemon.ts     可 spawn 的真进程假 daemon（kill -9 是真的）
 ├─ fake-server/      本地静态发布服务器 + 篡改 API
-├─ artifact-factory/ 版本工件工厂（一次构建多次盖戳 + behavior 旋钮 + 签名链）
+├─ artifact-factory/ 版本工件工厂（一次构建多次盖戳 + behavior 旋钮）
 ├─ scenario/         场景运行器（隔离沙箱 + 虚拟时钟）
 ├─ crash/            崩溃注入编排器（枚举生成，禁手列）
 ├─ teeth/            齿注册表 + 分档 + 自验
@@ -30,8 +30,8 @@ harness/
 - **虚拟负载账本**：假宿主维护一个确定性"会话状态"文件（计数器+校验和）；`quiesce↔resume` 等价断言 = 账本逐字节比对（**含 rolled-back 后 resume**）。这是"会话保留"的可机械判定形态。
 
 ### 1.2 fake-server（假发布端）
-- 本地静态文件服务 + manifest 构造器 + 测试密钥签名助手（root/signing 全套测试链）。
-- **篡改 API**：`corruptByte(file, offset) / swapSig / serveOlderVersion / dropFile` —— 供应链齿全部走"真篡改→真拒绝"，不 mock 校验函数。
+- 本地静态文件服务 + manifest 构造器（含 Range 续传——不认 Range 的桩会让"续传"悄悄退化成普通下载）。
+- **篡改 API**：`corruptByte(file, offset) / swapFiles / serveOlderVersion / dropFile` —— 完整性齿全部走"真篡改→真拒绝"，不 mock 校验函数。判据是 sha256：K 验完整性不验来源（design-v1 §L0.5），所以篡改的判据也只能是"服务的字节还对不对得上 manifest 的摘要"。
 
 ### 1.3 scenario（场景运行器）
 - **一场景一沙箱**：独立 temp stateDir + 独立 fake-server 端口 → 全部并行安全、可重复。
@@ -120,7 +120,7 @@ export default {
 ## 1.77 版本工件工厂 + 清场（xxchan 08-05："准备相应版本的二进制？删除清空？"）
 
 **① artifact-factory（升级测试需要"同一个 app 的 vX 和 vY"）**：
-- `makeRelease({version, behavior})` → 产出**盖了版本戳的真二进制** + manifest + 完整测试签名链，落到 fake-server。实现 = **一次构建、多次盖戳**（构建 demo 源码一次，post-build 往二进制里注入版本串——与真 SEA 嵌版本同型，快且真实；不用"版本写在旁边文件"那种假形态）。
+- `makeRelease({version, behavior})` → 产出**盖了版本戳的真二进制** + manifest，落到 fake-server。实现 = **一次构建、多次盖戳**（构建 demo 源码一次，post-build 往二进制里注入版本串——与真 SEA 嵌版本同型，快且真实；不用"版本写在旁边文件"那种假形态）。
 - `behavior` 旋钮让某个"新版本"**故意坏**：`crash-on-start / wrong-probe / hang-on-quiesce ...` —— 回滚齿、known-red、对抗样本的 fixture 都从这来（"升到坏版本→自动回滚→stable 完好"整条链可黑盒复现）。
 - 内容寻址缓存（key = demo 源 hash × version × behavior），跨场景复用，不重复构建。
 
@@ -136,7 +136,6 @@ export default {
 - harness 需要的一切必须走**产品级注入面**——这些面是产品本来就需要的，不是为测试开的：
   - `HostAdapter`：产品 API 本体，fake-host 只是又一个 adapter；
   - `releaseBase`：指向 localhost 是配置，不是测试感知；
-  - `rootKeys`：注入是产品需求（每个 app 编译自己的根），测试链只是另一组真钥匙——**签名验证永不可关**；
   - `clock`：时钟 seam 是正当的生产抽象（默认真时钟），不是测试后门；
   - `stateDir`：本就按 app 配置。
 - 崩溃注入 = 对真进程 kill -9，零 core 配合；故障注入全在 fake-host（harness 侧代码）；对抗样本 = 假 adapter——全部外部。
@@ -152,7 +151,7 @@ export default {
 ## 3. 实现顺序（M0 内部）
 1. teeth 注册表 + 分档执行器 + 二分标注检查（纯逻辑，先立规矩）；
 2. scenario 沙箱 + 虚拟时钟；
-3. fake-server + 测试签名链；
+3. fake-server（静态服务 + 篡改 API）；
 4. fake-host inproc → fake-host daemon（真进程）；
 5. crash 枚举器（吃 core 状态机表——此时 core 只需 `txn/state.ts` 的类型，已存在）；
 6. 自验三样本 → **M0 出口**。

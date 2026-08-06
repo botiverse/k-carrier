@@ -192,20 +192,54 @@ to K and it becomes enforced rather than hoped for.
 ```
             YOUR APP                    |              K CORE
                                         |
-  daemon ──┐                            |   ┌─ artifact (channel/download/verify/swap)
+  daemon ──┐                            |   ┌─ artifact (download/resume/verify/swap)
   CLI `myapp self upgrade` ──┤ construct|   ├─ (no signature client — see §Trust)
   install script ──┘    the same        |   ├─ txn (two-slot + journal + state machine)
                         ┌────────────┐  |   ├─ lifecycle (handoff orchestration)
                         │  Upgrader  │──┼──►├─ converge (predicates + readback)
                         └────────────┘  |   ├─ policy (consent/notify gating)
-  your HostAdapter ◄────────────────────┼───┘  (calls back into your adapter only)
-  your notificationSink ◄───────────────┘
+  your HostAdapter ◄────────────────────┼───┤
+  your notificationSink ◄───────────────┼───┤
+  your onProgress ◄─────────────────────┼───┘  (calls back into your code only)
 ```
 
 One rule regardless of profile: **every entrypoint constructs the same
 Upgrader.** Your daemon's auto-update loop, your CLI subcommand, your
 install script — same object, same path. This kills the bug class where one
 entrypoint upgrades correctly and another silently doesn't.
+
+## 4.5 Showing progress
+
+Pass `onProgress` and K reports where an upgrade is:
+
+```ts
+createUpgrader({
+  ...,
+  onProgress: (p) => {
+    // p.stage: checking | downloading | verifying | staging
+    //        | handing-over | probing | promoted | rolled-back
+    // p.downloaded / p.total: bytes, present during `downloading` only
+    render(p);
+  },
+});
+```
+
+Three things worth knowing before you draw a bar with it:
+
+- **Only `downloading` has a denominator.** Every other stage reports a
+  stage and nothing else, because K does not know how long staging or
+  probing will take and will not invent a number.
+- **`downloaded` counts bytes on disk, not bytes fetched this attempt.** A
+  resumed download starts at the size of the partial file. That is deliberate:
+  a bar that restarts from zero after a network blip reads as "it lost my
+  download".
+- **Your sink cannot fail the upgrade.** K calls it inside a `try`/`catch`
+  and discards anything it throws. An observation surface must never become
+  a failure mode — if your renderer breaks, the upgrade still completes.
+
+The stages are not a parallel state machine: they are derived from the L1
+transaction phases (`stageForPhase`), so a progress display can never show a
+state the transaction does not have.
 
 ## 5. Publishing releases
 
