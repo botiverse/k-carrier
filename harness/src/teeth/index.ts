@@ -11,3 +11,4 @@ import "./examples.ts";
 import "./blackbox.ts";
 import "./artifact.ts";
 import "./artifactM5.ts";
+import "./artifactM6.ts";

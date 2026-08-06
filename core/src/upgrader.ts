@@ -4,6 +4,18 @@ import type { ConvergenceReport } from "./converge/predicates.js";
 import type { ReleaseSource } from "./artifact/source.js";
 
 /**
+ * Who drove a reconcile, recorded in the provenance journal (M6, L5).
+ * `who` is the driving identity (server/operator), `carrier` the channel
+ * the command travelled on. The artifact VERSION is recorded by the
+ * upgrader (it knows what it installed; the identity does not need to).
+ * Local auto-updates use the upgrader's configured default identity.
+ */
+export interface ProvenanceIdentity {
+  who: string;
+  carrier: string;
+}
+
+/**
  * Upgrader is the single facade an application calls. Every entrypoint the
  * app exposes (daemon-internal auto-update, `myapp self upgrade`, install
  * script, remote drive) constructs the SAME Upgrader — one canonical
@@ -38,7 +50,7 @@ export interface Upgrader {
    * silently installing whatever is current now. Consent is to a SPECIFIC
    * version, never to "the upgrade" as an event.
    */
-  upgradeTo(version: string, opts?: { consented?: boolean }): Promise<UpgradeOutcome>;
+  upgradeTo(version: string, opts?: { consented?: boolean; provenance?: ProvenanceIdentity }): Promise<UpgradeOutcome>;
 
   /** Explicit rollback while an experiment is live (pre-promote). */
   rollback(reason: string): Promise<void>;
