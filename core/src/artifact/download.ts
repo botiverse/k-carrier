@@ -138,11 +138,11 @@ async function fetchAndAppend(
   // say -- a stall and a total-timeout abort look identical at the signal.
   let stalled = false;
   let stallTimer: (() => void) | undefined;
-  // Set by the race below; invoked when either deadline fires so the pending
-  // fetch cannot outlive its own timeout.
+  // Invoked when a deadline fires so the pending fetch cannot outlive it.
   let aborted: (() => void) | undefined;
-  // Which phase the stall fired in — "awaiting response" for a mid-body stall
-  // would send the reader looking at the wrong end of the transfer.
+  // Which phase we were in when the deadline fired. Reporting "awaiting
+  // response" for a stall that happened mid-body sends the reader looking at
+  // the wrong end of the transfer.
   let responded = false;
   const abortReason = (u: string): string =>
     stalled
@@ -256,8 +256,9 @@ async function fetchAndAppend(
       });
       await fh.sync();
     } catch (err) {
-      // interrupted (abort / connection drop): the prefix stays in the
-      // partial for the next attempt
+      // A typed error we raised (no readable body) stays typed, like the
+      // in-memory branch; only genuine interruptions become "interrupted".
+      if (err instanceof ArtifactError) throw err;
       const timedOut = controller.signal.aborted;
       throw new ArtifactError(
         "DOWNLOAD_FAILED",

@@ -77,6 +77,11 @@ registerTooth({
         "a no-body response returns zero bytes — the only symptom is a sha256 mismatch against the empty string, hiding the cause",
       caughtOnlyBy: "this", // the failure path must not produce the empty success value
     },
+    {
+      mutate:
+        "the RESUME path treats a no-body response as an empty prefix to continue from (the cause hides behind a sha256 mismatch there too)",
+      caughtOnlyBy: "this", // discovered while writing these teeth: the twin path had no pre-existing mutation to copy
+    },
   ],
   run: checkDownloadEmptyBodyNamed,
 });

@@ -92,6 +92,15 @@ test("known-red: empty-body-named catches zero bytes instead of the cause", asyn
   }
 });
 
+test("known-red: empty-body-named catches the resume path treating no body as an empty prefix", async () => {
+  const { ctx, teardown } = await ctxFor("red-dl-empty-prefix");
+  try {
+    await assert.rejects(checkDownloadEmptyBodyNamed(ctx, { treatEmptyAsPrefix: true }), /treatEmptyAsPrefix => RED/);
+  } finally {
+    await teardown();
+  }
+});
+
 test("known-red: stall-bounds catches a total-timeout stall budget", async () => {
   const { ctx, teardown } = await ctxFor("red-dl-total");
   try {

@@ -11,6 +11,7 @@
  */
 import assert from "node:assert/strict";
 import * as http from "node:http";
+import * as path from "node:path";
 import { createHash } from "node:crypto";
 import { type ToothContext } from "../teeth/registry.ts";
 import { downloadVerified } from "../../../core/src/artifact/download.ts";
@@ -21,6 +22,7 @@ import {
   naivePlatformKey,
   probeEverywherePlatformKey,
   arrayBufferDownload,
+  emptyPrefixDownload,
   totalTimeoutDownload,
   noStallDownload,
   wrongPhaseDownload,
@@ -184,15 +186,25 @@ export async function checkDownloadProgressWithoutResumeDir(
 
 export async function checkDownloadEmptyBodyNamed(
   ctx: ToothContext,
-  opts: { returnEmptyBytes?: boolean } = {},
+  opts: { returnEmptyBytes?: boolean; treatEmptyAsPrefix?: boolean } = {},
 ): Promise<void> {
   const s = await serveNoBody();
   try {
+    // arm 1: the in-memory path (no resumeDir)
     const download = opts.returnEmptyBytes ? arrayBufferDownload : downloadVerified;
     await assert.rejects(
       download(releaseFor(s.url), { timeoutMs: 0 }),
       /no readable body/,
       "a response with no readable body is a failure to READ, not an empty download — the error must name the cause, never a sha256 mismatch (returnEmptyBytes => RED)",
+    );
+    // arm 2: the RESUME path must name it too — a no-body response is never
+    // an empty prefix to continue from. This arm was added after archer
+    // proved the first arm does not bite on the resume path.
+    const resumeDownload = opts.treatEmptyAsPrefix ? emptyPrefixDownload : downloadVerified;
+    await assert.rejects(
+      resumeDownload(releaseFor(s.url), { timeoutMs: 0, resumeDir: path.join(ctx.sandboxDir, "resume") }),
+      /no readable body/,
+      "the resume path must name a no-body response as a read failure, never treat it as an empty prefix (treatEmptyAsPrefix => RED)",
     );
   } finally {
     s.close();

@@ -46,6 +46,15 @@ export function probeEverywherePlatformKey(platform: string, arch: string, probe
   return `${platform}-${probe() ? "arm64" : arch}`;
 }
 
+/** Mutation ④(resume): a no-body response is treated as an empty prefix —
+ * the resume path hides the cause behind the sha256 mismatch. */
+export async function emptyPrefixDownload(release: Release, opts: StubDownloadOpts = {}): Promise<Uint8Array> {
+  const res = await (opts.fetchImpl ?? fetch)(release.url);
+  if (!res.ok) throw new ArtifactError("DOWNLOAD_FAILED", `GET ${release.url} -> HTTP ${res.status}`);
+  if (!res.body) return new Uint8Array(0); // the wrong behavior: an "empty prefix", no error
+  return new Uint8Array(await res.arrayBuffer());
+}
+
 /** Mutation ③④⑥: one opaque `arrayBuffer()` await — no chunk boundaries,
  * so no progress, no stall detection, no error classification. The total
  * timeout is SIGNALLED (the pre-fix behavior): an abort on a wedged server
