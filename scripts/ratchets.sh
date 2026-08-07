@@ -18,10 +18,20 @@ hits=$(grep -rnE "as any|: any|<any>|@ts-ignore|@ts-expect-error|@ts-nocheck" co
 [ -n "$hits" ] && { echo "$hits"; say "any/ts-suppression escape hatch"; }
 
 # 4) Assertion dichotomy (#395): every test file declares @invariant or @baseline.
-missing=$(for f in $(find core harness examples -name '*.test.ts' 2>/dev/null); do
-  head -5 "$f" | grep -qE "@invariant|@baseline" || echo "$f";
-done)
-[ -n "$missing" ] && { echo "$missing"; say "test file missing @invariant/@baseline header tag"; }
+#    The file list is asserted non-empty FIRST. Without that, a renamed directory
+#    (or a find that fails) yields zero files, the loop body never runs, `missing`
+#    is empty, and the ratchet reports green having examined nothing -- "looked and
+#    found no violations" and "never looked" arriving at the same value. Proven:
+#    pointing find at a nonexistent dir printed "ratchets: all green".
+test_files=$(find core harness examples -name '*.test.ts')
+if [ -z "$test_files" ]; then
+  say "assertion-dichotomy ratchet found NO test files -- it checked nothing"
+else
+  missing=$(for f in $test_files; do
+    head -5 "$f" | grep -qE "@invariant|@baseline" || echo "$f";
+  done)
+  [ -n "$missing" ] && { echo "$missing"; say "test file missing @invariant/@baseline header tag"; }
+fi
 
 # 5) Platform assumptions stay behind the platform seam: core must not name
 #    signals, process-kill, or rename-based swap outside core/src/platform/.
