@@ -97,3 +97,20 @@ test("byte progress is reported even with no resumeDir", async () => {
     s.close();
   }
 });
+
+test("a fetch that IGNORES the abort signal still hits the deadline", async () => {
+  // fetchImpl is an adopter-supplied seam. A client that never settles and
+  // ignores AbortSignal would, if the deadline were only signalled, leave every
+  // timeout inert — and an inert timeout is indistinguishable from a download
+  // that is merely still working. The promise must be raced, not just aborted.
+  const neverSettles = (() => new Promise<Response>(() => {})) as unknown as typeof fetch;
+  await assert.rejects(
+    downloadVerified(release("http://127.0.0.1:1/app.bin"), {
+      fetchImpl: neverSettles,
+      timeoutMs: 150,
+      stallTimeoutMs: 0,
+    }),
+    /timed out after 150ms/,
+    "an uncooperative fetch must not be able to outlive the deadline",
+  );
+});

@@ -35,6 +35,7 @@ import { createHash } from "node:crypto";
 import { type Clock, systemClock } from "../clock.ts";
 import { ArtifactError } from "./errors.ts";
 import type { Release } from "./source.ts";
+import { collectStream } from "./collectStream.ts";
 
 export interface DownloadOptions {
   /**
@@ -140,18 +141,36 @@ async function fetchAndAppend(
   doFetch: typeof fetch = fetch,
 ): Promise<Uint8Array> {
   const controller = new AbortController();
-  const cancel = timeoutMs > 0 ? clock.after(timeoutMs, () => controller.abort()) : undefined;
   // Rearmed on every chunk; fires only if the gap between chunks exceeds the
   // budget. `stalled` records WHY we aborted, because the abort itself cannot
   // say -- a stall and a total-timeout abort look identical at the signal.
   let stalled = false;
   let stallTimer: (() => void) | undefined;
+  // Set by the race below; invoked when either deadline fires so the pending
+  // fetch cannot outlive its own timeout.
+  let aborted: (() => void) | undefined;
+  const abortReason = (u: string): string =>
+    stalled
+      ? `download stalled: nothing received for ${stallTimeoutMs}ms (awaiting response): ${u}`
+      : `download timed out after ${timeoutMs}ms: ${u}`;
+  // Declared AFTER `aborted`: an immediate/virtual clock fires this callback
+  // synchronously inside `clock.after`, so a timer created earlier would reach
+  // `aborted` in its temporal dead zone. Real clocks hide that ordering; the
+  // test clock does not.
+  const cancel =
+    timeoutMs > 0
+      ? clock.after(timeoutMs, () => {
+          controller.abort();
+          aborted?.();
+        })
+      : undefined;
   const armStall = (): void => {
     if (stallTimeoutMs <= 0) return;
     stallTimer?.();
     stallTimer = clock.after(stallTimeoutMs, () => {
       stalled = true;
       controller.abort();
+      aborted?.();
     });
   };
   try {
@@ -160,7 +179,20 @@ async function fetchAndAppend(
     let res: Response;
     armStall(); // the response headers themselves must not hang forever
     try {
-      res = await doFetch(url, { signal: controller.signal, headers });
+      // Race the abort, do not merely signal it. `AbortSignal` only works if the
+      // fetch implementation honours it, and `fetchImpl` is an adopter-supplied
+      // seam -- a custom client that ignores the signal would leave every
+      // timeout here silently inert, with no way to tell that from a fetch that
+      // is simply still working. The deadline has to be enforced by the side
+      // that promises it.
+      res = await Promise.race([
+        doFetch(url, { signal: controller.signal, headers }),
+        new Promise<never>((_, reject) => {
+          aborted = () => {
+            reject(new ArtifactError("DOWNLOAD_FAILED", abortReason(url)));
+          };
+        }),
+      ]);
     } catch (err) {
       const timedOut = controller.signal.aborted;
       throw new ArtifactError(
@@ -183,7 +215,7 @@ async function fetchAndAppend(
       // progress sink can observe anything -- a download without a resumeDir
       // silently had no byte progress and no stall detection at all, while
       // both looked configured.
-      return collectStream(res.body, total, onProgress, armStall);
+      return collectStream(url, res.body, total, onProgress, armStall);
     }
 
     // Resume semantics: only a 206 proves the server honored the Range.
@@ -228,37 +260,6 @@ async function fetchAndAppend(
     cancel?.();
     stallTimer?.();
   }
-}
-
-/** Read a body into memory, keeping chunk boundaries visible to the caller. */
-async function collectStream(
-  body: ReadableStream<Uint8Array> | null,
-  total: number | undefined,
-  onProgress: ((downloaded: number, total: number) => void) | undefined,
-  onChunk: () => void,
-): Promise<Uint8Array> {
-  const parts: Uint8Array[] = [];
-  let got = 0;
-  onProgress?.(0, total ?? 0);
-  const reader = body?.getReader();
-  if (reader) {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value === undefined) continue;
-      parts.push(value);
-      got += value.byteLength;
-      onChunk();
-      onProgress?.(got, total ?? 0);
-    }
-  }
-  const all = new Uint8Array(got);
-  let at = 0;
-  for (const part of parts) {
-    all.set(part, at);
-    at += part.byteLength;
-  }
-  return all;
 }
 
 async function streamToFile(
