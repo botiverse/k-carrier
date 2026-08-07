@@ -29,7 +29,7 @@
 | L0 校验+原子换 | sha256 不符拒装；换字节原子（半写不可见）；Windows 运行中自替换 | 篡改工件 ⇒ 拒；swap 中途 kill ⇒ 旧字节完好 |
 | cli 档端到端 | swap-tool demo：升级→下次运行是新版；`held/rolled-back/up-to-date` 四态出口都可构造 | — |
 
-**已落地齿**（`pnpm check` 实际注册）：`artifact.tamper-refuses-install`（篡改工件 ⇒ SHA256_MISMATCH 拒装；must-red：跳过 sha256 校验）、`artifact.atomic-swap-crash-safe`（64MiB 真进程中途 SIGKILL ⇒ 旧字节完好 + 恢复；must-red：就地写无 tmp+rename）、`artifact.source-fails-closed`（未知平台/指名版本 ⇒ 拒）、`m1.swap-tool-upgrade`（`k-harness --bin` 等价黑盒闭环：真升级 → 下次运行新版本 → state promoted；must-red：升级不到 stable 槽）、`m1.swap-tool-rollback`（crash-on-start 坏版本 ⇒ 自动回滚 + 旧可用 + experiment 清空；must-red：坏版本被 promote）、`m1.download-resumes-after-kill`（下载中途 SIGKILL ⇒ Range 续传 + 全量验证；must-red：从头重下无 Range）。下载层（archer L0 接入方挖出的 8 洞，每洞一齿）：`m1.download-timeout-enforced`（deadline 竞速而非仅信号——注入不理会 AbortSignal 的 fetch 也必须超时；must-red：signal-only）、`m1.platform-key-native-arch`（Rosetta：x64 Node 在 arm64 硬件选 arm64 target；探针只在 darwin+x64 被问；must-red：朴素拼接 / 到处问探针）、`m1.download-progress-without-resumedir`（无 resumeDir 进度也必须动、单调收尾到全量；must-red：arrayBuffer 路径）、`m1.download-empty-body-named`（**两臂**：内存与 resume 路径对无 body 响应都必须报 typed "no readable body"，绝不当作空前缀——错误点名原因不是 sha256 对不上空串；must-red：返回空字节 / 空前缀）、`m1.download-stall-bounds-silence`（静默被限界不是总时长：慢而正常存活、卡死点名 stall；must-red：total-timeout / 无 stall）、`m1.download-errors-classified`（我们主动放弃的 stall 是 typed DOWNLOAD_FAILED 点名原因；must-red：裸 stream 错）、`m1.download-stall-phase-honest`（mid-body 的 stall 说 mid-body；must-red：一律说 awaiting response）。core 单测：`core/src/artifact/{download,downloadResume,swap,source,staticManifestSource.manifest}.test.ts`。
+已落地齿以 `k-harness --list` 为准——本文件**不手抄齿名**（手抄清单是 `--list` 的副本，只会漂向'少列一颗'；ratchet 7 只能查'写下来的存在'，查不了'该写的没写'）。逐颗齿（层/档/must-red/定义位置）直接 `k-harness --list`。 本层判据形状：篡改工件 ⇒ 拒装；原子换（半写不可见、中途 kill 旧字节完好）；未知平台/指名版本 ⇒ 拒；cli 档闭环（真升级 → 下次运行新版本 → state promoted）；坏版本 ⇒ 自动回滚 + 旧可用 + experiment 清空；下载中途死 ⇒ Range 续传 + 全量验证。**下载层 8 洞**（archer L0 接入方挖出，每洞一齿）：deadline **竞速**而非仅信号（注入不理会 AbortSignal 的 fetch 也必须超时）；Rosetta 下 platform key **问硬件**（x64 Node 在 arm64 硬件选 arm64 target，探针只在 darwin+x64 被问）；无 resumeDir 进度也必须动（单调收尾到全量）；无 body 响应**两臂**（内存 + resume）都报 typed "no readable body"、绝不当作空前缀；静默被限界不是总时长（慢而正常存活、卡死点名 stall）；主动放弃的 stall 是 typed DOWNLOAD_FAILED 点名原因；mid-body 的 stall 说 mid-body。
 
 ## M2 — L0.5 供应链：**不做**
 
@@ -53,7 +53,7 @@ size），不验来源真实性；原两级签名链、`m2.*` 四颗齿与 harne
 | fail-closed 退役序 | 未过 host_lifecycle_converged 前退旧管理器 ⇒ 拒 + typed HOLD | 强行退役路径存在 ⇒ 红 |
 | ownership 检测 | 受管标记存在 ⇒ `held: managed-elsewhere`（typed、指向管理者） | 受管副本完成自升 ⇒ 红 |
 
-**已落地齿**：`fake-host.ledger-equivalence` / `fake-host.ledger-equivalence-after-rollback`（quiesce↔resume 账本逐字节等价，含回滚后 resume；must-red：resume 重写不同账本）、`fake-host.fault-wrong-version-probe` / `fake-host.fault-stale-startid-probe`（probe 证据绑定活化身；must-red：探针说谎/报旧 startId）、`fake-host.fault-fail-on-quiesce` / `fake-host.fault-hang-on-stop` / `fake-host.fault-crash-during-start`（每开关关掉齿必须绿）、`m3.service-upgrade`（两种宿主形状：spawn 自起 / respawn 交给 owner——真停旧、真起新、旧 pid 验证死、新化身 fresh startId；must-red：startId 复用 / stop 只发信号不验证）、`m3.service-rollback`（坏版本 ⇒ 旧版**真的拉回来在跑**，不是槽位回退；must-red：回滚不拉回旧版）、`m3.stuck-driver-evidence-recovery`（卡死 driver ⇒ 宿主调用预算超时 → 锁释放 → successor 凭**证据**（v2 + fresh startId）判交接完成；must-red：凭标志/不恢复）、`examples.service-daemon-contract`（真进程 spawn/probe/stop/升级）。`host_lifecycle_converged` / 禁投影 / 退役序 → M5 齿。
+已落地齿以 `k-harness --list` 为准——本文件**不手抄齿名**（手抄清单是 `--list` 的副本，只会漂向'少列一颗'；ratchet 7 只能查'写下来的存在'，查不了'该写的没写'）。逐颗齿（层/档/must-red/定义位置）直接 `k-harness --list`。 本层判据形状：quiesce↔resume 账本逐字节等价（含回滚后 resume）；probe 证据**绑定活化身**（探针说谎/报旧 startId ⇒ 红）；每开关故障关掉齿必须绿；service 升级两种宿主形状（spawn 自起 / respawn 交给 owner）——真停旧、真起新、旧 pid 验证死、新化身 fresh startId；坏版本 ⇒ 旧版**真的拉回来在跑**（不是槽位回退）；卡死 driver ⇒ 宿主调用预算超时 → 锁释放 → successor 凭**证据**（v2 + fresh startId）判交接完成，凭标志不恢复。`host_lifecycle_converged` / 禁投影 / 退役序 → M5 齿。
 
 ## M4 — L4 同意与通知
 
@@ -62,7 +62,7 @@ size），不验来源真实性；原两级签名链、`m2.*` 四颗齿与 harne
 | 策略门 | confirm 未答 ⇒ 零副作用；notify-only ⇒ 只通知不动 | confirm 前有任何盘面写 ⇒ 红 |
 | **通知可验齿**（Hipp 判据原样） | 构造真实失败（迁移写失败/readback 不一致）⇒ sink **真收到**结构化事件 | 删通知调用 ⇒ 此齿必须红；"代码调用了通知"但 sink 没收到 ⇒ 红 |
 
-**已落地齿**：`m4.confirm-no-consent-zero-side-effects`（confirm 未答 ⇒ **磁盘零副作用**——无 journal/slots/incoming，不是"没 promote"是"没 staged"；must-red：策略门移到 staging 之后）、`m4.consent-binds-version`（同意续传只装**当初同意的那个版本**；中途服务器换版 ⇒ 拒装；must-red：装当前版）、`m4.notify-only-reports-installable-version`（通知带**真能装的那个版本** + 零副作用；must-red：通知版本与实际不可装）。
+已落地齿以 `k-harness --list` 为准——本文件**不手抄齿名**（手抄清单是 `--list` 的副本，只会漂向'少列一颗'；ratchet 7 只能查'写下来的存在'，查不了'该写的没写'）。逐颗齿（层/档/must-red/定义位置）直接 `k-harness --list`。 本层判据形状：confirm 未答 ⇒ **磁盘零副作用**（无 journal/slots/incoming，不是"没 promote"是"没 staged"）；同意只装**当初同意的那个版本**（中途服务器换版 ⇒ 拒装，不装"当前版"）；notify-only 通知带**真能装的那个版本** + 零副作用。
 
 ## M5 — platform 适配器 + managed 档（出口：`examples/hosted-service` 绿）
 
@@ -72,7 +72,7 @@ size），不验来源真实性；原两级签名链、`m2.*` 四颗齿与 harne
 | managed 端到端 | hosted-service demo：带活"会话"的完整升级→会话保留断言→回滚路径同样保留 | 升级后会话丢失/回滚后会话丢失 ⇒ 红 |
 | ownership 迁移场景 | **DEFERRED（xxchan 08-05 范围裁定：v0 只假设官方 installer 安装，不做 deb/RPM 接管）**——PM 装的副本走 ownership 检测 → `held: managed-elsewhere` 即为正确终态（有齿，M3）；接管(adopt)留给将来需要时再立项 | —（deferred） |
 
-**已落地齿**：`m5.lifecycle-surface-allowlist`（**面在 allowlist 才可作证**——未注册面被引用 ⇒ typed UNREGISTERED_SURFACE 拒；must-red：未注册面被接受）、`m5.lifecycle-converged-promotes`（读回新工件路径 ⇒ promote + 报告带真谓词；must-red：读回旧路径仍 promote）、`m5.lifecycle-projection-ban`（**禁投影**——版本串/元数据永远不能绿收敛谓词；must-red：投影被接受）、`m5.lifecycle-fail-closed-retirement`（**退役序**——未过收敛前 `retireLegacyManager()` 是 typed HOLD；must-red：无条件退役）。`ConvergenceReport.hostLifecycleConverged` 为 `PredicateResult | null`——**未声明面 = null = 从未被观测 = 不等于通过**（沉默不能当证据花）。`examples.hosted-service-adapter`（managed 档 adapter 契约子集）。
+已落地齿以 `k-harness --list` 为准——本文件**不手抄齿名**（手抄清单是 `--list` 的副本，只会漂向'少列一颗'；ratchet 7 只能查'写下来的存在'，查不了'该写的没写'）。逐颗齿（层/档/must-red/定义位置）直接 `k-harness --list`。 本层判据形状：**面在 allowlist 才可作证**（未注册面被引用 ⇒ typed UNREGISTERED_SURFACE 拒）；读回新工件路径才 promote（读回旧路径仍 promote ⇒ 红）；**禁投影**——版本串/元数据永远不能绿收敛谓词；**退役序**——未过收敛前 `retireLegacyManager()` 是 typed HOLD（无条件退役 ⇒ 红）。`ConvergenceReport.hostLifecycleConverged` 为 `PredicateResult | null`——**未声明面 = null = 从未被观测 = 不等于通过**（沉默不能当证据花）。
 
 ## M6 — L5 drive（可选层，最后）
 
@@ -82,10 +82,10 @@ size），不验来源真实性；原两级签名链、`m2.*` 四颗齿与 harne
 | 状态上报 | {stable, experiment, 两谓词, 策略} 与本地读回一致 | 上报值可与本地不一致 ⇒ 红 |
 | provenance journal | forward-only 记 reconcile 来路；**"已记录"与 NOT_OBSERVED 机制上不可合并** | 存量机被计入"已记录" ⇒ 红 |
 
-**已落地齿**（三包全合，main 296 绿 / 56 齿）：
-- provenance（journal 三态 genesis/observed/unreadable，只有 ENOENT 是 genesis，unreadable 上 append 拒；记录 {who, carrier, when, version} 写前）：`m6.provenance-forward-only`（4 must-red：重写被接受 / 撕裂行保留 / seq 折叠 / 损坏历史上 append 被允许）、`m6.provenance-genesis-not-observed`（4：genesis 计入 recorded / 空档报 genesis / unreadable 报 genesis / 聚合把 unreadable 折进 notObserved）、`m6.provenance-records-each-reconcile`（2：成功 reconcile 无条目 / 回滚 reconcile 不记录——写前证明）。
-- status（机器自报是读回不是发明；谓词带**版本戳 join key**、跨重启持久化、读不了 ≠ 从没有）：`m6.status-report-matches-local`（3：字段发明 / 谓词非真实评估 / 真结论贴错版本）、`m6.status-report-silence-not-evidence`（5：伪造 binary pass / 伪造收敛 pass / 回滚报成 pass / 重启擦掉真观测 / unreadable 报 genesis）。
-- drive + 政策门（服务器下发的命令和本地升级走同一套门；**ownership 门画在动作性质上**——settle 在飞事务永远允许、只有"休息态 + managed-elsewhere"的新改装才 held）：`m6.drive-stage-through-policy`（2）、`m6.drive-promote-through-policy`（2）、`m6.drive-rollback-through-ownership`（2，三终态 idle/promoted/rolled-back 各断言）、`m6.rollback-settles-inflight-ownership-flip`（1，反向防砖）、`m6.push-rollback-through-policy`（1，已 promote 版本的 push-rollback 也要 consent）、`m6.auto-rollback-needs-no-consent`（1，配对互相控制）。
+**已落地齿**（三包全合，main 296 绿 / 56 齿）：以 `k-harness --list` 为准，本文件不手抄（手抄是 `--list` 的副本，只会漂向少列一颗）。本层判据形状：
+- provenance：journal **三态** genesis/observed/unreadable（只有 ENOENT 是 genesis；unreadable 上 append 拒——截断视图绝不能重发 seq）；记录 {who, carrier, when, version} **写前**（回滚的 reconcile 也留痕，证明写前）；聚合把 genesis 与 NOT_OBSERVED 机械分离（"没数据"≠"没记录"）。
+- status：机器自报是**读回不是发明**；谓词带**版本戳 join key**（真结论贴错版本比造假更难看出）；跨重启持久化（"观测过、只是我重启了"≠"从没观测过"）；读不了 ≠ 从没有（第三态）。
+- drive + 政策门：服务器下发的命令和本地升级走**同一套门**；**ownership 门画在动作性质上**——settle 在飞事务永远允许（在飞 + ownership 翻转必须收敛，不许 held——held 在开了头的机器上是砖），只有"休息态 + managed-elsewhere"的新改装才 typed held（三个终态 idle/promoted/rolled-back 都断言）；已 promote 版本的 push-rollback 在 confirm 下必须 HOLD（安全方向是字节安全不是权威）；K 自己的 in-transaction 自动回滚**绝不问同意**（配对互相控制）。
 
 ## 跨里程碑（一直在跑）
 
