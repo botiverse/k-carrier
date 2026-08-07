@@ -138,8 +138,7 @@ async function fetchAndAppend(
   // say -- a stall and a total-timeout abort look identical at the signal.
   let stalled = false;
   let stallTimer: (() => void) | undefined;
-  // Set by the race below; invoked when either deadline fires so the pending
-  // fetch cannot outlive its own timeout.
+  // Invoked when a deadline fires so the pending fetch cannot outlive it.
   let aborted: (() => void) | undefined;
   // Which phase we were in when the deadline fired. Reporting "awaiting
   // response" for a stall that happened mid-body sends the reader looking at
@@ -240,22 +239,26 @@ async function fetchAndAppend(
     await fs.mkdir(path.dirname(partialPath), { recursive: true });
     const fh = await fs.open(partialPath, partialSize > 0 ? "a" : "w");
     try {
-      if (res.body) {
-        // Count from the resumed prefix, never from zero: a bar that restarts
-        // reads as "it lost my download" to the person watching it.
-        let onDisk = partialSize;
-        onProgress?.(onDisk, total ?? 0);
-        armStall();
-        await streamToFile(res.body, fh, (chunk) => {
-          onDisk += chunk;
-          armStall();
-          onProgress?.(onDisk, total ?? 0);
-        });
+      // Same rule as the in-memory branch: no readable body is a failure to
+      // READ, not an empty download — never hide the cause behind a sha256 mismatch.
+      if (!res.body) {
+        throw new ArtifactError("DOWNLOAD_FAILED", `response has no readable body: ${url}`);
       }
+      // Count from the resumed prefix, never from zero: a bar that restarts
+      // reads as "it lost my download" to the person watching it.
+      let onDisk = partialSize;
+      onProgress?.(onDisk, total ?? 0);
+      armStall();
+      await streamToFile(res.body, fh, (chunk) => {
+        onDisk += chunk;
+        armStall();
+        onProgress?.(onDisk, total ?? 0);
+      });
       await fh.sync();
     } catch (err) {
-      // interrupted (abort / connection drop): the prefix stays in the
-      // partial for the next attempt
+      // A typed error we raised (no readable body) stays typed, like the
+      // in-memory branch; only genuine interruptions become "interrupted".
+      if (err instanceof ArtifactError) throw err;
       const timedOut = controller.signal.aborted;
       throw new ArtifactError(
         "DOWNLOAD_FAILED",
