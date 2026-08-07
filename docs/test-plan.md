@@ -29,7 +29,7 @@
 | L0 校验+原子换 | sha256 不符拒装；换字节原子（半写不可见）；Windows 运行中自替换 | 篡改工件 ⇒ 拒；swap 中途 kill ⇒ 旧字节完好 |
 | cli 档端到端 | swap-tool demo：升级→下次运行是新版；`held/rolled-back/up-to-date` 四态出口都可构造 | — |
 
-**已落地齿**（`pnpm check` 实际注册）：`artifact.tamper-refuses-install`（篡改工件 ⇒ SHA256_MISMATCH 拒装；must-red：跳过 sha256 校验）、`artifact.atomic-swap-crash-safe`（64MiB 真进程中途 SIGKILL ⇒ 旧字节完好 + 恢复；must-red：就地写无 tmp+rename）、`artifact.source-fails-closed`（未知平台/指名版本 ⇒ 拒）、`m1.swap-tool-upgrade`（`k-harness --bin` 等价黑盒闭环：真升级 → 下次运行新版本 → state promoted；must-red：升级不到 stable 槽）、`m1.swap-tool-rollback`（crash-on-start 坏版本 ⇒ 自动回滚 + 旧可用 + experiment 清空；must-red：坏版本被 promote）、`m1.download-resumes-after-kill`（下载中途 SIGKILL ⇒ Range 续传 + 全量验证；must-red：从头重下无 Range）。core 单测：`core/src/artifact/{download,downloadResume,swap,source,staticManifestSource.manifest}.test.ts`。
+**已落地齿**（`pnpm check` 实际注册）：`artifact.tamper-refuses-install`（篡改工件 ⇒ SHA256_MISMATCH 拒装；must-red：跳过 sha256 校验）、`artifact.atomic-swap-crash-safe`（64MiB 真进程中途 SIGKILL ⇒ 旧字节完好 + 恢复；must-red：就地写无 tmp+rename）、`artifact.source-fails-closed`（未知平台/指名版本 ⇒ 拒）、`m1.swap-tool-upgrade`（`k-harness --bin` 等价黑盒闭环：真升级 → 下次运行新版本 → state promoted；must-red：升级不到 stable 槽）、`m1.swap-tool-rollback`（crash-on-start 坏版本 ⇒ 自动回滚 + 旧可用 + experiment 清空；must-red：坏版本被 promote）、`m1.download-resumes-after-kill`（下载中途 SIGKILL ⇒ Range 续传 + 全量验证；must-red：从头重下无 Range）。下载层（archer L0 接入方挖出的 8 洞，每洞一齿）：`m1.download-timeout-enforced`（deadline 竞速而非仅信号——注入不理会 AbortSignal 的 fetch 也必须超时；must-red：signal-only）、`m1.platform-key-native-arch`（Rosetta：x64 Node 在 arm64 硬件选 arm64 target；探针只在 darwin+x64 被问；must-red：朴素拼接 / 到处问探针）、`m1.download-progress-without-resumedir`（无 resumeDir 进度也必须动、单调收尾到全量；must-red：arrayBuffer 路径）、`m1.download-empty-body-named`（**两臂**：内存与 resume 路径对无 body 响应都必须报 typed "no readable body"，绝不当作空前缀——错误点名原因不是 sha256 对不上空串；must-red：返回空字节 / 空前缀）、`m1.download-stall-bounds-silence`（静默被限界不是总时长：慢而正常存活、卡死点名 stall；must-red：total-timeout / 无 stall）、`m1.download-errors-classified`（我们主动放弃的 stall 是 typed DOWNLOAD_FAILED 点名原因；must-red：裸 stream 错）、`m1.download-stall-phase-honest`（mid-body 的 stall 说 mid-body；must-red：一律说 awaiting response）。core 单测：`core/src/artifact/{download,downloadResume,swap,source,staticManifestSource.manifest}.test.ts`。
 
 ## M2 — L0.5 供应链：**不做**
 
@@ -81,6 +81,11 @@ size），不验来源真实性；原两级签名链、`m2.*` 四颗齿与 harne
 | 远程命令过策略门 | drive 的 stage/promote/rollback 全部经 L4 | drive 绕过 confirm 直接动 ⇒ 红（设备主人永远赢） |
 | 状态上报 | {stable, experiment, 两谓词, 策略} 与本地读回一致 | 上报值可与本地不一致 ⇒ 红 |
 | provenance journal | forward-only 记 reconcile 来路；**"已记录"与 NOT_OBSERVED 机制上不可合并** | 存量机被计入"已记录" ⇒ 红 |
+
+**已落地齿**（三包全合，main 296 绿 / 56 齿）：
+- provenance（journal 三态 genesis/observed/unreadable，只有 ENOENT 是 genesis，unreadable 上 append 拒；记录 {who, carrier, when, version} 写前）：`m6.provenance-forward-only`（4 must-red：重写被接受 / 撕裂行保留 / seq 折叠 / 损坏历史上 append 被允许）、`m6.provenance-genesis-not-observed`（4：genesis 计入 recorded / 空档报 genesis / unreadable 报 genesis / 聚合把 unreadable 折进 notObserved）、`m6.provenance-records-each-reconcile`（2：成功 reconcile 无条目 / 回滚 reconcile 不记录——写前证明）。
+- status（机器自报是读回不是发明；谓词带**版本戳 join key**、跨重启持久化、读不了 ≠ 从没有）：`m6.status-report-matches-local`（3：字段发明 / 谓词非真实评估 / 真结论贴错版本）、`m6.status-report-silence-not-evidence`（5：伪造 binary pass / 伪造收敛 pass / 回滚报成 pass / 重启擦掉真观测 / unreadable 报 genesis）。
+- drive + 政策门（服务器下发的命令和本地升级走同一套门；**ownership 门画在动作性质上**——settle 在飞事务永远允许、只有"休息态 + managed-elsewhere"的新改装才 held）：`m6.drive-stage-through-policy`（2）、`m6.drive-promote-through-policy`（2）、`m6.drive-rollback-through-ownership`（2，三终态 idle/promoted/rolled-back 各断言）、`m6.rollback-settles-inflight-ownership-flip`（1，反向防砖）、`m6.push-rollback-through-policy`（1，已 promote 版本的 push-rollback 也要 consent）、`m6.auto-rollback-needs-no-consent`（1，配对互相控制）。
 
 ## 跨里程碑（一直在跑）
 
