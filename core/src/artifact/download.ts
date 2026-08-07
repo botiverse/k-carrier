@@ -208,6 +208,12 @@ async function fetchAndAppend(
     if (!res.ok) {
       throw new ArtifactError("DOWNLOAD_FAILED", `GET ${url} -> HTTP ${res.status}`);
     }
+    // Headers arriving IS activity: the silence budget covers the gap until the
+    // next thing happens, and the response is that thing. Without this rearm a
+    // server that answers slowly and then streams normally is killed by a
+    // deadline that started before the request was even answered -- and the
+    // failure reports "awaiting response" while bytes were on their way.
+    armStall();
 
     if (partialPath === null) {
       // Stream even with nowhere to resume to. `res.arrayBuffer()` is one
@@ -215,7 +221,17 @@ async function fetchAndAppend(
       // progress sink can observe anything -- a download without a resumeDir
       // silently had no byte progress and no stall detection at all, while
       // both looked configured.
-      return collectStream(url, res.body, total, onProgress, armStall);
+      try {
+        return await collectStream(url, res.body, total, onProgress, armStall);
+      } catch (err) {
+        // Same classification as the resume path. Without this the in-memory
+        // branch reported a bare stream error, so an abort we ourselves caused
+        // (stall or deadline) came back as an anonymous transport failure --
+        // the caller could not tell "we gave up on purpose" from "the network
+        // broke".
+        if (err instanceof ArtifactError) throw err;
+        throw new ArtifactError("DOWNLOAD_FAILED", abortReason(url), { cause: err });
+      }
     }
 
     // Resume semantics: only a 206 proves the server honored the Range.
