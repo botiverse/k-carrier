@@ -141,9 +141,8 @@ async function fetchAndAppend(
   // Set by the race below; invoked when either deadline fires so the pending
   // fetch cannot outlive its own timeout.
   let aborted: (() => void) | undefined;
-  // Which phase we were in when the deadline fired. Reporting "awaiting
-  // response" for a stall that happened mid-body sends the reader looking at
-  // the wrong end of the transfer.
+  // Which phase the stall fired in — "awaiting response" for a mid-body stall
+  // would send the reader looking at the wrong end of the transfer.
   let responded = false;
   const abortReason = (u: string): string =>
     stalled
@@ -240,18 +239,21 @@ async function fetchAndAppend(
     await fs.mkdir(path.dirname(partialPath), { recursive: true });
     const fh = await fs.open(partialPath, partialSize > 0 ? "a" : "w");
     try {
-      if (res.body) {
-        // Count from the resumed prefix, never from zero: a bar that restarts
-        // reads as "it lost my download" to the person watching it.
-        let onDisk = partialSize;
-        onProgress?.(onDisk, total ?? 0);
-        armStall();
-        await streamToFile(res.body, fh, (chunk) => {
-          onDisk += chunk;
-          armStall();
-          onProgress?.(onDisk, total ?? 0);
-        });
+      // Same rule as the in-memory branch: no readable body is a failure to
+      // READ, not an empty download — never hide the cause behind a sha256 mismatch.
+      if (!res.body) {
+        throw new ArtifactError("DOWNLOAD_FAILED", `response has no readable body: ${url}`);
       }
+      // Count from the resumed prefix, never from zero: a bar that restarts
+      // reads as "it lost my download" to the person watching it.
+      let onDisk = partialSize;
+      onProgress?.(onDisk, total ?? 0);
+      armStall();
+      await streamToFile(res.body, fh, (chunk) => {
+        onDisk += chunk;
+        armStall();
+        onProgress?.(onDisk, total ?? 0);
+      });
       await fh.sync();
     } catch (err) {
       // interrupted (abort / connection drop): the prefix stays in the
