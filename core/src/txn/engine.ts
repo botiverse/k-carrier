@@ -12,6 +12,7 @@
 import type { HostAdapter, ProcessEvidence } from "../lifecycle/hostAdapter.ts";
 import type { TxnEffects } from "./effects.ts";
 import type { JournalEntry, TxnPhase } from "./state.ts";
+import { decideRecovery } from "./recoveryDecision.ts";
 import { STATE_FORMAT_VERSION } from "./state.ts";
 import type { Clock } from "../clock.ts";
 import { HostCallTimeout, DEFAULT_HOST_CALL_BUDGET_MS } from "./hostCallBudget.ts";
@@ -77,45 +78,41 @@ export class UpgradeEngine {
     if (!last) return; // fresh install, stable running
 
     const version = (await this.deps.effects.slots.slotVersions()).experiment;
-    switch (last.intent) {
-      case "idle":
+    // The decision is a VALUE (recoveryDecision.ts) so an adopter mid-migration
+    // can ask what K would conclude without K acting on it. This method only
+    // executes what that function decided.
+    const action = decideRecovery(last, version);
+    switch (action.kind) {
+      case "nothing":
         return;
-      case "promoted":
+      case "redo-promote":
         // WAL redo: the intent is durable but its action may not have run
-        // (crash in the after-journal window). Completing it is idempotent —
-        // promoteExperiment on an already-promoted world is a no-op because
-        // the experiment slot is empty.
-        if (version !== null) await this.deps.effects.slots.promoteExperiment();
+        // (crash in the after-journal window). Idempotent to repeat.
+        await this.deps.effects.slots.promoteExperiment();
         return;
-      case "rolled-back":
-        // Same redo obligation: clearing an already-cleared slot is a no-op.
-        if (version !== null) await this.deps.effects.slots.clearExperiment();
+      case "redo-clear":
+        await this.deps.effects.slots.clearExperiment();
         return;
-      case "staged":
+      case "undo-staged":
         // Download completed but handover never started: cheap undo.
         await this.rollbackTo("crash before handover", { skipHostRestart: true });
         return;
-      case "handing-over":
-      case "running-experiment":
-      case "readback": {
-        // We may have died with the experiment (partially) live -- or the
-        // handover succeeded and killed the process that was driving it.
+      case "needs-evidence": {
         // EVIDENCE decides, never a "this restart was planned" flag: a flag is
         // a claim the crash path could make just as easily.
-        if (version !== null && (await this.handoverSucceeded(last, version))) {
-          await this.finishHandover(version);
+        if (await this.handoverSucceeded(last, action.experimentVersion)) {
+          await this.finishHandover(action.experimentVersion);
           return;
         }
         // Fail closed: stop whatever runs, restore stable, resume workloads.
-        await this.rollbackTo(`crash during ${last.intent}` + (version ? ` (experiment ${version})` : ""));
+        await this.rollbackTo(`crash during ${action.intent} (experiment ${action.experimentVersion})`);
         return;
       }
-      default: {
-        // Unknown intent => journal written by a NEWER core. Fail closed.
-        throw new Error(
-          `journal intent ${JSON.stringify(last.intent)} is not understood by this core (state format newer than binary); refusing to act`,
-        );
-      }
+      case "rollback-in-flight":
+        await this.rollbackTo(`crash during ${action.intent}`);
+        return;
+      case "refuse":
+        throw new Error(action.reason);
     }
   }
 
