@@ -3,19 +3,14 @@
  * (断点续传 — computer's 150MB SEA case: a process that dies mid-download
  * must not restart from zero).
  *
- * Downloads the artifact over HTTP, streaming the body to a partial file in
- * `resumeDir` (keyed by the release URL). A later attempt resumes from the
- * partial via a `Range` request instead of re-downloading the prefix. The
- * FULL assembled bytes are verified against the release's sha256 + size
- * before they are returned — a corrupted partial (or a tampered resume
- * server) is REFUSED and the partial deleted, so a bad prefix is never
- * trusted just because it was "already downloaded".
- *
- * Interruptions (timeout / process death) leave the partial in place —
- * that is the whole point. Only a COMPLETED-but-invalid assembly deletes it.
- *
- * Time goes through the injected Clock (the core clock seam); a hung
- * download aborts after the timeout instead of hanging the caller.
+ * Streams the body to a partial file in `resumeDir` (keyed by the release
+ * URL); a later attempt resumes from it via `Range`. The FULL assembled bytes
+ * are verified against sha256 + size before being returned, so a corrupted
+ * partial is refused rather than trusted for having been "already downloaded".
+ * Interruptions leave the partial in place — that is the point; only a
+ * completed-but-invalid assembly deletes it. Time goes through the injected
+ * Clock, and the deadline is RACED rather than merely signalled (an injected
+ * fetch that ignores AbortSignal must not be able to outlive it).
  *
  * ⚠️ K verifies INTEGRITY, never AUTHENTICITY. sha256 + size prove the bytes
  * are the ones the manifest described; they cannot prove WHO produced them,
@@ -36,6 +31,8 @@ import { type Clock, systemClock } from "../clock.ts";
 import { ArtifactError } from "./errors.ts";
 import type { Release } from "./source.ts";
 import { collectStream } from "./collectStream.ts";
+import { partialPathFor } from "./partialPath.ts";
+export { partialPathFor } from "./partialPath.ts";
 
 export interface DownloadOptions {
   /**
@@ -70,11 +67,6 @@ export interface DownloadOptions {
    * leaves its prefix here and the next attempt resumes via Range.
    */
   resumeDir?: string;
-}
-
-/** The partial-download file for a release URL (the naming rule lives here). */
-export function partialPathFor(resumeDir: string, url: string): string {
-  return path.join(resumeDir, `${sha256Hex(new TextEncoder().encode(url))}.part`);
 }
 
 /** Fetch and verify one release's bytes, resuming from a partial if present. */
@@ -149,9 +141,14 @@ async function fetchAndAppend(
   // Set by the race below; invoked when either deadline fires so the pending
   // fetch cannot outlive its own timeout.
   let aborted: (() => void) | undefined;
+  // Which phase we were in when the deadline fired. Reporting "awaiting
+  // response" for a stall that happened mid-body sends the reader looking at
+  // the wrong end of the transfer.
+  let responded = false;
   const abortReason = (u: string): string =>
     stalled
-      ? `download stalled: nothing received for ${stallTimeoutMs}ms (awaiting response): ${u}`
+      ? `download stalled: nothing received for ${stallTimeoutMs}ms ` +
+        `(${responded ? "mid-body" : "awaiting response"}): ${u}`
       : `download timed out after ${timeoutMs}ms: ${u}`;
   // Declared AFTER `aborted`: an immediate/virtual clock fires this callback
   // synchronously inside `clock.after`, so a timer created earlier would reach
@@ -213,6 +210,7 @@ async function fetchAndAppend(
     // server that answers slowly and then streams normally is killed by a
     // deadline that started before the request was even answered -- and the
     // failure reports "awaiting response" while bytes were on their way.
+    responded = true;
     armStall();
 
     if (partialPath === null) {
