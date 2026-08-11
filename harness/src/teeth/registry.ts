@@ -46,7 +46,7 @@ export type Profile = "swap" | "service";
  * Selecting a capability that no tooth answers adds ZERO checks while looking
  * like added assurance -- the empty-suite false-green this harness exists to
  * prevent. `workload-preservation` was removed on those grounds (08-05): no
- * tooth claimed it, and raft-computer, the host it was imagined for, restarts
+ * tooth claimed it, and example-host, the host it was imagined for, restarts
  * its workloads rather than preserving them (xxchan: resume is enough).
  * `core/src/invariants.ts` still exports `workloadPreserved` for a host that
  * genuinely has continuity; it just is not a capability you can select yet.

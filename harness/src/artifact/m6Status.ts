@@ -68,7 +68,7 @@ export async function checkM6StatusReportMatchesLocal(
     // stamped with the version they evaluated.
     const outcome = await upgrader.upgradeTo("2.0.0", {
       consented: true,
-      provenance: { who: "fleet-server", carrier: "raft-computer" },
+      provenance: { who: "fleet-control", carrier: "example-host" },
     });
     assert.equal(outcome.result, "promoted", "the reconcile must promote");
     assert.ok(outcome.report !== null, "a promoted reconcile carries a convergence report");
@@ -161,7 +161,7 @@ export async function checkM6StatusReportSilenceNotEvidence(
     const failingUpgrader = await makeUpgrader(ctx, bad, journal);
     const r = await failingUpgrader.upgradeTo("3.0.0", {
       consented: true,
-      provenance: { who: "fleet-server", carrier: "raft-computer" },
+      provenance: { who: "fleet-control", carrier: "example-host" },
     });
     assert.equal(r.result, "rolled-back", "the bad reconcile must roll back");
     const after = await failingUpgrader.status();
@@ -178,7 +178,7 @@ export async function checkM6StatusReportSilenceNotEvidence(
     // stateDir.
     const promoted = await upgrader.upgradeTo("2.0.0", {
       consented: true,
-      provenance: { who: "fleet-server", carrier: "raft-computer" },
+      provenance: { who: "fleet-control", carrier: "example-host" },
     });
     assert.equal(promoted.result, "promoted", "the good reconcile must promote");
     const restarted = await makeUpgrader(ctx, good, journal); // same stateDir: the daemon restarted

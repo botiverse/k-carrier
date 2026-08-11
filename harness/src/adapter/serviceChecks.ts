@@ -12,7 +12,7 @@
  * The release is the ADOPTER'S app when they supply `releaseSource`, and the
  * demo daemon otherwise. That hook is load-bearing, not a convenience: the
  * teeth assert the successor's version through the ADOPTER'S probe, so an
- * adopter whose probe reads its own evidence format (raft-computer reads its
+ * adopter whose probe reads its own evidence format (example-host reads its
  * machine-attestation IPC) can never pass against a demo binary. Swapping the
  * host while pinning the artifact only ever accepted adopters that happened to
  * speak the demo's evidence format -- which is not a contract, it is a

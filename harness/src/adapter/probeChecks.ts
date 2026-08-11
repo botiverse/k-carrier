@@ -5,7 +5,7 @@
  * written against the in-process fake host: they call `start("stable")` on a
  * host that invents its slots, and they were gated on the adapter declaring a
  * workload driver (doWork/ledger) — a marker with nothing to do with what they
- * assert. The effect was an inverted incentive: raft-computer honestly declines
+ * assert. The effect was an inverted incentive: example-host honestly declines
  * to claim session continuity, so it lost the two checks that most directly pin
  * its evidence mapping. An adopter should be checked on what it claims to do,
  * never checked LESS for declining to claim something.

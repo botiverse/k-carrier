@@ -234,7 +234,7 @@ export async function checkM6ProvenanceRecordsEachReconcile(
     const goodUpgrader = await makeUpgrader(ctx, good, opts.skipJournaling ? null : journal);
     const r1 = await goodUpgrader.upgradeTo("2.0.0", {
       consented: true,
-      provenance: { who: "fleet-server", carrier: "raft-computer" },
+      provenance: { who: "fleet-control", carrier: "example-host" },
     });
     assert.equal(r1.result, "promoted", "the good reconcile must promote");
     if (opts.journalOnPromoteOnly) await deferred.flush();
@@ -246,7 +246,7 @@ export async function checkM6ProvenanceRecordsEachReconcile(
     const badUpgrader = await makeUpgrader(ctx, bad, opts.skipJournaling ? null : journal);
     const r2 = await badUpgrader.upgradeTo("3.0.0", {
       consented: true,
-      provenance: { who: "fleet-server", carrier: "raft-computer" },
+      provenance: { who: "fleet-control", carrier: "example-host" },
     });
     assert.equal(r2.result, "rolled-back", "the bad reconcile must roll back");
     if (opts.journalOnPromoteOnly) {
@@ -264,8 +264,8 @@ export async function checkM6ProvenanceRecordsEachReconcile(
     assert.equal(read.entries[0]!.version, "2.0.0", "the recorded version is the one the good reconcile drove");
     assert.equal(read.entries[1]!.version, "3.0.0", "the recorded version is the one the failed reconcile drove");
     for (const e of read.entries) {
-      assert.equal(e.who, "fleet-server", "the recorded who is the driving identity");
-      assert.equal(e.carrier, "raft-computer", "the recorded carrier is the command channel");
+      assert.equal(e.who, "fleet-control", "the recorded who is the driving identity");
+      assert.equal(e.carrier, "example-host", "the recorded carrier is the command channel");
     }
   } finally {
     await good.stop();

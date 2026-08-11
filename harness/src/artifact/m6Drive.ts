@@ -23,7 +23,7 @@ import {
 import { serveRelease } from "./m1.ts";
 import { stateDir, hostReporting, makeUpgrader } from "./m6.ts";
 
-const DRIVE = { who: "fleet-server", carrier: "raft-computer" };
+const DRIVE = { who: "fleet-control", carrier: "example-host" };
 
 function provDir(ctx: ToothContext): string {
   return path.join(stateDir(ctx), "provenance");
@@ -121,7 +121,7 @@ export async function checkM6DrivePromoteThroughPolicy(
     assert.equal(read.kind, "observed");
     if (read.kind !== "observed") return;
     const e = read.entries.at(-1);
-    assert.equal(e?.who, "fleet-server", "the provenance records the driving identity");
+    assert.equal(e?.who, "fleet-control", "the provenance records the driving identity");
     assert.equal(e?.version, "2.0.0", "the provenance records the version that was installed");
   } finally {
     await server.stop();
