@@ -1,0 +1,41 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "unicorn",
+    "typescript",
+    "oxc",
+    "import"
+  ],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "pedantic": "warn"
+  },
+  "rules": {
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "off",
+    "no-unused-vars": "error",
+    "eqeqeq": "error",
+    "eslint/no-console": "error",
+    "import/no-cycle": "error",
+    "import/no-self-import": "error",
+    "import/no-unassigned-import": "off",
+    "import/max-dependencies": "off",
+    "eslint/no-inline-comments": "off",
+    "eslint/max-lines-per-function": "off",
+    "eslint/require-await": "off",
+    "eslint/require-unicode-regexp": "off"
+  },
+  "overrides": [
+    {
+      "files": [
+        "harness/src/cli.ts",
+        "harness/src/receipt.ts",
+        "examples/**"
+      ],
+      "rules": {
+        "eslint/no-console": "off"
+      }
+    }
+  ]
+}

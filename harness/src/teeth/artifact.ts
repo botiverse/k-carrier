@@ -1,0 +1,215 @@
+/**
+ * M1 artifact teeth (test-plan M1 L0 rows; the package spec):
+ * tampered artifact => refuse install; kill mid-swap => old bytes intact;
+ * source refuses rather than guesses. Registration site only — check bodies
+ * live in harness/src/artifact/checks.ts.
+ */
+import { registerTooth } from "./registry.ts";
+import {
+  checkTamperedArtifactRefused,
+  checkKillMidSwapPreservesOld,
+  checkSourceFailsClosed,
+} from "../artifact/checks.ts";
+import {
+  checkSwapToolUpgradeLoop,
+  checkSwapToolRollback,
+} from "../artifact/m1.ts";
+import {
+  checkM3ServiceUpgrade,
+  checkM3ServiceRollback,
+  checkM3StuckDriverEvidence,
+} from "../artifact/m3.ts";
+import { checkDownloadResumesAfterKill } from "../artifact/m1Resume.ts";
+import {
+  checkM4ConfirmNoConsentZeroSideEffects,
+  checkM4ConsentBindsVersion,
+  checkM4NotifyOnlyReportsInstallableVersion,
+} from "../artifact/m4.ts";
+
+registerTooth({
+  id: "artifact.tamper-refuses-install",
+  profiles: ["swap", "service"],
+  layers: ["L0"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "downloadVerified skips the sha256 verification",
+      caughtOnlyBy: {
+        alsoCaughtBy: "core/src/artifact download unit tests (SHA256_MISMATCH)",
+        whyStillNeeded:
+          "the tooth runs the full black-box plane — fake-server tamper API + factory artifact + real HTTP — which the unit test does not",
+      },
+    },
+  ],
+  run: checkTamperedArtifactRefused,
+});
+
+registerTooth({
+  id: "artifact.atomic-swap-crash-safe",
+  profiles: ["swap", "service"],
+  layers: ["L0"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "atomicWriteFile writes the target in place (no tmp+rename; half-writes visible)",
+      caughtOnlyBy: "this", // only this tooth kills a real process mid-swap
+    },
+  ],
+  run: checkKillMidSwapPreservesOld,
+});
+
+registerTooth({
+  id: "artifact.source-fails-closed",
+  profiles: ["swap", "service"],
+  layers: ["L0"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "the release source guesses a target instead of refusing (unknown platform / unservable version)",
+      caughtOnlyBy: {
+        alsoCaughtBy: "core/src/artifact source unit tests",
+        whyStillNeeded:
+          "the tooth pins refusal at the real source boundary (platform + named-version), not just one helper",
+      },
+    },
+  ],
+  run: checkSourceFailsClosed,
+});
+
+registerTooth({
+  id: "m1.swap-tool-upgrade",
+  profiles: ["swap"],
+  layers: ["L0", "L1p"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "the upgrade never reaches the stable slot (next run still reports the old version)",
+      caughtOnlyBy: "this", // only this tooth runs the full black-box upgrade through the demo
+    },
+  ],
+  run: checkSwapToolUpgradeLoop,
+});
+
+registerTooth({
+  id: "m1.swap-tool-rollback",
+  profiles: ["swap"],
+  layers: ["L0", "L1p"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "a failing experiment is promoted instead of rolled back",
+      caughtOnlyBy: {
+        alsoCaughtBy: "core txn engine unit tests (rollback symmetry)",
+        whyStillNeeded:
+          "the engine tests use in-memory effects; this tooth drives the real binary + real slots through the demo's own upgrade command",
+      },
+    },
+  ],
+  run: checkSwapToolRollback,
+});
+
+
+
+
+
+registerTooth({
+  id: "m3.service-upgrade",
+  profiles: ["service"],
+  layers: ["L0", "L1", "L2", "L3"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "the new service is the SAME process as the old (no fresh incarnation; startId reused)",
+      caughtOnlyBy: "this", // only this tooth checks the running process's fresh startId end to end
+    },
+    {
+      mutate: "stop(slot) sends SIGKILL but never verifies the process is gone",
+      caughtOnlyBy: "this", // signal-sent != dead; only this tooth asserts the old pid is OS-gone
+    },
+  ],
+  run: checkM3ServiceUpgrade,
+});
+
+registerTooth({
+  id: "m3.service-rollback",
+  profiles: ["service"],
+  layers: ["L0", "L1", "L2", "L3"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "rollback reverts the slots but does not pull the old version back up",
+      caughtOnlyBy: "this", // only this tooth asserts the old version is ACTUALLY running after rollback
+    },
+  ],
+  run: checkM3ServiceRollback,
+});
+
+registerTooth({
+  id: "m3.stuck-driver-evidence-recovery",
+  profiles: ["service"],
+  layers: ["L0", "L1", "L2", "L3"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "the successor decides the handover by a flag, not by evidence (or never recovers at all)",
+      caughtOnlyBy: "this", // only this tooth wedges the driver and demands evidence-based recovery
+    },
+  ],
+  run: checkM3StuckDriverEvidence,
+});
+
+registerTooth({
+  id: "m1.download-resumes-after-kill",
+  profiles: ["swap", "service"],
+  layers: ["L0"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "an interrupted download restarts from zero (no partial, no Range resume)",
+      caughtOnlyBy: "this", // only this tooth kills a real downloader and demands a Range resume
+    },
+  ],
+  run: checkDownloadResumesAfterKill,
+});
+
+registerTooth({
+  id: "m4.confirm-no-consent-zero-side-effects",
+  profiles: ["service"],
+  layers: ["L0", "L1", "L4"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "the confirm gate moves after staging (unapproved bytes reach the disk)",
+      caughtOnlyBy: "this", // only this tooth asserts the stateDir is untouched under unapproved confirm
+    },
+  ],
+  run: checkM4ConfirmNoConsentZeroSideEffects,
+});
+
+registerTooth({
+  id: "m4.consent-binds-version",
+  profiles: ["service"],
+  layers: ["L0", "L1", "L4"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "the continuation installs whatever the server serves now, not the approved version",
+      caughtOnlyBy: "this", // only this tooth binds consent to the specific offered version
+    },
+  ],
+  run: checkM4ConsentBindsVersion,
+});
+
+registerTooth({
+  id: "m4.notify-only-reports-installable-version",
+  profiles: ["service"],
+  layers: ["L0", "L1", "L4"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "the notification names a version that is not the installable one",
+      caughtOnlyBy: "this", // only this tooth pins the notification to the actual pick
+    },
+  ],
+  run: checkM4NotifyOnlyReportsInstallableVersion,
+});

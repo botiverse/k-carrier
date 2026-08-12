@@ -1,0 +1,264 @@
+/**
+ * M6 provenance teeth (test-plan M6 rows: provenance journal forward-only;
+ * a genesis machine is NOT_OBSERVED and never counted as "recorded"; an
+ * unreadable/corrupt journal is a THIRD state, never genesis; every
+ * reconcile that reaches the transaction records WHO drove it, write-ahead).
+ * Registration site only — check bodies live in harness/src/artifact/m6.ts.
+ */
+import { registerTooth } from "./registry.ts";
+import {
+  checkM6ProvenanceForwardOnly,
+  checkM6ProvenanceGenesisNotObserved,
+  checkM6ProvenanceRecordsEachReconcile,
+} from "../artifact/m6.ts";
+import {
+  checkM6StatusReportMatchesLocal,
+  checkM6StatusReportSilenceNotEvidence,
+} from "../artifact/m6Status.ts";
+import {
+  checkM6DriveStageThroughPolicy,
+  checkM6DrivePromoteThroughPolicy,
+  checkM6DriveRollbackThroughOwnership,
+  checkM6RollbackSettlesInflightOwnershipFlip,
+  checkM6PushRollbackThroughPolicy,
+  checkM6AutoRollbackNeedsNoConsent,
+} from "../artifact/m6Drive.ts";
+
+registerTooth({
+  id: "m6.provenance-forward-only",
+  profiles: ["service"],
+  layers: ["L5"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "an overwrite of an existing entry is accepted (provenance becomes rewritable)",
+      caughtOnlyBy: "this", // nobody else pins the forward-only journal
+    },
+    {
+      mutate: "a torn final line is kept (history includes an entry that never completed)",
+      caughtOnlyBy: "this",
+    },
+    {
+      mutate: "appends are not unique/ordered (history can be collapsed or reordered)",
+      caughtOnlyBy: "this",
+    },
+    {
+      mutate:
+        "appending on an unreadable/corrupt history is allowed (a truncated view re-issues a seq)",
+      caughtOnlyBy: "this", // the rewrite-under-a-truncated-view attack
+    },
+  ],
+  run: checkM6ProvenanceForwardOnly,
+});
+
+registerTooth({
+  id: "m6.provenance-genesis-not-observed",
+  profiles: ["service"],
+  layers: ["L5"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate:
+        "genesis machines are counted as recorded (recorded ∪ not-observed collapses into one bucket)",
+      caughtOnlyBy: "this", // "no data" ≠ "no problem": the M6 genesis guard
+    },
+    {
+      mutate:
+        "an empty-but-present journal is reported as genesis (machinery present, misreported as never-had-it)",
+      caughtOnlyBy: "this",
+    },
+    {
+      mutate:
+        "an unreadable journal is reported as genesis (\"I cannot see the data\" becomes \"there is no data\")",
+      caughtOnlyBy: "this", // only this tooth pins the third state
+    },
+    {
+      mutate:
+        "aggregation folds unreadable into notObserved (the 'definitely absent' bucket)",
+      caughtOnlyBy: "this",
+    },
+  ],
+  run: checkM6ProvenanceGenesisNotObserved,
+});
+
+registerTooth({
+  id: "m6.status-report-matches-local",
+  profiles: ["service"],
+  layers: ["L5"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "the report invents/fabricates a field (stable says X while the machine is on Y)",
+      caughtOnlyBy: "this", // only this tooth pins the read-back equality
+    },
+    {
+      mutate: "the report's predicates are not the last real evaluation's (a report from a different machine/moment)",
+      caughtOnlyBy: "this",
+    },
+    {
+      mutate:
+        "a real conclusion is attached to the wrong version (no stamp / wrong stamp — consumers cannot join correctly)",
+      caughtOnlyBy: "this", // a true fact pasted on the wrong version reads like a lie
+    },
+  ],
+  run: checkM6StatusReportMatchesLocal,
+});
+
+registerTooth({
+  id: "m6.status-report-silence-not-evidence",
+  profiles: ["service"],
+  layers: ["L5"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate:
+        "a machine that never observed a promote reports binaryAtTarget: passed:true",
+      caughtOnlyBy: "this", // silence cannot be spent as evidence (M5 rule, fleet surface)
+    },
+    {
+      mutate:
+        "a machine that never observed a promote reports hostLifecycleConverged: passed:true",
+      caughtOnlyBy: "this",
+    },
+    {
+      mutate:
+        "a rolled-back reconcile is reported as an observed pass (failure converted into evidence)",
+      caughtOnlyBy: "this",
+    },
+    {
+      mutate:
+        "a machine that DID converge reports NOT_OBSERVED after a restart (the report is not persisted)",
+      caughtOnlyBy: "this", // "observed, I restarted" is not "never observed"
+    },
+    {
+      mutate:
+        "an unreadable report is read as genesis (\"I cannot see the data\" becomes \"there is no data\" — the report store collapses to two states)",
+      caughtOnlyBy: "this", // same family as the provenance third state, one package
+    },
+  ],
+  run: checkM6StatusReportSilenceNotEvidence,
+});
+
+registerTooth({
+  id: "m6.provenance-records-each-reconcile",
+  profiles: ["service"],
+  layers: ["L5"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "a successful reconcile leaves no provenance entry (the 'who' is lost)",
+      caughtOnlyBy: "this", // only this tooth pins who-drove-it on every reconcile
+    },
+    {
+      mutate:
+        "a failed reconcile (auto-rollback) is not recorded (journaling after the outcome, not write-ahead)",
+      caughtOnlyBy: "this",
+    },
+  ],
+  run: checkM6ProvenanceRecordsEachReconcile,
+});
+
+registerTooth({
+  id: "m6.drive-stage-through-policy",
+  profiles: ["service"],
+  layers: ["L5", "L4"],
+  requiresCapability: "fleet-drive",
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "the drive path stages bytes without consent (policy=confirm is not honored)",
+      caughtOnlyBy: "this", // only this tooth pins drive stage through the policy gate
+    },
+    {
+      mutate: "a held drive stage leaves a provenance entry (it never reached the transaction)",
+      caughtOnlyBy: "this", // "reaches the transaction" is the provenance threshold
+    },
+  ],
+  run: checkM6DriveStageThroughPolicy,
+});
+
+registerTooth({
+  id: "m6.drive-promote-through-policy",
+  profiles: ["service"],
+  layers: ["L5", "L4"],
+  requiresCapability: "fleet-drive",
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate: "the drive path promotes without consent",
+      caughtOnlyBy: "this",
+    },
+    {
+      mutate: "the drive installs a different version than the one approved (consent does not bind)",
+      caughtOnlyBy: "this", // consent is to a VERSION, never to "the upgrade"
+    },
+  ],
+  run: checkM6DrivePromoteThroughPolicy,
+});
+
+registerTooth({
+  id: "m6.drive-rollback-through-ownership",
+  profiles: ["service"],
+  layers: ["L5", "L1"],
+  requiresCapability: "fleet-drive",
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate:
+        "a drive rollback on a managed-elsewhere machine at rest rolls back (someone else's copy modified)",
+      caughtOnlyBy: "this", // only this tooth pins the at-rest ownership gate
+    },
+    {
+      mutate:
+        "a TERMINAL rolled-back state is classified as in-flight (an exclusion-list at-rest check would touch a machine that is not ours)",
+      caughtOnlyBy: "this", // the gate enumerates positively: the next terminal phase cannot silently become "in flight"
+    },
+  ],
+  run: checkM6DriveRollbackThroughOwnership,
+});
+
+registerTooth({
+  id: "m6.rollback-settles-inflight-ownership-flip",
+  profiles: ["service"],
+  layers: ["L1"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate:
+        "a machine with an in-flight transaction is held from settling when ownership flipped (bricked mid-transaction)",
+      caughtOnlyBy: "this", // the reverse: a held on an opened transaction is a brick
+    },
+  ],
+  run: checkM6RollbackSettlesInflightOwnershipFlip,
+});
+
+registerTooth({
+  id: "m6.push-rollback-through-policy",
+  profiles: ["service"],
+  layers: ["L5", "L4"],
+  requiresCapability: "fleet-drive",
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate:
+        "a pushed rollback of an ALREADY-PROMOTED version executes without consent (the downgrade attack by another name)",
+      caughtOnlyBy: "this", // safe direction is byte safety, not authority (the ruling)
+    },
+  ],
+  run: checkM6PushRollbackThroughPolicy,
+});
+
+registerTooth({
+  id: "m6.auto-rollback-needs-no-consent",
+  profiles: ["service"],
+  layers: ["L5", "L4"],
+  kind: { kind: "invariant" },
+  mustRed: [
+    {
+      mutate:
+        "the in-transaction auto-rollback waits for consent that never comes (the promise 'you'll always get back' is false)",
+      caughtOnlyBy: "this", // the controlling twin of push-rollback-through-policy
+    },
+  ],
+  run: checkM6AutoRollbackNeedsNoConsent,
+});

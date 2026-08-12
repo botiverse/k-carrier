@@ -1,0 +1,42 @@
+{
+  "name": "@botiverse/k-carrier",
+  "version": "0.1.0",
+  "description": "A fail-closed upgrade carrier for long-running managed services: two-slot upgrade transactions (promote/rollback), host-driven quiesce/resume handoff, and post-upgrade convergence read-back.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "exports": {
+    ".": "./core/src/index.ts",
+    "./harness": "./harness/src/index.ts"
+  },
+  "bin": {
+    "k-harness": "./harness/src/cli.ts"
+  },
+  "files": [
+    "core/src/**/*.ts",
+    "harness/src/**/*.ts",
+    "!**/*.test.ts",
+    "docs",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "node --test --test-timeout=180000 \"core/src/**/*.test.ts\" \"harness/src/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint --deny-warnings core harness examples",
+    "ratchet": "bash scripts/ratchets.sh",
+    "check": "pnpm typecheck && pnpm lint && pnpm ratchet && pnpm test"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "oxlint": "^1.0.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "typescript": "^5.6.0"
+  }
+}

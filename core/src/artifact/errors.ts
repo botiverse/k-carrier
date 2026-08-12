@@ -1,0 +1,24 @@
+/**
+ * L0 artifact layer errors — every failure is typed (fail-closed: an
+ * a refused release, a tampered artifact, a half-written swap all carry a
+ * machine-readable code, never a silent pass).
+ */
+export type ArtifactErrorCode =
+  | "UNREGISTERED_SURFACE"
+  | "MANIFEST_INVALID"
+  | "PINNED_VERSION_MISMATCH"
+  | "UNSUPPORTED_PLATFORM"
+  | "DOWNLOAD_FAILED"
+  | "SHA256_MISMATCH"
+  | "SIZE_MISMATCH"
+  | "SWAP_FAILED";
+
+export class ArtifactError extends Error {
+  readonly code: ArtifactErrorCode;
+
+  constructor(code: ArtifactErrorCode, message: string, options?: { cause?: unknown }) {
+    super(`[${code}] ${message}`, options);
+    this.name = "ArtifactError";
+    this.code = code;
+  }
+}

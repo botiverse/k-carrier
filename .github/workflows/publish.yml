@@ -1,0 +1,31 @@
+# Publishes @botiverse/k-carrier to npm via Trusted Publishing (OIDC) — no NPM_TOKEN.
+#
+# One-time bootstrap (path A): the FIRST publish is done manually by a maintainer
+# (`npm publish --access public`) to create the package on npm; then a Trusted
+# Publisher is configured on npmjs.com pointing at this repo + workflow. From the
+# second release onward, this workflow publishes with no long-lived secret.
+name: publish
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write # required for OIDC Trusted Publishing + provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      # Trusted Publishing (OIDC) needs npm >= 11.5.1.
+      - run: npm install -g npm@latest
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check # never publish a red tree
+      - run: npm publish --provenance --access public
