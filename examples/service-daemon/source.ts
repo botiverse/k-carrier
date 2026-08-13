@@ -137,7 +137,16 @@ async function runRecovery() {
   const recoveryHost = {
     async quiesce() {},
     async stop() {},
-    async start() {
+    async start(slot) {
+      // Terminal rollback recovery is redo: start(stable) may run again in
+      // the stable successor that the previous attempt already launched.
+      // HostAdapter.start is idempotent, so that successor must stay alive
+      // instead of requesting an endless chain of respawns.
+      const slotVersionPath = path.join(STATE_DIR, "slots", slot, "VERSION");
+      const slotVersion = fs.existsSync(slotVersionPath)
+        ? fs.readFileSync(slotVersionPath, "utf8").trim()
+        : null;
+      if (slotVersion === VERSION) return;
       // a rollback pulls the old version back by asking for a successor; on
       // a non-self-starting host that means exiting for the owner to respawn
       if (HOST_SHAPE === "respawn") {

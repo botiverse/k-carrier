@@ -88,8 +88,14 @@ export async function runCrashPoint(point: CrashPoint): Promise<CrashRunResult> 
         },
         slotVersions: async () => ({ ...world.slots }),
         promoteExperiment: async () => {
-          world.slots.stable = world.slots.experiment;
-          world.slots.experiment = null;
+          // Production slot adapters promise idempotent redo: terminal
+          // recovery may call promote again after the experiment was already
+          // moved into stable. The crash model must preserve that contract or
+          // it manufactures a brick by assigning null to stable on replay.
+          if (world.slots.experiment !== null) {
+            world.slots.stable = world.slots.experiment;
+            world.slots.experiment = null;
+          }
           maybeCrashAfterAction("promoted");
         },
         clearExperiment: async () => {

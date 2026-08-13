@@ -80,6 +80,9 @@ const COVERED_ELSEWHERE = new Set([
   "examples.service-daemon-contract",
   "examples.hosted-service-adapter", // green run: teeth/examples.test.ts
   "blackbox.missing-target-fails",
+  "sim.seed-replay-identical",
+  "sim.smoke-invariants",
+  "sim.fault-surface-covered", // green run: teeth/sim.test.ts
 ]);
 
 const TOOTH_IDS = new Set([
