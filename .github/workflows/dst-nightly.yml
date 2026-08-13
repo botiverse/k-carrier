@@ -1,0 +1,37 @@
+name: DST Nightly
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      start_seed:
+        description: First uint32 seed (defaults to this workflow run id)
+        required: false
+        type: string
+      seed_count:
+        description: Number of sequential seeds
+        required: false
+        default: "50000"
+        type: string
+permissions: { contents: read }
+jobs:
+  deterministic-simulation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      START_SEED: ${{ inputs.start_seed || github.run_id }}
+      SEED_COUNT: ${{ inputs.seed_count || '50000' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "24" }
+      - run: corepack enable pnpm && pnpm install --frozen-lockfile
+      - name: Run seeded deterministic simulator
+        run: node harness/src/cli.ts sim --start-seed "$START_SEED" --seeds "$SEED_COUNT"
+      - name: Preserve exact failing-seed corpus
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dst-failing-seeds-${{ github.run_id }}
+          path: .k-harness/sim-failures.json
+          if-no-files-found: error

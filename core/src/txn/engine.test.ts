@@ -223,13 +223,38 @@ test("recover after crash at staged: cheap undo, no host restart", async () => {
   assert.deepEqual(w.trace, ["journal:rolled-back", "slots:clear"]);
 });
 
-test("recover on terminal journal: no side effects; next seq continues", async () => {
+test("recover after promoted intent always resumes parked work; next seq continues", async () => {
   const w = makeWorld({ journal: [entry(0, "staged"), entry(1, "promoted")] });
   const engine = new UpgradeEngine(w.deps);
   await engine.recover();
-  assert.deepEqual(w.trace, []);
+  assert.deepEqual(w.trace, ["slots:promote", "host:resume"]);
   await engine.upgrade({ version: "3.0.0", bytesRef: "r" });
   assert.equal(w.journal.at(2)!.seq, 2); // seq continues after replay
+});
+
+test("recover after promoted WAL but before slot action redoes promote then resume", async () => {
+  const w = makeWorld({
+    slots: { stable: "1.0.0", experiment: "2.0.0" },
+    journal: [entry(0, "staged"), entry(1, "promoted")],
+  });
+  await new UpgradeEngine(w.deps).recover();
+  assert.deepEqual(w.trace, ["slots:promote", "host:resume"]);
+  assert.deepEqual(w.slots, { stable: "2.0.0", experiment: null });
+});
+
+test("recover after rolled-back WAL redoes host restore before clearing experiment", async () => {
+  const w = makeWorld({
+    slots: { stable: "1.0.0", experiment: "2.0.0" },
+    journal: [entry(0, "staged"), entry(1, "readback"), entry(2, "rolled-back")],
+  });
+  await new UpgradeEngine(w.deps).recover();
+  assert.deepEqual(w.trace, [
+    "host:stop:experiment",
+    "host:start:stable",
+    "host:resume",
+    "slots:clear",
+  ]);
+  assert.deepEqual(w.slots, { stable: "1.0.0", experiment: null });
 });
 
 test("recover fails closed on a journal intent from a newer core", async () => {

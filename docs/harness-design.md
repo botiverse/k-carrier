@@ -45,12 +45,20 @@ harness/
 
 ### 1.45 DST：确定性模拟测试（与崩溃矩阵互补）
 
+**实现状态：已落地。** 入口为 `k-harness sim`；实现位于
+`harness/src/sim/`，三颗注册齿为 `sim.seed-replay-identical`、
+`sim.smoke-invariants`、`sim.fault-surface-covered`。
+
 **两条腿**：崩溃矩阵 = **枚举穷举**（在它的粒度上完备，给保证）；DST = **种子随机深探**（FoundationDB/TigerBeetle 手法，找枚举想不到的交错，给发现）。
 
 - **前提（对 txn 引擎的架构约束，写引擎前就定）**：L1 引擎 = **纯状态机 + Effects 接口**——journal append/fsync、槽操作、宿主调用、时钟全部经注入的 effects 层，引擎本体零直接 IO/时间/随机。这**不是**测试后门（§1.8 自洽）：effects 层就是平台适配器的天然挂点（各平台 fsync/swap 本来就不同实现），是产品级抽象。
 - **模拟器**：SimEffects = 内存盘（可模拟 partial write / fsync 丢失 / 重排）+ VirtualClock + **种子 PRNG 故障调度器**（在任意 effect 点注入 crash/fail/delay，按种子决定）。跑 N 千个种子 × 每种子一条完整升级/回滚剧本 → 断言同一组不变式（永不双跑/永不砖/journal 可重放/谓词诚实）。
 - **可复现**：任何失败 = 一个种子号，`k-harness sim --seed X` 逐字节重放。**失败种子沉淀为枚举矩阵的新固定格**（发现→保证的转化管道）。
 - **跑法**：PR 门跑固定 smoke 种子集（快、确定）；夜跑扩大随机种子量；语料库（历史失败种子）永久保留。
+  - PR/本地：`k-harness sim`（固定、评审可见的 smoke seeds）。
+  - 单种子重放：`k-harness sim --seed X --json`（同 seed receipt 逐字节相同）。
+  - 扩量：`k-harness sim --start-seed X --seeds N`；nightly 默认 50,000 seeds。
+  - 失败自动原子合并进 `.k-harness/sim-failures.json`，workflow 保存为 artifact；记录含 seed、失败原因、transcript SHA-256 与一条可直接运行的 replay command。
 - 范围诚实：DST 覆盖 txn/converge 的逻辑交错；真进程/真 OS 面（信号、真 fsync 语义）仍归崩溃矩阵与真机轮——**模拟不替代真进程层，两者叠加**。
 
 ### 1.5 teeth（齿注册表）

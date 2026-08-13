@@ -93,7 +93,7 @@ size），不验来源真实性；原两级签名链、`m2.*` 四颗齿与 harne
 - **mutation-runner**（Lincan 工具就绪即接）：对本计划全部齿跑变异；换说法+整段删两变体默认；杀不掉先排除"没杀对"再删守卫。
 - **断言纪律标注**：每个测试文件头标 `@invariant` 或 `@baseline(failure-condition: ...)`；CI 检查无标注的 implementation-locking 断言（OS-supervisor 退役设计 二分的机械化）。
 - **真机轮**（Testbed）：每里程碑收口跑一轮真机抽样；个人真机仅 consent 后读回抽样。
-- **DST 夜跑**（§1.45）：种子随机故障调度跑 txn/converge 剧本；PR 门固定 smoke 种子集；失败种子进语料库并转成枚举矩阵固定格。
+- **DST**（§1.45，已实现）：`k-harness sim` 在 PR/profile 门跑固定 smoke seeds；`DST Nightly` 从 workflow run id 起跑 50,000 个顺序 seed。每个 journal/slot/host/predicate effect 后跑共享 invariant；失败自动留下 seed + transcript hash + `k-harness sim --seed X --json` 重放命令，并进入失败语料库后转成枚举矩阵固定格。
 - **时间戳锚定断言**（借 Datadog）：scenario receipt 的事件断言一律"标记之后发生了 X"（取 marker → assert-since），防旧事件/上一场景残留冒充新证据。
 
 ## 完成定义

@@ -134,6 +134,35 @@ test("--adapter runs the service-tier teeth against a process-semantics adapter"
   assert.equal(byId.get("adapter.probe-version-matches-slot")!.status, "na");
 });
 
+test("sim --seed replays one exact deterministic schedule", async () => {
+  const first = await runCli(["sim", "--seed", "0xdecafbad", "--json"]);
+  const second = await runCli(["sim", "--seed", "0xdecafbad", "--json"]);
+  assert.equal(first.code, 0, first.stdout + first.stderr);
+  assert.equal(second.code, 0, second.stdout + second.stderr);
+  assert.equal(first.stdout, second.stdout, "same-seed CLI receipts must be byte-identical");
+  const receipt = JSON.parse(first.stdout) as {
+    mode: string;
+    seeds: number[];
+    results: Array<{ replay: string; transcriptSha256: string }>;
+    result: string;
+  };
+  assert.equal(receipt.mode, "sim");
+  assert.deepEqual(receipt.seeds, [0xdecafbad]);
+  assert.equal(receipt.results[0]!.replay, "k-harness sim --seed 3737844653 --json");
+  assert.match(receipt.results[0]!.transcriptSha256, /^[a-f0-9]{64}$/);
+  assert.equal(receipt.result, "pass");
+});
+
+test("sim validates seed flag combinations", async () => {
+  const conflicting = await runCli(["sim", "--seed", "1", "--seeds", "2"]);
+  assert.equal(conflicting.code, 2);
+  assert.match(conflicting.stderr, /mutually exclusive/);
+
+  const orphanStart = await runCli(["sim", "--start-seed", "2"]);
+  assert.equal(orphanStart.code, 2);
+  assert.match(orphanStart.stderr, /requires --seeds/);
+});
+
 test("--help prints usage and exits 0; bad flags exit 2", async () => {
   const help = await runCli(["--help"]);
   assert.equal(help.code, 0);

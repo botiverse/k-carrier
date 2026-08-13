@@ -9,6 +9,7 @@
  *                                                     commands (k.target.ts REQUIRED)
  *   k-harness --adapter <path> [--profile service]    run the adopter contract subset
  *                                                     against an external adapter
+ *   k-harness sim [--seed N | --seeds N --start-seed N]  seeded deterministic simulation
  *   k-harness --json                                  machine-readable receipt
  *   k-harness --target-version <v>                    version served by --bin mode
  *   k-harness --target <path>                         explicit target file for --bin
@@ -23,6 +24,9 @@ import "./teeth/index.ts"; // registers all teeth (side effect)
 import { runBinMode, type BinModeOptions } from "./blackbox.ts";
 import { printReceipt } from "./receipt.ts";
 import type { Profile } from "./teeth/registry.ts";
+import { SMOKE_SEEDS, sequentialSeeds } from "./sim/corpus.ts";
+import { runSimulationBatch, type SimulationBatch } from "./sim/run.ts";
+import { recordFailures } from "./sim/record.ts";
 
 const USAGE = `k-harness — K acceptance harness
 
@@ -31,6 +35,7 @@ Usage:
   k-harness --profile <swap|service> [--json]
   k-harness --bin <path-to-binary> [--profile swap] [--target-version <v>] [--target <path>] [--json]
   k-harness --adapter <path-to-module> [--profile service] [--json]
+  k-harness sim [--seed <uint32> | --seeds <count> [--start-seed <uint32>]] [--record-failures <path>] [--json]
   k-harness --help
 
 Options:
@@ -39,6 +44,12 @@ Options:
   --bin <path>         black-box mode: drive a real binary (k.target.ts REQUIRED)
   --adapter <path>     adapter mode: contract subset against an external adapter
                        (module default export: (stateDir) => HostDriver)
+  sim                  deterministic simulator; no seed flags = fixed PR smoke corpus
+  --seed <n>           replay one exact uint32 seed (decimal or 0x...)
+  --seeds <n>          run n sequential seeds (nightly/extended mode)
+  --start-seed <n>     first seed for --seeds (default 1)
+  --record-failures <path>
+                       atomically merge failing seeds here (default .k-harness/sim-failures.json)
   --target <path>      explicit target file for --bin (default <bin-dir>/k.target.ts)
   --target-version <v> version the --bin fake-server serves (default 2.0.0)
   --json               print the receipt as JSON (human lines always printed)
@@ -53,8 +64,26 @@ function parseArgs(argv: string[]): {
   targetVersion: string | null;
   targetPath: string | null;
   json: boolean;
+  sim: boolean;
+  seed: number | null;
+  seedCount: number | null;
+  startSeed: number | null;
+  failurePath: string;
 } {
-  const out = { list: false, profile: null as Profile | null, binPath: null as string | null, adapterPath: null as string | null, targetVersion: null as string | null, targetPath: null as string | null, json: false };
+  const out = {
+    list: false,
+    profile: null as Profile | null,
+    binPath: null as string | null,
+    adapterPath: null as string | null,
+    targetVersion: null as string | null,
+    targetPath: null as string | null,
+    json: false,
+    sim: false,
+    seed: null as number | null,
+    seedCount: null as number | null,
+    startSeed: null as number | null,
+    failurePath: ".k-harness/sim-failures.json",
+  };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     const next = (): string => {
@@ -78,6 +107,21 @@ function parseArgs(argv: string[]): {
       case "--adapter":
         out.adapterPath = next();
         break;
+      case "sim":
+        out.sim = true;
+        break;
+      case "--seed":
+        out.seed = parseUint32(next(), "--seed");
+        break;
+      case "--seeds":
+        out.seedCount = parsePositiveInteger(next(), "--seeds");
+        break;
+      case "--start-seed":
+        out.startSeed = parseUint32(next(), "--start-seed");
+        break;
+      case "--record-failures":
+        out.failurePath = next();
+        break;
       case "--target-version":
         out.targetVersion = next();
         break;
@@ -97,6 +141,38 @@ function parseArgs(argv: string[]): {
     }
   }
   return out;
+}
+
+function parseUint32(raw: string, flag: string): number {
+  const value = /^0x[0-9a-f]+$/i.test(raw) ? Number.parseInt(raw.slice(2), 16) : Number(raw);
+  if (!Number.isSafeInteger(value) || value < 0 || value > 0xffffffff) {
+    throw new Error(`${flag} must be a uint32, got ${raw}`);
+  }
+  return value >>> 0;
+}
+
+function parsePositiveInteger(raw: string, flag: string): number {
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${flag} must be a positive integer, got ${raw}`);
+  }
+  return value;
+}
+
+function printSimulation(batch: SimulationBatch, json: boolean): void {
+  if (json) {
+    console.log(JSON.stringify(batch, null, 2));
+    return;
+  }
+  console.log(`k-harness sim (${batch.summary.total} seeds)`);
+  for (const result of batch.results.filter((item) => item.status === "fail")) {
+    console.log(`  ✖ seed ${result.seed} — ${result.failure}`);
+    console.log(`    replay: ${result.replay}`);
+  }
+  console.log(
+    `faults: delay=${batch.coverage.delay} crash-before=${batch.coverage["crash-before"]} crash-after=${batch.coverage["crash-after"]} fail-before=${batch.coverage["fail-before"]} partial-write=${batch.coverage["partial-write"]} reorder-volatile=${batch.coverage["reorder-volatile"]}`,
+  );
+  console.log(`result: ${batch.result} — ${batch.summary.pass} pass, ${batch.summary.fail} fail`);
 }
 
 /**
@@ -149,8 +225,34 @@ async function main(): Promise<number> {
     listTeeth(args.profile, args.json);
     return 0;
   }
+  if (args.sim) {
+    if (args.binPath || args.adapterPath || args.profile !== null) {
+      throw new Error("sim is mutually exclusive with --profile, --bin, and --adapter");
+    }
+    if (args.seed !== null && args.seedCount !== null) {
+      throw new Error("--seed and --seeds are mutually exclusive");
+    }
+    if (args.startSeed !== null && args.seedCount === null) {
+      throw new Error("--start-seed requires --seeds");
+    }
+    let seeds: number[];
+    if (args.seed === null) {
+      seeds =
+        args.seedCount === null
+          ? [...SMOKE_SEEDS]
+          : sequentialSeeds(args.startSeed ?? 1, args.seedCount);
+    } else {
+      seeds = [args.seed];
+    }
+    const batch = await runSimulationBatch(seeds);
+    if (batch.result === "fail") {
+      await recordFailures(args.failurePath, batch.results);
+    }
+    printSimulation(batch, args.json);
+    return batch.result === "pass" ? 0 : 1;
+  }
   if (args.binPath && args.adapterPath) throw new Error("--bin and --adapter are mutually exclusive");
-  if (!args.binPath && !args.adapterPath && !args.profile) throw new Error("need one of --list, --profile, --bin, --adapter");
+  if (!args.binPath && !args.adapterPath && !args.profile) throw new Error("need one of --list, --profile, --bin, --adapter, sim");
 
   const profile: Profile = args.profile ?? (args.binPath ? "swap" : "service");
 
