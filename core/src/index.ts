@@ -13,6 +13,7 @@ export * from "./bootstrap.ts";
 // Core types: Upgrader, UpgraderConfig, UpgradeOutcome, ProvenanceIdentity,
 // NotificationEvent.
 export * from "./upgrader.ts";
+export * from "./operation.ts";
 
 // The release-source boundary applications implement and the durable
 // provenance journal they wire into createUpgrader.

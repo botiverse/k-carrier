@@ -3,6 +3,7 @@ import type { TxnState } from "./txn/state.js";
 import type { ConvergenceReport } from "./converge/predicates.js";
 import type { StatusReport } from "./status/report.js";
 import type { ReleaseSource } from "./artifact/source.js";
+import type { OperationDescriptor, OperationRead } from "./operation.js";
 
 /**
  * Who drove a reconcile, recorded in the provenance journal (M6, L5).
@@ -62,7 +63,11 @@ export interface Upgrader {
    * silently installing whatever is current now. Consent is to a SPECIFIC
    * version, never to "the upgrade" as an event.
    */
-  upgradeTo(version: string, opts?: { consented?: boolean; provenance?: ProvenanceIdentity }): Promise<UpgradeOutcome>;
+  upgradeTo(version: string, opts?: {
+    consented?: boolean;
+    provenance?: ProvenanceIdentity;
+    operation?: OperationDescriptor;
+  }): Promise<UpgradeOutcome>;
 
   /**
    * Explicit rollback while an experiment is live (pre-promote).
@@ -95,6 +100,12 @@ export interface Upgrader {
    * are null (NOT_OBSERVED), never a fabricated pass.
    */
   status(): Promise<StatusReport>;
+
+  /** K's single durable operation receipt; hosts project it, never mirror it. */
+  operation(): Promise<OperationRead>;
+
+  /** Mark one exact terminal operation delivered by the host transport. */
+  acknowledgeOperation(operationId: string): Promise<"acknowledged" | "not-terminal" | "not-found" | "changed">;
 }
 
 export type UpgradeOutcome =

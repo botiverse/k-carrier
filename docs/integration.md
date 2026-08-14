@@ -241,6 +241,35 @@ The stages are not a parallel state machine: they are derived from the L1
 transaction phases (`stageForPhase`), so a progress display can never show a
 state the transaction does not have.
 
+## 4.6 One durable operation receipt
+
+When a host detaches the transaction driver from the service it replaces,
+pass an exact operation descriptor to `upgradeTo`. K then owns the only
+durable operation state, including the previous stable version and terminal
+outcome:
+
+```ts
+await upgrader.upgradeTo("2.0.0", {
+  consented: true,
+  operation: {
+    id: requestId,
+    startedAtMs: Date.now(),
+    metadata: { originServerId }, // non-secret host correlation only
+  },
+});
+
+const receipt = await upgrader.operation();
+if (receipt.kind === "observed" && receipt.operation.outcome !== null) {
+  await deliver(receipt.operation);
+  await upgrader.acknowledgeOperation(receipt.operation.id);
+}
+```
+
+The host may project this receipt into UI or transport, but must not maintain
+a second pending/status/previous-version state machine. `recover()` settles an
+active receipt under K's upgrade lock before the host reads it again. A corrupt
+or future-version receipt is `unreadable`, never treated as genesis or success.
+
 ## 5. Publishing releases
 
 If you use the built-in `staticManifestSource`, its layout is:

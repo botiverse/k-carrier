@@ -8,26 +8,24 @@
  */
 import type { Upgrader, UpgraderConfig, UpgradeOutcome, ProvenanceIdentity } from "./upgrader.ts";
 import { phaseAtRest, type TxnState } from "./txn/state.ts";
-import type { Release } from "./artifact/source.ts";
 import type { ProcessEvidence } from "./lifecycle/hostAdapter.ts";
 import { UpgradeEngine } from "./txn/engine.ts";
-import { fileEffects, materializeArtifact } from "./txn/fileEffects.ts";
+import { fileEffects } from "./txn/fileEffects.ts";
 import { acquireUpgradeLock } from "./txn/lock.ts";
-import { downloadVerified } from "./artifact/download.ts";
-import { ArtifactError } from "./artifact/errors.ts";
-import * as path from "node:path";
 import { systemClock, type Clock } from "./clock.ts";
 import { buildSurfaceAllowlist, evaluateLifecycleConvergence } from "./converge/lifecycle.ts";
 import type { ReadbackSurface, PredicateResult } from "./converge/predicates.ts";
 import { platformOpsFor } from "./platform/index.ts";
 import type { UpgradeProgress } from "./progress.ts";
 import { slotArtifactPath } from "./txn/fileEffects.ts";
-import { recordReconcile, type ProvenanceJournal } from "./provenance/journal.ts";
-import { finishUpgradeOutcome } from "./upgrade/outcome.ts";
+import type { ProvenanceJournal } from "./provenance/journal.ts";
 import { retireReason } from "./upgrade/retire.ts";
 import { buildStatusReport, type StatusReport } from "./status/report.ts";
 import { persistReport, loadLastReport, type ReportRead } from "./status/reportStore.ts";
 import { recoverUpgrade } from "./upgrade/recover.ts";
+import type { OperationDescriptor } from "./operation.ts";
+import { createOperationLifecycle } from "./operationLifecycle.ts";
+import { driveUpgrade } from "./upgrade/drive.ts";
 
 export interface CreateUpgraderOptions extends UpgraderConfig {
   clock?: Clock;
@@ -121,115 +119,36 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
     };
   }
 
-  /** Report a stage. Observational only: a broken sink cannot break upgrades. */
-  function reportStage(progress: UpgradeProgress): void {
-    try {
-      opts.onProgress?.(progress);
-    } catch {
-      // a host's progress bar must never be able to fail an upgrade
-    }
-  }
-
-  async function notify(kind: Parameters<UpgraderConfig["notificationSink"]>[0]["kind"], detail: Record<string, string>): Promise<void> {
-    await opts.notificationSink({ kind, detail });
-  }
-
-  /** Gates 1-7. `consented` = the user approved THIS version (the confirm was
-   * shown and answered) — the policy gate is skipped, everything else stands. */
-  async function run(
-    pick: (current: string) => Promise<Release | null>,
-    consented = false,
-    provenance: ProvenanceIdentity | null = null,
-  ): Promise<UpgradeOutcome> {
-    const owner = ownership();
-    if (owner === "managed-elsewhere") {
-      await notify("held", { reason: "managed-elsewhere" });
-      return { result: "held", reason: "this install is managed by another manager; it does not upgrade itself" };
-    }
-
-    const lock = await acquireUpgradeLock(opts.stateDir, clock.nowMs());
-    try {
-      await engine.recover(); // finish or undo anything a previous crash left
-      const current = (await readState()).stableVersion;
-      reportStage({ stage: "checking" });
-      let release: Release | null;
-      try {
-        release = await pick(current);
-      } catch (err) {
-        // Consent is to a SPECIFIC version: if the source can no longer
-        // serve it (the publisher moved on), the approval is void — a typed
-        // refusal, never a silent switch to whatever is current now.
-        if (consented && err instanceof ArtifactError && err.code === "PINNED_VERSION_MISMATCH") {
-          await notify("held", { reason: "consented-version-unavailable", version: current });
-          return {
-            result: "held",
-            reason: `the approved version is no longer served; nothing was installed`,
-          };
-        }
-        throw err;
-      }
-      if (release === null) return { result: "up-to-date" };
-      if (!consented && opts.policy === "notify-only") {
-        await notify("held", { reason: "notify-only", version: release.version });
-        return { result: "held", reason: `policy is notify-only; ${release.version} is available` };
-      }
-      if (!consented && opts.policy === "confirm") {
-        await notify("confirm-request", { version: release.version, current });
-        return { result: "held", reason: `policy requires confirmation before upgrading to ${release.version}` };
-      }
-
-      if (opts.checkCompatibility) {
-        const refusal = await opts.checkCompatibility(current, release.version);
-        if (refusal !== null) {
-          await notify("held", { reason: "incompatible", detail: refusal });
-          return { result: "held", reason: `incompatible: ${refusal}` };
-        }
-      }
-
-      // Resume support: an interrupted download (process death
-      // mid-fetch) leaves its prefix in stateDir/incoming and the next
-      // attempt continues via Range instead of restarting from zero.
-      reportStage({ stage: "downloading", version: release.version });
-      const bytes = await downloadVerified(release, {
-        clock,
-        resumeDir: path.join(opts.stateDir, "incoming"),
-        onProgress: (downloaded, total) =>
-          reportStage({ stage: "downloading", version: release.version, downloaded, total }),
-      });
-      reportStage({ stage: "verifying", version: release.version });
-
-      reportStage({ stage: "staging", version: release.version });
-      const bytesRef = await materializeArtifact(opts.stateDir, bytes);
-
-      // M6 provenance: record WHO drove this reconcile, write-ahead of the txn.
-      if (opts.provenance) {
-        await recordReconcile(opts.provenance, provenance ?? opts.provenanceIdentity, release.version);
-      }
-
-      reportStage({ stage: "handing-over", version: release.version });
-      const outcome = await engine.upgrade({ version: release.version, bytesRef });
-      const finished = await finishUpgradeOutcome(outcome, {
-        notify,
-        reportStage,
-        targetVersion: release.version,
-        declaredSurfaces: (opts.lifecycleSurfaces ?? []).length,
-        nowMs: clock.nowMs(),
-        evidence: lastEvidence,
-        lifecycle: lastLifecycle,
-      });
-      if (finished.report !== null) {
-        lastReport = { kind: "observed", report: finished.report };
+  const operationLifecycle = createOperationLifecycle(opts.stateDir, clock, readState);
+  const drive = (request: Parameters<typeof driveUpgrade>[1]): Promise<UpgradeOutcome> =>
+    driveUpgrade({
+      stateDir: opts.stateDir,
+      clock,
+      engine,
+      operation: operationLifecycle,
+      ownership,
+      readStableVersion: async () => (await readState()).stableVersion,
+      policy: opts.policy,
+      notificationSink: opts.notificationSink,
+      ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
+      ...(opts.checkCompatibility ? { checkCompatibility: opts.checkCompatibility } : {}),
+      lifecycleSurfaceCount: (opts.lifecycleSurfaces ?? []).length,
+      evidence: () => lastEvidence,
+      lifecycle: () => lastLifecycle,
+      persistConvergenceReport: async (report) => {
+        lastReport = { kind: "observed", report };
         reportLoaded = true;
-        await persistReport(opts.stateDir, finished.report);
-      }
-      return finished.outcome;
-    } finally {
-      await lock.release();
-    }
-  }
+        await persistReport(opts.stateDir, report);
+      },
+      ...(opts.provenance ? { provenanceJournal: opts.provenance } : {}),
+      ...(opts.provenanceIdentity ? { provenanceIdentity: opts.provenanceIdentity } : {}),
+    }, request);
 
   return {
-    recover: () => recoverUpgrade(opts.stateDir, clock, engine),
+    recover: async () => {
+      operationLifecycle.reset();
+      await recoverUpgrade(opts.stateDir, clock, engine, operationLifecycle.settleRecovery);
+    },
 
     async check(): Promise<{ current: string; target: string | null }> {
       const current = (await readState()).stableVersion;
@@ -241,21 +160,29 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
     },
 
     async upgrade(): Promise<UpgradeOutcome> {
-      return run(async (current) =>
-        opts.source.checkForUpdate({ currentVersion: current, platformKey: platformOpsFor().platformKey() }),
-      );
+      return drive({
+        pick: async (current) => opts.source.checkForUpdate({
+          currentVersion: current,
+          platformKey: platformOpsFor().platformKey(),
+        }),
+      });
     },
 
-    async upgradeTo(version: string, opts2?: { consented?: boolean; provenance?: ProvenanceIdentity }): Promise<UpgradeOutcome> {
-      return run(
-        async (current) =>
-          opts.source.fetchRelease(version, {
+    async upgradeTo(version: string, opts2?: {
+      consented?: boolean;
+      provenance?: ProvenanceIdentity;
+      operation?: OperationDescriptor;
+    }): Promise<UpgradeOutcome> {
+      return drive({
+        pick: async (current) => opts.source.fetchRelease(version, {
             currentVersion: current,
             platformKey: platformOpsFor().platformKey(),
-          }),
-        opts2?.consented === true,
-        opts2?.provenance ?? null,
-      );
+        }),
+        consented: opts2?.consented === true,
+        ...(opts2?.provenance ? { provenance: opts2.provenance } : {}),
+        ...(opts2?.operation ? { operation: opts2.operation } : {}),
+        targetVersionHint: version,
+      });
     },
 
     async retireLegacyManager(): Promise<"retired" | { held: string }> {
@@ -272,12 +199,12 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
         const last = (await effects.journal.readAll()).at(-1)?.intent;
         const inFlight = last !== undefined && !phaseAtRest(last);
         if (!inFlight && ownership() === "managed-elsewhere") {
-          await notify("held", { reason: "managed-elsewhere" });
+          await opts.notificationSink({ kind: "held", detail: { reason: "managed-elsewhere" } });
           return { held: "this install is managed by another manager; it does not roll itself back" };
         }
         await engine.recover();
         await effects.slots.clearExperiment();
-        await notify("rolled-back", { reason });
+        await opts.notificationSink({ kind: "rolled-back", detail: { reason } });
         return "rolled-back";
       } finally {
         await lock.release();
@@ -295,6 +222,17 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
         policy: opts.policy,
         provenance: opts.provenance ? await opts.provenance.read() : null,
       });
+    },
+
+    operation: operationLifecycle.read,
+
+    async acknowledgeOperation(operationId) {
+      const lock = await acquireUpgradeLock(opts.stateDir, clock.nowMs());
+      try {
+        return await operationLifecycle.acknowledge(operationId);
+      } finally {
+        await lock.release();
+      }
     },
   };
 }
