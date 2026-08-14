@@ -27,6 +27,7 @@ import { finishUpgradeOutcome } from "./upgrade/outcome.ts";
 import { retireReason } from "./upgrade/retire.ts";
 import { buildStatusReport, type StatusReport } from "./status/report.ts";
 import { persistReport, loadLastReport, type ReportRead } from "./status/reportStore.ts";
+import { recoverUpgrade } from "./upgrade/recover.ts";
 
 export interface CreateUpgraderOptions extends UpgraderConfig {
   clock?: Clock;
@@ -65,7 +66,6 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
   const clock = opts.clock ?? systemClock;
   const effects = fileEffects(opts.stateDir);
   const ownership = opts.installOwnership ?? ((): "self" => "self");
-
   // The last predicate evidence, captured for the promote report (the
   // engine only carries pass/fail; the report needs the real results).
   let lastEvidence: ProcessEvidence | null = null;
@@ -150,7 +150,6 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
     const lock = await acquireUpgradeLock(opts.stateDir, clock.nowMs());
     try {
       await engine.recover(); // finish or undo anything a previous crash left
-
       const current = (await readState()).stableVersion;
       reportStage({ stage: "checking" });
       let release: Release | null;
@@ -170,7 +169,6 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
         throw err;
       }
       if (release === null) return { result: "up-to-date" };
-
       if (!consented && opts.policy === "notify-only") {
         await notify("held", { reason: "notify-only", version: release.version });
         return { result: "held", reason: `policy is notify-only; ${release.version} is available` };
@@ -231,6 +229,8 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
   }
 
   return {
+    recover: () => recoverUpgrade(opts.stateDir, clock, engine),
+
     async check(): Promise<{ current: string; target: string | null }> {
       const current = (await readState()).stableVersion;
       const release = await opts.source.checkForUpdate({

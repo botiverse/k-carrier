@@ -122,3 +122,49 @@ test("check() reports the target without changing anything", async () => {
   assert.equal(target, "2.0.0");
   await assert.rejects(() => fs.stat(path.join(dir, "journal.jsonl")));
 });
+
+test("recover() settles durable work without consulting the release source", async () => {
+  const dir = await stateDir();
+  const host = recordingHost();
+  let sourceConsulted = false;
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(
+    path.join(dir, "journal.jsonl"),
+    `${JSON.stringify({
+      seq: 0,
+      timestampMs: 1,
+      intent: "rolled-back",
+      detail: { formatVersion: "1" },
+    })}\n`,
+  );
+  const upgrader = createUpgrader({
+    host,
+    stateDir: dir,
+    source: {
+      checkForUpdate: async () => {
+        sourceConsulted = true;
+        throw new Error("recover must not check releases");
+      },
+      fetchRelease: async () => {
+        sourceConsulted = true;
+        throw new Error("recover must not fetch releases");
+      },
+    },
+    policy: "auto",
+    notificationSink: async () => {},
+  });
+
+  await upgrader.recover();
+
+  assert.equal(sourceConsulted, false);
+  assert.deepEqual(host.calls, ["stop:experiment", "start:stable", "resume"]);
+});
+
+test("recover() shares the upgrade lock and refuses a concurrent coordinator", async () => {
+  const dir = await stateDir();
+  const opts = await baseOpts(dir, await serveBytes());
+  const { acquireUpgradeLock } = await import("./txn/lock.ts");
+  const held = await acquireUpgradeLock(dir, 1);
+  await assert.rejects(() => createUpgrader(opts).recover(), /UPGRADE_IN_PROGRESS/u);
+  await held.release();
+});

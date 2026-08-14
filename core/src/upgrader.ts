@@ -25,6 +25,17 @@ export interface ProvenanceIdentity {
  */
 export interface Upgrader {
   /**
+   * Settle any transaction a previous coordinator left in flight.
+   *
+   * Recovery uses the same durable journal, host adapter, predicates and
+   * upgrade lock as ordinary upgrades. It never consults the release source
+   * or begins a new transaction; it only replays or rolls back work already
+   * recorded by K. Hosts should run this from a coordinator that survives
+   * service replacement, because recovery may stop and restart the service.
+   */
+  recover(): Promise<void>;
+
+  /**
    * Ask the release source whether this install should move, without moving
    * it. `target: null` means nothing to do.
    */
