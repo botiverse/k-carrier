@@ -55,6 +55,15 @@ test("appends are sequential and read back in file order", async () => {
   });
 });
 
+test("the public file journal has a real-clock default", async () => {
+  await withDir(async (dir) => {
+    const journal = fileProvenanceJournal(dir);
+    const entry = await journal.append({ who: "local", carrier: "cli", version: "1.0.0" });
+    assert.equal(Number.isFinite(entry.when), true);
+    assert.ok(entry.when > 0);
+  });
+});
+
 test("an explicit seq at or below the last one is refused", async () => {
   await withDir(async (dir) => {
     const j = fileProvenanceJournal(dir, fakeClock);

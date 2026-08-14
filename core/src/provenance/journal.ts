@@ -23,7 +23,7 @@
  */
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import type { Clock } from "../clock.ts";
+import { systemClock, type Clock } from "../clock.ts";
 
 const PROVENANCE_FILE = "provenance.jsonl";
 
@@ -84,7 +84,7 @@ export interface ProvenanceJournal {
   read(): Promise<ProvenanceRead>;
 }
 
-export function fileProvenanceJournal(stateDir: string, clock: Clock): ProvenanceJournal {
+export function fileProvenanceJournal(stateDir: string, clock: Clock = systemClock): ProvenanceJournal {
   const filePath = path.join(stateDir, PROVENANCE_FILE);
 
   /** Read the raw file. Throws ProvenanceHistoryUnreadableError when the
