@@ -1,6 +1,6 @@
 {
   "name": "@botiverse/k-carrier",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A fail-closed upgrade carrier for long-running managed services: two-slot upgrade transactions (promote/rollback), host-driven quiesce/resume handoff, and post-upgrade convergence read-back.",
   "license": "Apache-2.0",
   "type": "module",

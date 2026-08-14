@@ -6,6 +6,10 @@
 // The upgrader factory and its configuration.
 export * from "./createUpgrader.ts";
 
+// One-time adoption of an already-running trusted binary into K's stable
+// slot, plus the K-owned slot resolver host adapters use to launch it.
+export * from "./bootstrap.ts";
+
 // Core types: Upgrader, UpgraderConfig, UpgradeOutcome, ProvenanceIdentity,
 // NotificationEvent.
 export * from "./upgrader.ts";
