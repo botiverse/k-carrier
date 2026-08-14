@@ -239,7 +239,7 @@ K                   交付低 / 保证高    单二进制；事务 + 回读 + �
 3. 本仓库 = 原"release/publish 侧 spec"的上位替代；接入方视角见 `docs/integration.md`。
 
 ## 6. 决定记录（原开放问题，已拍部分）
-1. **名字/仓库 ✅（08-05）**：公开名 **k-carrier**（`github.com/botiverse/k-carrier`，private 孵化），口头名 **K**。理由：单字母不可检索 + kframework/k 撞名；k-carrier 自解释。
+1. **名字/仓库 ✅（08-05）**：公开名 **k-carrier**（`github.com/botiverse/k-carrier`），口头名 **K**。理由：单字母不可检索 + kframework/k 撞名；k-carrier 自解释。
 2. **core 语言 = TS 起步 ✅（默认成立，未被否）**：与 daemon 同栈、宿主壳复用最快、测试教义全在 TS 生态；留 FFI/重写门。
 3. **并行方式 = 1.0.16 先行 ✅（默认成立）**：按本仓库接口形状写，core 骨架随后收编。
 4. **drive 协议（仍开放）**：对齐现有远程配置生态 vs 自定义最小集 —— 到 L5 动工时拍。

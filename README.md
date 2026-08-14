@@ -6,34 +6,12 @@ CLI self-update libraries stop at replacing bytes; fleet updaters assume a machi
 
 **Two process models, defined by how many live incarnations K manages** — `swap` (**0**: K replaces bytes and touches no process; a one-shot CLI and an hours-long agent session are the same case) and `service` (**1**: K stops the old, starts the new, and proves it). OS lifecycle convergence and fleet drive are capabilities you opt into on top, not a third model. Proof is executable: a runnable example per case, and a claim without a green example does not exist.
 
-## Delivery and guarantee are different axes
+## What K owns
 
-Most updaters are compared on one vague axis called "complexity". There are
-two, and they are independent:
-
-|                       | delivery — how hard is it to put the bytes in place | guarantee — what is promised afterwards |
-|-----------------------|---------------------------------------|-----------------------------|
-| `rustup self update`  | low: replace one file, exit           | low: none                   |
-| `electron-updater`    | **high**                              | low: none                   |
-| **K**                 | low: one binary                       | **high**: transaction, readback, rollback |
-
-Measured, not asserted: of electron-updater 6.8.9's ~4,200 lines, ~1,170 are
-per-platform installation (Squirrel.Mac, NSIS, deb/rpm/pacman, AppImage),
-~1,200 orchestration and policy, ~960 feed providers, and ~860 differential
-download. Downloading is not the hard part — **installing is, because
-installing is not yours to do**: you hand off to a system component with its
-own rules (Squirrel.Mac accepts only a URL, so the updater serves the file it
-already downloaded back to itself over a local HTTP server; NSIS may need
-elevation; dpkg needs root). Grep that codebase for rollback and you find none,
-and nothing checks health after the install.
-
-K deliberately does not compete on the delivery axis — platform packaging
-belongs to platform tools. It exists on the other one, and specifically for the
-consequence those tools all share and none of them handle: **because something
-else installs your bytes, something else replaces and restarts your process.**
-The process driving the upgrade dies on the *success* path, so the successor
-must be able to tell "the handover worked" from "we crashed" — by evidence,
-never by a flag saying the restart was planned.
+K does not replace platform packaging or artifact delivery. It wraps an
+addressable release in a transaction with rollback and convergence readback.
+Because the process driving an upgrade may die on the success path, the
+successor proves the handoff from live evidence rather than trusting a flag.
 
 ## Start here
 
@@ -53,10 +31,8 @@ examples/   one runnable demo per profile (swap-tool / service-daemon / hosted-s
 docs/       guides + design + test plan + prior art
 ```
 
-**Platform support today:** Linux and macOS are implemented and gate CI.
-Windows platform operations (replacing a *running* .exe, process liveness) are
-deliberately unimplemented — they throw a typed `PLATFORM_UNSUPPORTED` rather
-than approximating POSIX behaviour and corrupting an install. The Windows CI
-job runs and reports, but does not gate, until those land.
+**Platform support today:** Linux and macOS gate CI. Windows platform
+operations are implemented; its acceptance harness and CI gate are still in
+progress.
 
 Status: incubating. TypeScript first. License: **Apache-2.0**.
