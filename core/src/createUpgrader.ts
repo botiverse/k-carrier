@@ -7,7 +7,7 @@
  * rollback is rare, not routine.
  */
 import type { Upgrader, UpgraderConfig, UpgradeOutcome, ProvenanceIdentity } from "./upgrader.ts";
-import { phaseAtRest, type TxnState } from "./txn/state.ts";
+import { assertNever, buildTxnState, phaseAtRest, type TxnState } from "./txn/state.ts";
 import type { ProcessEvidence } from "./lifecycle/hostAdapter.ts";
 import { UpgradeEngine } from "./txn/engine.ts";
 import { fileEffects } from "./txn/fileEffects.ts";
@@ -111,12 +111,35 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
   async function readState(): Promise<TxnState> {
     const slots = await effects.slots.slotVersions();
     const intents = (await effects.journal.readAll()).map((e) => e.intent);
-    return {
-      phase: intents.at(-1) ?? "idle",
-      stableVersion: slots.stable ?? "0.0.0",
-      experimentVersion: slots.experiment,
-      rollbackReason: null,
-    };
+    const phase = intents.at(-1) ?? "idle";
+    const stableVersion = slots.stable ?? "0.0.0";
+    const experimentVersion = slots.experiment;
+    switch (phase) {
+      case "idle":
+      case "promoted":
+        return buildTxnState({ phase, stableVersion });
+      case "rolled-back":
+        return buildTxnState({ phase, stableVersion });
+      case "staged":
+      case "handing-over":
+      case "running-experiment":
+      case "readback": {
+        // In-flight phases always carry an experiment. A persisted world that
+        // says an in-flight phase has an empty experiment slot is
+        // inconsistent, and we fail closed rather than fabricate a value that
+        // would be a type lie at this (the only runtime) boundary.
+        if (experimentVersion === null) {
+          throw new Error(
+            `TXN_STATE_INCONSISTENT: phase ${phase} is in-flight but the experiment slot is empty`,
+          );
+        }
+        return buildTxnState({ phase, stableVersion, experimentVersion });
+      }
+      default:
+        // Matches phaseAtRest's exhaustive discipline: an unknown phase from a
+        // newer core is not silently reinterpreted.
+        return assertNever(phase);
+    }
   }
 
   const operationLifecycle = createOperationLifecycle(opts.stateDir, clock, readState);
