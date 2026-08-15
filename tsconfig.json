@@ -14,5 +14,5 @@
     "erasableSyntaxOnly": true,
     "skipLibCheck": true
   },
-  "include": ["core/src", "harness/src", "examples"]
+  "include": ["src", "harness/src", "examples"]
 }

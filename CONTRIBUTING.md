@@ -10,8 +10,8 @@ SQLite.)
 
 **Issues are very welcome**, and are the best way to influence K:
 
-- bug reports — ideally with a failing scenario (see `docs/harness-design.md`;
-  a reproducible fake-host scenario is the gold standard)
+- bug reports — ideally with a failing scenario (see `docs/test-plan.md`; a
+  reproducible deterministic crash boundary is the gold standard)
 - design feedback and use cases — especially "I tried to adopt profile X and
   hit Y"
 - security reports — please do NOT open a public issue; contact the

@@ -17,6 +17,13 @@
     "no-unused-vars": "error",
     "eqeqeq": "error",
     "eslint/no-console": "error",
+    "eslint/no-underscore-dangle": [
+      "error",
+      {
+        "allow": ["_tag"]
+      }
+    ],
+    "eslint/max-lines": "off",
     "import/no-cycle": "error",
     "import/no-self-import": "error",
     "import/no-unassigned-import": "off",

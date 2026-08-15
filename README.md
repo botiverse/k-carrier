@@ -1,38 +1,57 @@
-# K (k-carrier)
+# K v2 Effect experiment
 
-**Self-upgrade framework for programs that must prove they came back up.**
+This branch is an intentionally private, from-scratch experiment. It is not a
+successor release of `@botiverse/k-carrier@0.1.x`, and it has no publish
+workflow.
 
-CLI self-update libraries stop at replacing bytes; fleet updaters assume a machine someone else administers. K covers what neither does: **an upgrade that is a transaction and can prove it happened** — two slots with rollback, crash-safe at every step, handoff of a live process with its workloads intact, and convergence proven from the live process and named OS surfaces (a version string is never accepted as proof). Consent and notification are built in, because on a machine someone owns personally, changing behaviour silently is not acceptable — but nothing here is limited to personal machines.
+The experiment asks one narrow question: can Effect provide the in-process
+execution model for K without weakening the durable upgrade protocol?
 
-**Two process models, defined by how many live incarnations K manages** — `swap` (**0**: K replaces bytes and touches no process; a one-shot CLI and an hours-long agent session are the same case) and `service` (**1**: K stops the old, starts the new, and proves it). OS lifecycle convergence and fleet drive are capabilities you opt into on top, not a third model. Proof is executable: a runnable example per case, and a claim without a green example does not exist.
-
-## What K owns
-
-K does not replace platform packaging or artifact delivery. It wraps an
-addressable release in a transaction with rollback and convergence readback.
-Because the process driving an upgrade may die on the success path, the
-successor proves the handoff from live evidence rather than trusting a flag.
-
-## Start here
-
-- **[`docs/integration.md`](docs/integration.md)** — from-zero guide: the problem in plain words, concept primer, tiered adoption with code.
-- [`docs/design-v1.md`](docs/design-v1.md) — full design: six layers, architecture, decision record.
-- [`docs/harness-design.md`](docs/harness-design.md) — the test framework, designed first: harness as executable spec (teeth registry, real-process crash injection, adversarial self-verification).
-- [`docs/test-plan.md`](docs/test-plan.md) — executable test plan (M0–M6, must-red per cell).
-- [`docs/prior-art.md`](docs/prior-art.md) — the source-level survey this design stands on (Tailscale / Datadog), and the license-defense record behind `NOTICE`.
-
-## Repo layout
+## Resulting shape
 
 ```
-core/       the framework — zero host-specific concepts (shells live in their
-            product's repo and consume core as a dependency)
-harness/    generic acceptance bed: fake-host daemon + profile-tiered teeth
-examples/   one runnable demo per profile (swap-tool / service-daemon / hosted-service)
-docs/       guides + design + test plan + prior art
+src/domain.ts       pure, schema-checked durable protocol data
+src/services.ts     Journal / Clock / Slots / Source / Host / Verifier / Lock
+src/kernel.ts       Effect-native upgrade and recovery programs
+src/facade.ts       Promise adapter and managed runtime boundary
+src/effect.ts       opt-in Effect-native entry
+harness/src/        deterministic Layer-backed host and crash matrix
 ```
 
-**Platform support today:** Linux and macOS gate CI. Windows platform
-operations are implemented; its acceptance harness and CI gate are still in
-progress.
+The default export is Promise-only. Consumers that already use Effect may use
+the `/effect` entry and provide their own Layers.
 
-Status: incubating. TypeScript first. License: **Apache-2.0**.
+## Protocol rules
+
+1. The synced journal is the authority across process death. Fiber state is
+   never recovery evidence.
+2. A host mutation carries a stable action id. An unknown result ends the
+   current turn; K does not issue a second mutation. Recovery may reissue only
+   that same id, which the adapter must deduplicate.
+3. Only the short journal append-and-sync operation is uninterruptible. Host
+   calls never run inside an uninterruptible region.
+4. Time enters through exactly one `KClock` service. The deterministic harness
+   supplies it from the same world that supplies crash scheduling.
+
+Slot `promote` and `clearExperiment` operations must be idempotent. A Journal
+implementation must reject or serialize concurrent writers and must not resolve
+`append` before durable sync. A Host implementation must persist the action-id
+deduplication receipt at least as durably as the side effect it guards.
+
+## Running the experiment
+
+Node 24 and pnpm 11 are required.
+
+```sh
+pnpm install --frozen-lockfile
+pnpm check
+```
+
+The crash test first records every boundary on a successful run, then boots a
+fresh runtime after a simulated process death at each boundary. It requires a
+terminal committed or rolled-back journal, one running stable slot, no staged
+artifact, and no retained process lock.
+
+See [`docs/design-v2-effect.md`](docs/design-v2-effect.md) and
+[`docs/test-plan.md`](docs/test-plan.md). The initial footprint measurements
+are in [`docs/experiment-results.md`](docs/experiment-results.md).

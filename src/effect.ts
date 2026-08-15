@@ -1,0 +1,46 @@
+export {
+  recoverEffect,
+  upgradeEffect,
+  type RecoveryServices,
+  type UpgradeServices,
+} from "./kernel.ts";
+export {
+  Host,
+  Journal,
+  KClock,
+  ReleaseSource,
+  Slots,
+  UpgradeLock,
+  Verifier,
+  type HostService,
+  type JournalService,
+  type ClockService,
+  type LockLease,
+  type ReleaseSourceService,
+  type SlotsService,
+  type UpgradeLockService,
+  type VerifierService,
+} from "./services.ts";
+export type {
+  HostCallError,
+  HostFailure,
+  HostOutcomeUnknown,
+  InvalidJournal,
+  InvariantViolation,
+  JournalFailure,
+  KError,
+  LockUnavailable,
+  PredicateRefused,
+  SlotFailure,
+  SourceFailure,
+} from "./errors.ts";
+export type {
+  Artifact,
+  HostMutation,
+  JournalEntry,
+  Phase,
+  ProcessEvidence,
+  Slot,
+  UpgradeOutcome,
+  UpgradeRequest,
+} from "./domain.ts";
