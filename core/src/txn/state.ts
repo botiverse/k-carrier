@@ -30,7 +30,7 @@ export type TxnPhase =
  * default, never the exclusion-list trap where every future terminal
  * phase silently becomes "in-flight" = allowed to modify.
  */
-function assertNever(x: never): never {
+export function assertNever(x: never): never {
   throw new Error(`unknown TxnPhase ${String(x)}; refusing to classify — a phase a newer core wrote must not be touched`);
 }
 
@@ -53,13 +53,34 @@ export function phaseAtRest(phase: TxnPhase): boolean {
   }
 }
 
-export interface TxnState {
-  phase: TxnPhase;
-  stableVersion: string;
-  experimentVersion: string | null;
-  /** Why the last rollback happened; null unless phase === "rolled-back". */
-  rollbackReason: string | null;
-}
+/**
+ * A discriminated union so that an "illegal" combination is not representable:
+ *
+ *  - terminal / at-rest phases (`idle`, `promoted`, `rolled-back`) NEVER carry
+ *    an experiment — an experiment slot that outlives a terminal phase is a
+ *    leaked transaction (k.terminal-leaves-no-experiment would fire at runtime;
+ *    here it is a compile error instead).
+ *  - in-flight phases (`staged`..`readback`) ALWAYS carry an experiment — that
+ *    is exactly what "in flight" means.
+ *  - only `rolled-back` may carry a `rollbackReason`.
+ *
+ * Construction must choose a member consistent with `phase`; a `switch` over
+ * `TxnState` narrows each member and forces every phase to make a decision
+ * (the same discipline as `phaseAtRest`, lifted to the whole record).
+ */
+export type TxnState =
+  | { phase: "idle"; stableVersion: string; experimentVersion: null; rollbackReason: null }
+  | {
+      phase: "staged" | "handing-over" | "running-experiment" | "readback";
+      stableVersion: string;
+      experimentVersion: string;
+      rollbackReason: null;
+    }
+  | { phase: "promoted"; stableVersion: string; experimentVersion: null; rollbackReason: null }
+  | { phase: "rolled-back"; stableVersion: string; experimentVersion: null; rollbackReason: string | null };
+
+/** The in-flight, experiment-carrying phases (a helper for exhaustive narrowing). */
+export const IN_FLIGHT_PHASES = ["staged", "handing-over", "running-experiment", "readback"] as const;
 
 /** Append-only, write-ahead journal entry. fsync'd before the action runs. */
 export interface JournalEntry {
@@ -75,3 +96,51 @@ export interface JournalEntry {
  * silently reinterpret. Encoded as a version field checked before replay.
  */
 export const STATE_FORMAT_VERSION = 1;
+
+/**
+ * The strongly-typed input to `buildTxnState`. The argument is itself a
+ * discriminated union over the phase, so an illegal input combination does
+ * not type-check: a terminal/at-rest phase simply cannot carry an experiment,
+ * only `rolled-back` may carry a reason, and an in-flight phase must carry
+ * one. This is the "impossible states" discipline applied to the constructor's
+ * arguments, not just its result.
+ */
+export type TxnStateInput =
+  | { phase: "idle" | "promoted"; stableVersion: string }
+  | { phase: "rolled-back"; stableVersion: string; rollbackReason?: string | null }
+  | {
+      phase: "staged" | "handing-over" | "running-experiment" | "readback";
+      stableVersion: string;
+      experimentVersion: string;
+    };
+
+/**
+ * Soundly construct a `TxnState` member from a discriminated input.
+ *
+ * The input type already forbids the illegal combinations (an in-flight phase
+ * cannot be given a missing experiment, a terminal phase cannot be given an
+ * experiment, only `rolled-back` may carry a reason), so the result is sound
+ * by construction — there is no per-phase coercion to get wrong here.
+ *
+ * The one place an inconsistent persisted world can slip in is the runtime
+ * boundary that reads the journal and slots but only knows the phase at
+ * runtime (see `createUpgrader.readState`); that boundary must decide the
+ * phase before calling this, failing closed if a phase is in flight but the
+ * experiment slot is empty.
+ */
+export function buildTxnState(input: TxnStateInput): TxnState {
+  switch (input.phase) {
+    case "idle":
+    case "promoted":
+      return { phase: input.phase, stableVersion: input.stableVersion, experimentVersion: null, rollbackReason: null };
+    case "rolled-back":
+      return { phase: input.phase, stableVersion: input.stableVersion, experimentVersion: null, rollbackReason: input.rollbackReason ?? null };
+    case "staged":
+    case "handing-over":
+    case "running-experiment":
+    case "readback":
+      return { phase: input.phase, stableVersion: input.stableVersion, experimentVersion: input.experimentVersion, rollbackReason: null };
+    default:
+      return assertNever(input);
+  }
+}
