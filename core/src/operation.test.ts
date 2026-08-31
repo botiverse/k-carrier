@@ -44,6 +44,18 @@ test("operation receipt is durable and acknowledgement binds the exact terminal 
   const after = await loadOperation(dir);
   assert.equal(after.kind, "observed");
   if (after.kind === "observed") assert.equal(after.operation.acknowledgedAtMs, 3);
+
+  assert.equal(await acknowledgeOperation(dir, "op-1", 9), "acknowledged");
+  const replayed = await loadOperation(dir);
+  assert.equal(replayed.kind, "observed");
+  if (replayed.kind === "observed") {
+    assert.equal(
+      replayed.operation.acknowledgedAtMs,
+      3,
+      "an exact replay must preserve the first durable acknowledgement time",
+    );
+    assert.equal(replayed.operation.updatedAtMs, 3);
+  }
 });
 
 test("an active operation cannot be acknowledged as if it were terminal", async () => {
