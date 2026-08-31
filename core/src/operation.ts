@@ -170,6 +170,9 @@ export async function acknowledgeOperation(
   if (current.kind === "unreadable") throw new Error(current.reason);
   if (current.operation.id !== operationId) return "changed";
   if (current.operation.outcome === null) return "not-terminal";
+  // Exact replay is idempotent. The first delivery time is part of the audit
+  // receipt; a retry must not rewrite it or manufacture a later delivery.
+  if (current.operation.acknowledgedAtMs !== null) return "acknowledged";
   await persistOperation(stateDir, {
     ...current.operation,
     updatedAtMs: acknowledgedAtMs,

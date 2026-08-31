@@ -26,6 +26,7 @@ import { recoverUpgrade } from "./upgrade/recover.ts";
 import type { OperationDescriptor } from "./operation.ts";
 import { createOperationLifecycle } from "./operationLifecycle.ts";
 import { driveUpgrade } from "./upgrade/drive.ts";
+import type { ArtifactTransferPolicy } from "./artifact/transferPolicy.ts";
 
 export interface CreateUpgraderOptions extends UpgraderConfig {
   clock?: Clock;
@@ -58,6 +59,12 @@ export interface CreateUpgraderOptions extends UpgraderConfig {
   provenance?: ProvenanceJournal;
   /** Identity recorded for reconciles that carry none (local auto-update). */
   provenanceIdentity?: ProvenanceIdentity;
+  /**
+   * Independent response, idle, and size-derived total budgets for artifact
+   * bytes. Defaults are safe for Computer-sized binaries; adopters may make
+   * them stricter, but cannot disable every bound.
+   */
+  artifactTransferPolicy?: ArtifactTransferPolicy;
 }
 
 export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
@@ -165,6 +172,9 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
       },
       ...(opts.provenance ? { provenanceJournal: opts.provenance } : {}),
       ...(opts.provenanceIdentity ? { provenanceIdentity: opts.provenanceIdentity } : {}),
+      ...(opts.artifactTransferPolicy
+        ? { artifactTransferPolicy: opts.artifactTransferPolicy }
+        : {}),
     }, request);
 
   return {

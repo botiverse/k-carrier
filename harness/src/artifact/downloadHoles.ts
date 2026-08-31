@@ -39,7 +39,7 @@ function releaseFor(url: string): Release {
 async function serve(chunks: number, gapMs: number, hang = false, stallAfterFirst = false) {
   const server = http.createServer((_req, res) => {
     res.writeHead(200, { "Content-Length": String(BODY.length) });
-    if (hang) return; // headers sent, bytes never follow
+    if (hang) { res.flushHeaders(); return; } // headers sent, bytes never follow
     const size = Math.ceil(BODY.length / chunks);
     let sent = 0;
     const push = (): void => {

@@ -18,6 +18,7 @@ export * from "./operation.ts";
 // The release-source boundary applications implement and the durable
 // provenance journal they wire into createUpgrader.
 export * from "./artifact/source.ts";
+export * from "./artifact/transferPolicy.ts";
 export * from "./provenance/journal.ts";
 
 // The host boundary an adopter implements: HostAdapter, Slot, ProcessEvidence.

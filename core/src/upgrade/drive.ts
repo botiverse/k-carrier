@@ -1,6 +1,11 @@
 import * as path from "node:path";
 import type { Release } from "../artifact/source.ts";
 import { downloadVerified } from "../artifact/download.ts";
+import {
+  artifactTransferTimeouts,
+  type ArtifactTransferPolicy,
+  type DownloadOptions,
+} from "../artifact/transferPolicy.ts";
 import { ArtifactError } from "../artifact/errors.ts";
 import { materializeArtifact } from "../txn/fileEffects.ts";
 import { acquireUpgradeLock } from "../txn/lock.ts";
@@ -37,6 +42,8 @@ export interface UpgradeDriveDeps {
   persistConvergenceReport: (report: ConvergenceReport) => Promise<void>;
   provenanceJournal?: ProvenanceJournal;
   provenanceIdentity?: ProvenanceIdentity;
+  artifactTransferPolicy?: ArtifactTransferPolicy;
+  downloadArtifact?: (release: Release, opts: DownloadOptions) => Promise<Uint8Array>;
 }
 
 export interface UpgradeDriveRequest {
@@ -115,9 +122,13 @@ export async function driveUpgrade(
 
     await deps.operation.transition({ phase: "downloading" });
     progress({ stage: "downloading", version: release.version });
-    const bytes = await downloadVerified(release, {
+    const transfer = artifactTransferTimeouts(release.size, deps.artifactTransferPolicy);
+    const bytes = await (deps.downloadArtifact ?? downloadVerified)(release, {
       clock: deps.clock,
       resumeDir: path.join(deps.stateDir, "incoming"),
+      timeoutMs: transfer.overallTimeoutMs,
+      responseTimeoutMs: transfer.responseTimeoutMs,
+      idleTimeoutMs: transfer.idleTimeoutMs,
       onProgress: (downloaded, total) =>
         progress({ stage: "downloading", version: release.version, downloaded, total }),
     });

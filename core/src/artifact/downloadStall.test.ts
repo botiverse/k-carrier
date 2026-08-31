@@ -14,7 +14,10 @@ const BODY = new Uint8Array(4096).fill(7);
 async function serve(chunks: number, gapMs: number, hang = false) {
   const server = http.createServer((_req, res) => {
     res.writeHead(200, { "Content-Length": String(BODY.length) });
-    if (hang) return; // headers sent, bytes never follow
+    if (hang) {
+      res.flushHeaders();
+      return; // headers sent, bytes never follow
+    }
     const size = Math.ceil(BODY.length / chunks);
     let sent = 0;
     const push = (): void => {
@@ -65,6 +68,20 @@ test("a wedged download dies on the stall budget, and says so", async () => {
   } finally {
     s.close();
   }
+});
+
+test("response headers have a budget distinct from body-idle liveness", async () => {
+  const neverSettles = (() => new Promise<Response>(() => {})) as unknown as typeof fetch;
+  await assert.rejects(
+    downloadVerified(release("http://127.0.0.1:1/app.bin"), {
+      fetchImpl: neverSettles,
+      responseTimeoutMs: 120,
+      idleTimeoutMs: 900,
+      timeoutMs: 3_000,
+    }),
+    /response timed out after 120ms \(awaiting response\)/u,
+    "an unreachable server must spend the response budget, not the body-idle or total budget",
+  );
 });
 
 test("stallTimeoutMs is off by default (a slow download is not a failure)", async () => {
