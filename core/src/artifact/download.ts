@@ -32,42 +32,9 @@ import { ArtifactError } from "./errors.ts";
 import type { Release } from "./source.ts";
 import { collectStream } from "./collectStream.ts";
 import { partialPathFor } from "./partialPath.ts";
+import type { DownloadOptions } from "./transferPolicy.ts";
 export { partialPathFor } from "./partialPath.ts";
-
-export interface DownloadOptions {
-  /**
-   * Byte progress. `downloaded` counts bytes ON DISK including any resumed
-   * prefix, so a resumed download never appears to restart at zero.
-   */
-  onProgress?: (downloaded: number, total: number) => void;
-  clock?: Clock;
-  /** Abort the download after this many ms (0 = no timeout). Default 10000. */
-  timeoutMs?: number;
-  /**
-   * Abort after this many ms with NO bytes arriving (0 = off). Default 0.
-   *
-   * Distinct from `timeoutMs`, and for large artifacts the more useful of the
-   * two: a total budget must either be big enough for the slowest acceptable
-   * download of a 150MB binary -- in which case a wedged connection holds for
-   * just as long -- or small enough to kill a slow one that was making steady
-   * progress. Bounding SILENCE instead follows liveness, so the limit does not
-   * have to encode a guess about size or bandwidth.
-   */
-  stallTimeoutMs?: number;
-  /**
-   * HTTP client for the artifact bytes. `staticManifestSource` already takes
-   * one; without the same seam here an adopter can point K at their own server
-   * for the MANIFEST but not for the BYTES, which is half a seam and surprising
-   * in exactly the place it matters (proxies, custom agents, and an adopter's
-   * own integration tests all need both).
-   */
-  fetchImpl?: typeof fetch;
-  /**
-   * Directory for partial-download state. When set, an interrupted download
-   * leaves its prefix here and the next attempt resumes via Range.
-   */
-  resumeDir?: string;
-}
+export type { DownloadOptions } from "./transferPolicy.ts";
 
 /** Fetch and verify one release's bytes, resuming from a partial if present. */
 export async function downloadVerified(
@@ -92,7 +59,9 @@ export async function downloadVerified(
 
   const bytes = await fetchAndAppend(
     url, partialPath, partialSize, clock, timeoutMs, opts.onProgress, release.size,
-    opts.stallTimeoutMs ?? 0, opts.fetchImpl ?? fetch,
+    opts.responseTimeoutMs ?? opts.stallTimeoutMs ?? 0,
+    opts.idleTimeoutMs ?? opts.stallTimeoutMs ?? 0,
+    opts.fetchImpl ?? fetch,
   );
 
   const sha = sha256Hex(bytes);
@@ -129,26 +98,24 @@ async function fetchAndAppend(
   timeoutMs: number,
   onProgress?: (downloaded: number, total: number) => void,
   total?: number,
-  stallTimeoutMs = 0,
+  responseTimeoutMs = 0,
+  idleTimeoutMs = 0,
   doFetch: typeof fetch = fetch,
 ): Promise<Uint8Array> {
   const controller = new AbortController();
-  // Rearmed on every chunk; fires only if the gap between chunks exceeds the
-  // budget. `stalled` records WHY we aborted, because the abort itself cannot
-  // say -- a stall and a total-timeout abort look identical at the signal.
-  let stalled = false;
-  let stallTimer: (() => void) | undefined;
+  // Body liveness is rearmed on every chunk. `timeoutKind` records WHY we
+  // aborted because the abort signal cannot distinguish the three budgets.
+  let timeoutKind: "overall" | "response" | "idle" | null = null;
+  let responseTimer: (() => void) | undefined;
+  let idleTimer: (() => void) | undefined;
   // Invoked when a deadline fires so the pending fetch cannot outlive it.
   let aborted: (() => void) | undefined;
-  // Which phase we were in when the deadline fired. Reporting "awaiting
-  // response" for a stall that happened mid-body sends the reader looking at
-  // the wrong end of the transfer.
-  let responded = false;
   const abortReason = (u: string): string =>
-    stalled
-      ? `download stalled: nothing received for ${stallTimeoutMs}ms ` +
-        `(${responded ? "mid-body" : "awaiting response"}): ${u}`
-      : `download timed out after ${timeoutMs}ms: ${u}`;
+    timeoutKind === "response"
+      ? `download response timed out after ${responseTimeoutMs}ms (awaiting response): ${u}`
+      : timeoutKind === "idle"
+        ? `download stalled: nothing received for ${idleTimeoutMs}ms (mid-body): ${u}`
+        : `download timed out after ${timeoutMs}ms: ${u}`;
   // Declared AFTER `aborted`: an immediate/virtual clock fires this callback
   // synchronously inside `clock.after`, so a timer created earlier would reach
   // `aborted` in its temporal dead zone. Real clocks hide that ordering; the
@@ -156,15 +123,25 @@ async function fetchAndAppend(
   const cancel =
     timeoutMs > 0
       ? clock.after(timeoutMs, () => {
+          timeoutKind = "overall";
           controller.abort();
           aborted?.();
         })
       : undefined;
-  const armStall = (): void => {
-    if (stallTimeoutMs <= 0) return;
-    stallTimer?.();
-    stallTimer = clock.after(stallTimeoutMs, () => {
-      stalled = true;
+  const armResponse = (): void => {
+    if (responseTimeoutMs <= 0) return;
+    responseTimer?.();
+    responseTimer = clock.after(responseTimeoutMs, () => {
+      timeoutKind = "response";
+      controller.abort();
+      aborted?.();
+    });
+  };
+  const armIdle = (): void => {
+    if (idleTimeoutMs <= 0) return;
+    idleTimer?.();
+    idleTimer = clock.after(idleTimeoutMs, () => {
+      timeoutKind = "idle";
       controller.abort();
       aborted?.();
     });
@@ -173,7 +150,7 @@ async function fetchAndAppend(
     const headers: Record<string, string> = {};
     if (partialSize > 0) headers["Range"] = `bytes=${partialSize}-`;
     let res: Response;
-    armStall(); // the response headers themselves must not hang forever
+    armResponse();
     try {
       // Race the abort, do not merely signal it. `AbortSignal` only works if the
       // fetch implementation honours it, and `fetchImpl` is an adopter-supplied
@@ -193,11 +170,7 @@ async function fetchAndAppend(
       const timedOut = controller.signal.aborted;
       throw new ArtifactError(
         "DOWNLOAD_FAILED",
-        stalled
-          ? `download stalled: nothing received for ${stallTimeoutMs}ms (awaiting response): ${url}`
-          : timedOut
-            ? `download timed out after ${timeoutMs}ms: ${url}`
-            : `fetch failed: ${url}`,
+        timedOut ? abortReason(url) : `fetch failed: ${url}`,
         { cause: err },
       );
     }
@@ -209,8 +182,9 @@ async function fetchAndAppend(
     // server that answers slowly and then streams normally is killed by a
     // deadline that started before the request was even answered -- and the
     // failure reports "awaiting response" while bytes were on their way.
-    responded = true;
-    armStall();
+    responseTimer?.();
+    responseTimer = undefined;
+    armIdle();
 
     if (partialPath === null) {
       // Stream even with nowhere to resume to. `res.arrayBuffer()` is one
@@ -219,7 +193,7 @@ async function fetchAndAppend(
       // silently had no byte progress and no stall detection at all, while
       // both looked configured.
       try {
-        return await collectStream(url, res.body, total, onProgress, armStall);
+        return await collectStream(url, res.body, total, onProgress, armIdle);
       } catch (err) {
         // Same classification as the resume path. Without this the in-memory
         // branch reported a bare stream error, so an abort we ourselves caused
@@ -248,10 +222,10 @@ async function fetchAndAppend(
       // reads as "it lost my download" to the person watching it.
       let onDisk = partialSize;
       onProgress?.(onDisk, total ?? 0);
-      armStall();
+      armIdle();
       await streamToFile(res.body, fh, (chunk) => {
         onDisk += chunk;
-        armStall();
+        armIdle();
         onProgress?.(onDisk, total ?? 0);
       });
       await fh.sync();
@@ -262,11 +236,7 @@ async function fetchAndAppend(
       const timedOut = controller.signal.aborted;
       throw new ArtifactError(
         "DOWNLOAD_FAILED",
-        stalled
-          ? `download stalled: nothing received for ${stallTimeoutMs}ms (mid-body): ${url}`
-          : timedOut
-            ? `download timed out after ${timeoutMs}ms: ${url}`
-            : `download interrupted: ${url}`,
+        timedOut ? abortReason(url) : `download interrupted: ${url}`,
         { cause: err },
       );
     } finally {
@@ -275,7 +245,8 @@ async function fetchAndAppend(
     return new Uint8Array(await fs.readFile(partialPath));
   } finally {
     cancel?.();
-    stallTimer?.();
+    responseTimer?.();
+    idleTimer?.();
   }
 }
 

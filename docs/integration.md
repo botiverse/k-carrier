@@ -237,6 +237,29 @@ Three things worth knowing before you draw a bar with it:
   and discards anything it throws. An observation surface must never become
   a failure mode — if your renderer breaks, the upgrade still completes.
 
+Artifact transfer has three independent fail-closed budgets. Response headers
+must arrive promptly, body progress must not go silent, and the full transfer
+has a hard ceiling derived from the release source's declared byte size. The
+defaults accept a Computer-sized binary that takes longer than ten seconds
+while still bounding an unreachable server and a wedged mid-body stream. An
+adopter with stricter network requirements may provide all four policy fields:
+
+```ts
+createUpgrader({
+  ...,
+  artifactTransferPolicy: {
+    responseTimeoutMs: 20_000,
+    idleTimeoutMs: 30_000,
+    minimumBytesPerSecond: 128 * 1024,
+    maximumOverallTimeoutMs: 20 * 60_000,
+  },
+});
+```
+
+The total budget is `responseTimeoutMs + size / minimumBytesPerSecond`, capped
+by `maximumOverallTimeoutMs`. Invalid, zero, or effectively unbounded policies
+are rejected before the byte request starts.
+
 The stages are not a parallel state machine: they are derived from the L1
 transaction phases (`stageForPhase`), so a progress display can never show a
 state the transaction does not have.
