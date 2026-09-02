@@ -4,6 +4,7 @@ import type { ConvergenceReport } from "./converge/predicates.js";
 import type { StatusReport } from "./status/report.js";
 import type { ReleaseSource } from "./artifact/source.js";
 import type { OperationDescriptor, OperationRead } from "./operation.js";
+import type { QuarantineOptions, QuarantineResult } from "./quarantine.ts";
 
 /**
  * Who drove a reconcile, recorded in the provenance journal (M6, L5).
@@ -106,6 +107,9 @@ export interface Upgrader {
 
   /** Mark one exact terminal operation delivered by the host transport. */
   acknowledgeOperation(operationId: string): Promise<"acknowledged" | "not-terminal" | "not-found" | "changed">;
+
+  /** Atomically move quiesced K state to an audit-only fresh-install backup. */
+  quarantineState(options: QuarantineOptions): Promise<QuarantineResult>;
 }
 
 export type UpgradeOutcome =

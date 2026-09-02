@@ -286,6 +286,16 @@ if (receipt.kind === "observed" && receipt.operation.outcome !== null) {
   await deliver(receipt.operation);
   await upgrader.acknowledgeOperation(receipt.operation.id);
 }
+
+// Fresh-install hosts may quarantine a complete, quiesced K state atomically.
+// The destination must be an absolute path outside stateDir and the host must
+// supply its clock timestamp. Terminal receipts are moved without deletion;
+// active receipts require an in-lock host handoff proof.
+const backup = await upgrader.quarantineState({
+  destination: "/var/lib/myapp/k-quarantine/op-123-1700000000000",
+  timestampMs: 1700000000000,
+});
+// backup.quarantinePath is the durable, non-secret audit location.
 ```
 
 The host may project this receipt into UI or transport, but must not maintain
