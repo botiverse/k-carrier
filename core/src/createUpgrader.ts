@@ -27,6 +27,7 @@ import type { OperationDescriptor } from "./operation.ts";
 import { createOperationLifecycle } from "./operationLifecycle.ts";
 import { driveUpgrade } from "./upgrade/drive.ts";
 import type { ArtifactTransferPolicy } from "./artifact/transferPolicy.ts";
+import { quarantineState } from "./quarantine.ts";
 
 export interface CreateUpgraderOptions extends UpgraderConfig {
   clock?: Clock;
@@ -267,5 +268,7 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
         await lock.release();
       }
     },
+
+    quarantineState: (options) => quarantineState(opts.stateDir, options),
   };
 }

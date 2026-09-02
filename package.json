@@ -1,6 +1,6 @@
 {
   "name": "@botiverse/k-carrier",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "packageManager": "pnpm@11.18.0",
   "description": "A fail-closed upgrade carrier for long-running managed services: two-slot upgrade transactions (promote/rollback), host-driven quiesce/resume handoff, and post-upgrade convergence read-back.",
   "repository": {

@@ -14,6 +14,7 @@ export * from "./bootstrap.ts";
 // NotificationEvent.
 export * from "./upgrader.ts";
 export * from "./operation.ts";
+export * from "./quarantine.ts";
 
 // The release-source boundary applications implement and the durable
 // provenance journal they wire into createUpgrader.
