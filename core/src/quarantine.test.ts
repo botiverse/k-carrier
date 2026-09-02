@@ -129,3 +129,9 @@ test("destination conflicts are not overwritten", async () => {
   );
   assert.equal(await fs.readFile(path.join(state, "journal.jsonl"), "utf8"), "audit\n");
 });
+
+test("atomicity contract is bound to the platform rename seam", async () => {
+  const source = await fs.readFile(new URL("./quarantine.ts", import.meta.url), "utf8");
+  assert.match(source, /platformOpsFor\(\)\.renamePath\(sourcePath, quarantinePath\)/u);
+  assert.doesNotMatch(source, /fs\.cp\(|fs\.rm\(sourcePath/u);
+});
