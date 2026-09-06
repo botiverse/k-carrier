@@ -8,6 +8,6 @@ test("command controller rejects malformed evidence, nonzero exit and hung comma
   const controller = makeController;
   await assert.rejects(controller('console.log(JSON.stringify({protocolVersion:1,ok:true,evidence:{version:"2"}}))').healthProbe(), /HOST_EVIDENCE_INVALID/);
   await assert.rejects(controller('process.exit(2)').stop("stable"), /HOST_COMMAND_FAILED/);
-  await assert.rejects(controller('setInterval(()=>{},1000)').start("experiment"), /HOST_COMMAND_FAILED/);
+  await assert.rejects(controller('process.on("SIGTERM",()=>{}); setInterval(()=>{},1000)').start("experiment"), /HOST_COMMAND_FAILED/);
   await assert.rejects(controller('console.log("not json")').quiesce());
 });

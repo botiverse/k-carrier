@@ -1,6 +1,8 @@
 import { execFile } from "node:child_process";
 import type { HostAdapter, ProcessEvidence, Slot } from "../lifecycle/hostAdapter.ts";
 import { slotArtifactPath } from "../bootstrap.ts";
+import { systemClock } from "../clock.ts";
+import { platformOpsFor } from "../platform/index.ts";
 import { objectValue } from "./protocol.ts";
 
 export interface CommandHostOptions {
@@ -20,10 +22,27 @@ export function createCommandHost(options: CommandHostOptions): HostAdapter {
     const input = { protocolVersion: 1, action,
       ...(slot ? { slot, artifactPath: slotArtifactPath(options.stateDir, slot) } : {}) };
     const stdout = await new Promise<string>((resolve, reject) => {
-      const child = execFile(file, args, { timeout, maxBuffer: 64 * 1024, encoding: "utf8",
+      let settled = false;
+      let cancel: (() => void) | undefined;
+      const child = execFile(file, args, { maxBuffer: 64 * 1024, encoding: "utf8",
         ...(options.cwd ? { cwd: options.cwd } : {}) }, (error, out) => {
+        if (settled) return;
+        settled = true;
+        cancel?.();
         if (error) reject(new Error(`HOST_COMMAND_FAILED: ${action} (${error.code ?? "terminated"})`));
         else resolve(out);
+      });
+      cancel = systemClock.after(timeout, () => {
+        if (settled) return;
+        settled = true;
+        // A controller ignoring graceful termination cannot hold the helper open.
+        // Killing this child does not prove its external effects stopped.
+        if (child.pid) {
+          try { platformOpsFor().killProcess(child.pid); } catch { /* preserve uncertainty */ }
+        }
+        child.stdin?.destroy(); child.stdout?.destroy(); child.stderr?.destroy();
+        child.unref();
+        reject(new Error(`HOST_COMMAND_FAILED: ${action} (deadline exceeded)`));
       });
       child.stdin?.on("error", () => { /* execFile reports early child failure */ });
       child.stdin?.end(JSON.stringify(input));
