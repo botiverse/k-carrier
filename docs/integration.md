@@ -1,5 +1,8 @@
 # Integrating K into your application
 
+For new integrations start with the [external runner guide](one-shot-runner.md).
+The embedded facade below remains available for existing consumers.
+
 A from-zero guide. If you already know updaters, skim §2 (concepts) and jump
 to your profile in §3.
 

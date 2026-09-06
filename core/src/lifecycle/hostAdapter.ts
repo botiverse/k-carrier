@@ -17,6 +17,9 @@
  *    asynchronously. So start() means "the successor has been asked for",
  *    never "the successor is running": only healthProbe() can say that.
  *
+ * New integrations run K outside the resident process and service unit; this
+ * keeps the transaction owner alive during stop/start. The following describes
+ * the legacy embedded integration and the recovery model retained for crashes:
  * A consequence worth stating, because it decides who finishes an upgrade:
  * on such hosts the process driving the transaction DIES on the success path.
  * The successor finds a journal that stops mid-handover -- indistinguishable

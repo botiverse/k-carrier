@@ -14,6 +14,8 @@ import { createCommandHost } from "./commandHost.ts";
 import type { RunnerRequest, RunnerResponse } from "./protocol.ts";
 
 const exec = promisify(execFile);
+const upgrade = (id: string, targetVersion: string): RunnerRequest => ({ protocolVersion: 1,
+  action: "upgrade", id, targetVersion, consented: true });
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 
 test("bundled helper upgrades a real service, replays, recovers and rolls back without app upgrade code", async (t) => {
@@ -57,8 +59,6 @@ test("bundled helper upgrades a real service, replays, recovers and rolls back w
       child.stdin.end(JSON.stringify(request));
     });
   }
-  const upgrade = (id: string, targetVersion: string): RunnerRequest => ({ protocolVersion: 1,
-    action: "upgrade", id, targetVersion, consented: true });
   await publish("2.0.0");
   const success = await run(upgrade("first", "2.0.0"));
   assert.equal(success.exitCode, 0, JSON.stringify(success));
@@ -75,21 +75,23 @@ test("bundled helper upgrades a real service, replays, recovers and rolls back w
   assert.equal((await run(upgrade("first", "3.0.0"))).exitCode, 1);
   assert.equal((await run({ protocolVersion: 1, action: "status" })).operation.kind, "observed");
   await publish("3.0.0", "wrong-version");
-  assert.notEqual((await run(upgrade("second", "3.0.0"))).exitCode, 0); // pending first receipt
-  assert.equal((await run({ protocolVersion: 1, action: "acknowledge", id: "first" })).exitCode, 0);
   const failed = await run(upgrade("second", "3.0.0"));
   assert.equal(failed.result, "rolled-back", JSON.stringify(failed));
   assert.equal(failed.exitCode, 1);
   assert.equal((await host.healthProbe()).version, "2.0.0");
   assert.equal((await run({ protocolVersion: 1, action: "recover" })).exitCode, 1); // recovered rollback remains failure
-  await run({ protocolVersion: 1, action: "acknowledge", id: "second" });
+  const oldReplay = await run(upgrade("first", "2.0.0"));
+  assert.equal(oldReplay.result, "replayed");
+  assert.equal(oldReplay.exitCode, 0);
+  if (oldReplay.operation.kind === "observed") assert.equal(oldReplay.operation.operation.acknowledgedAtMs, null);
+  assert.equal((await host.healthProbe()).version, "2.0.0");
   await publish("4.0.0");
   const crashHelper = path.join(dir, "crash-runner.mjs");
   await exec(process.execPath, [path.join(root, "scripts/build-runner.mjs"),
     path.join(root, "harness/src/fixtures/externalCrashAdapter.ts"), crashHelper], { cwd: root });
   await fs.writeFile(path.join(dir, "pause"), "pause-after-stop");
   const crashed = spawn(process.execPath, [crashHelper], { env: { ...process.env, K_EXAMPLE_HOME: dir }, stdio: "pipe" });
-  const ended = new Promise<void>((resolve) => crashed.once("close", () => resolve()));
+  const ended = new Promise<void>((resolve) => { crashed.once("close", () => resolve()); });
   t.after(() => { crashed.kill(); });
   crashed.stdin.end(JSON.stringify(upgrade("interrupted", "4.0.0")));
   let stopped = false;
@@ -111,5 +113,6 @@ test("bundled helper upgrades a real service, replays, recovers and rolls back w
   assert.equal(recovery.operation.kind, "observed");
   if (recovery.operation.kind === "observed") assert.equal(recovery.operation.operation.outcome, "rolled-back");
   assert.equal((await host.healthProbe()).version, "2.0.0");
-  assert.notEqual((await run(upgrade("interrupted", "4.0.0"))).exitCode, 0);
+  const replay = await run(upgrade("interrupted", "4.0.0"));
+  assert.equal(replay.result, "replayed", JSON.stringify(replay));
 });

@@ -8,6 +8,7 @@
  * already been acknowledged by the host transport.
  */
 import { promises as fs } from "node:fs";
+import { createHash } from "node:crypto";
 import * as path from "node:path";
 import { platformOpsFor } from "./platform/index.ts";
 import type { ProvenanceIdentity } from "./upgrader.ts";
@@ -188,5 +189,40 @@ export class OperationReplay extends Error {
     super(`OPERATION_REPLAY: ${operation.id}`);
     this.operation = operation;
     this.name = "OperationReplay";
+  }
+}
+
+function archivePath(stateDir: string, id: string): string {
+  return path.join(stateDir, "receipts", `${createHash("sha256").update(id).digest("hex")}.json`);
+}
+
+/** Durable history is independent of transport acknowledgement. Called under K's lock. */
+export async function archiveOperation(stateDir: string, operation: OperationRecord): Promise<void> {
+  if (operation.outcome === null) throw new Error("cannot archive an active operation");
+  const target = archivePath(stateDir, operation.id);
+  const existing = await loadArchivedOperation(stateDir, operation.id);
+  if (existing.kind === "unreadable") throw new Error(existing.reason);
+  if (existing.kind === "observed") {
+    if (existing.operation.targetVersion !== operation.targetVersion || existing.operation.outcome !== operation.outcome) {
+      throw new Error("OPERATION_ARCHIVE_CONFLICT");
+    }
+    return;
+  }
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  const tmp = `${target}.tmp`;
+  const handle = await fs.open(tmp, "w", 0o600);
+  try { await handle.writeFile(JSON.stringify(operation)); await handle.sync(); }
+  finally { await handle.close(); }
+  await platformOpsFor().renamePath(tmp, target);
+}
+
+export async function loadArchivedOperation(stateDir: string, id: string): Promise<OperationRead> {
+  try {
+    const operation = parseOperation(await fs.readFile(archivePath(stateDir, id), "utf8"));
+    if (operation.id !== id || operation.outcome === null) throw new Error("invalid archived receipt identity/outcome");
+    return { kind: "observed", operation };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { kind: "genesis" };
+    return { kind: "unreadable", reason: "cannot read archived K receipt" };
   }
 }

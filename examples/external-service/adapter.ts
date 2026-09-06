@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { createUpgrader, createCommandHost } from "../../core/src/index.ts";
+import { createExternalUpgrader, createCommandHost } from "../../core/src/index.ts";
 import type { Release } from "../../core/src/index.ts";
 
 /** This trusted module is bundled into the disposable helper at BUILD time. */
@@ -22,4 +22,4 @@ export function createOptions() {
   };
 }
 
-export default function create() { return createUpgrader(createOptions()); }
+export default function create() { return createExternalUpgrader(createOptions()); }

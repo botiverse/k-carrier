@@ -14,7 +14,7 @@ import type { Clock } from "../clock.ts";
 import type { UpgradeProgress } from "../progress.ts";
 import type { ProcessEvidence } from "../lifecycle/hostAdapter.ts";
 import type { PredicateResult, ConvergenceReport } from "../converge/predicates.ts";
-import { OperationReplay, type OperationDescriptor } from "../operation.ts";
+import { OperationReplay, loadArchivedOperation, type OperationDescriptor } from "../operation.ts";
 import type { OperationLifecycle } from "../operationLifecycle.ts";
 import type {
   NotificationEvent,
@@ -72,7 +72,11 @@ export async function driveUpgrade(
   try {
     deps.operation.reset();
     // Inspect under the transaction lock, before recovery or any new host action.
-    const prior = await deps.operation.read();
+    const latest = await deps.operation.read();
+    if (latest.kind === "unreadable") throw new Error(latest.reason);
+    const archived = request.operation ? await loadArchivedOperation(deps.stateDir, request.operation.id) : { kind: "genesis" as const };
+    if (archived.kind === "unreadable") throw new Error(archived.reason);
+    const prior = archived.kind === "observed" ? archived : latest;
     if (request.operation && prior.kind === "observed" && prior.operation.id === request.operation.id) {
       if (prior.operation.targetVersion !== request.targetVersionHint) {
         throw new Error("OPERATION_ID_CONFLICT: request id is already bound to another version");

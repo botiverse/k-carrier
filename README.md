@@ -1,6 +1,6 @@
 # K (k-carrier)
 
-**Self-upgrade framework for programs that must prove they came back up.**
+**External upgrade framework for programs that must prove they came back up.**
 
 CLI self-update libraries stop at replacing bytes; fleet updaters assume a machine someone else administers. K covers what neither does: **an upgrade that is a transaction and can prove it happened** — two slots with rollback, crash-safe at every step, handoff of a live process with its workloads intact, and convergence proven from the live process and named OS surfaces (a version string is never accepted as proof). Consent and notification are built in, because on a machine someone owns personally, changing behaviour silently is not acceptable — but nothing here is limited to personal machines.
 
@@ -12,6 +12,16 @@ K does not replace platform packaging or artifact delivery. It wraps an
 addressable release in a transaction with rollback and convergence readback.
 Because the process driving an upgrade may die on the success path, the
 successor proves the handoff from live evidence rather than trusting a flag.
+
+## External execution (new integrations)
+
+Build a disposable runner with a trusted adapter; the application exposes lifecycle
+and health controls and contains no upgrade engine. Installer/self-update/Web
+launchers select and verify the helper, then observe K's persistent outcome.
+See [design and protocol](docs/one-shot-runner.md),
+[source research](docs/external-runner-research.md), and the
+[real-process example](examples/external-service/README.md).
+Existing embedded consumers remain supported during migration.
 
 ## Start here
 

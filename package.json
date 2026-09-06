@@ -37,7 +37,8 @@
     "lint": "oxlint --deny-warnings core harness examples",
     "ratchet": "bash scripts/ratchets.sh",
     "sim": "node harness/src/cli.ts sim",
-    "check": "pnpm typecheck && pnpm lint && pnpm ratchet && pnpm test"
+    "check": "pnpm typecheck && pnpm lint && pnpm ratchet && pnpm test",
+    "test:external": "node --test --test-timeout=60000 \"core/src/external/*.test.ts\""
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
