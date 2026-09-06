@@ -14,7 +14,7 @@ import type { Clock } from "../clock.ts";
 import type { UpgradeProgress } from "../progress.ts";
 import type { ProcessEvidence } from "../lifecycle/hostAdapter.ts";
 import type { PredicateResult, ConvergenceReport } from "../converge/predicates.ts";
-import type { OperationDescriptor } from "../operation.ts";
+import { OperationReplay, type OperationDescriptor } from "../operation.ts";
 import type { OperationLifecycle } from "../operationLifecycle.ts";
 import type {
   NotificationEvent,
@@ -70,8 +70,22 @@ export async function driveUpgrade(
 
   const lock = await acquireUpgradeLock(deps.stateDir, deps.clock.nowMs());
   try {
+    deps.operation.reset();
+    // Inspect under the transaction lock, before recovery or any new host action.
+    const prior = await deps.operation.read();
+    if (request.operation && prior.kind === "observed" && prior.operation.id === request.operation.id) {
+      if (prior.operation.targetVersion !== request.targetVersionHint) {
+        throw new Error("OPERATION_ID_CONFLICT: request id is already bound to another version");
+      }
+      if (prior.operation.outcome !== null) throw new OperationReplay(prior.operation);
+    }
     await deps.engine.recover();
     await deps.operation.settleRecovery();
+    const recovered = await deps.operation.read();
+    if (request.operation && recovered.kind === "observed" &&
+        recovered.operation.id === request.operation.id && recovered.operation.outcome !== null) {
+      throw new OperationReplay(recovered.operation);
+    }
     const current = await deps.readStableVersion();
     await deps.operation.begin(
       request.operation ?? null,
@@ -96,6 +110,10 @@ export async function driveUpgrade(
         reason: error instanceof Error ? error.message : String(error),
       });
       throw error;
+    }
+    if (release !== null && request.targetVersionHint !== undefined && release.version !== request.targetVersionHint) {
+      await deps.operation.transition({ phase: "failed", outcome: "failed", reason: "target-version-mismatch" });
+      throw new Error("PINNED_VERSION_MISMATCH: release source returned a different target");
     }
     if (release === null) {
       await deps.operation.transition({ phase: "up-to-date", outcome: "up-to-date" });

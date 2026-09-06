@@ -180,3 +180,13 @@ export async function acknowledgeOperation(
   });
   return "acknowledged";
 }
+
+/** A completed request is replayed from its durable receipt, never executed twice. */
+export class OperationReplay extends Error {
+  readonly operation: OperationRecord;
+  constructor(operation: OperationRecord) {
+    super(`OPERATION_REPLAY: ${operation.id}`);
+    this.operation = operation;
+    this.name = "OperationReplay";
+  }
+}
