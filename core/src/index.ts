@@ -27,3 +27,4 @@ export * from "./lifecycle/hostAdapter.ts";
 
 // The built-in invariants and their types (WorldSnapshot, Invariant, ...).
 export * from "./invariants.ts";
+export * from "./oneShot.ts";
