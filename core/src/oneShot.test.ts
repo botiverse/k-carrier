@@ -10,3 +10,8 @@ test("one-shot maps terminal outcomes to shell status", async () => {
   assert.equal((await runOneShotUpgrade(fake({ result: "held", reason: "policy" }), "2")).exitCode, 2);
   assert.equal((await runOneShotUpgrade(fake({ result: "rolled-back", reason: "bad", report: null }), "2")).exitCode, 1);
 });
+
+test("external runner waits for child terminal exit", async () => {
+  const { execOneShotRunner } = await import("./oneShot.ts");
+  assert.equal(await execOneShotRunner(process.execPath, ["-e", "setTimeout(() => process.exit(2), 10)"]), 2);
+});
