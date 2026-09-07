@@ -4,8 +4,8 @@
  * Hosts may project this record into their own UI or transport, but they do
  * not maintain a second upgrade state machine. The operation receipt is the
  * single durable answer to: what is running, which version was requested,
- * what stable version can be restored, and whether the terminal receipt has
- * already been acknowledged by the host transport.
+ * what stable version can be restored, and the outcome. Transport delivery
+ * tracking belongs to the caller and cannot block another transaction.
  */
 import { promises as fs } from "node:fs";
 import { createHash } from "node:crypto";
@@ -76,8 +76,8 @@ export interface OperationRecord {
   reason: string | null;
   provenance: ProvenanceIdentity | null;
   metadata: Record<string, string>;
-  /** Host transport receipt, not a second transaction outcome. */
-  acknowledgedAtMs: number | null;
+  /** Historical format-1 metadata. Ignored by K; preserved when archiving old records. */
+  acknowledgedAtMs?: number | null;
 }
 
 export type OperationRead =
@@ -123,7 +123,6 @@ function parseOperation(text: string): OperationRecord {
     || parsed.metadata === null
     || Array.isArray(parsed.metadata)
     || Object.values(parsed.metadata).some((value) => typeof value !== "string")
-    || !(parsed.acknowledgedAtMs === null || typeof parsed.acknowledgedAtMs === "number")
   ) {
     throw new Error("operation record has an invalid shape");
   }
@@ -159,27 +158,6 @@ export async function loadOperation(stateDir: string): Promise<OperationRead> {
   } catch (error) {
     return { kind: "unreadable", reason: `corrupt ${OPERATION_FILE}: ${(error as Error).message}` };
   }
-}
-
-export async function acknowledgeOperation(
-  stateDir: string,
-  operationId: string,
-  acknowledgedAtMs: number,
-): Promise<"acknowledged" | "not-terminal" | "not-found" | "changed"> {
-  const current = await loadOperation(stateDir);
-  if (current.kind === "genesis") return "not-found";
-  if (current.kind === "unreadable") throw new Error(current.reason);
-  if (current.operation.id !== operationId) return "changed";
-  if (current.operation.outcome === null) return "not-terminal";
-  // Exact replay is idempotent. The first delivery time is part of the audit
-  // receipt; a retry must not rewrite it or manufacture a later delivery.
-  if (current.operation.acknowledgedAtMs !== null) return "acknowledged";
-  await persistOperation(stateDir, {
-    ...current.operation,
-    updatedAtMs: acknowledgedAtMs,
-    acknowledgedAtMs,
-  });
-  return "acknowledged";
 }
 
 /** A completed request is replayed from its durable receipt, never executed twice. */

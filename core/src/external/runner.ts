@@ -3,7 +3,7 @@ import { OperationReplay, type OperationRead } from "../operation.ts";
 import { systemClock, type Clock } from "../clock.ts";
 import { parseRunnerRequest, type RunnerRequest, type RunnerResponse } from "./protocol.ts";
 
-export type RunnerUpgrader = Pick<Upgrader, "upgradeTo" | "recover" | "operation" | "acknowledgeOperation">;
+export type RunnerUpgrader = Pick<Upgrader, "upgradeTo" | "recover" | "operation">;
 
 async function readOperation(upgrader: RunnerUpgrader): Promise<OperationRead> {
   try { return await upgrader.operation(); }
@@ -31,10 +31,6 @@ export async function runOneShotUpgrade(
     switch (request.action) {
       case "status": result = "observed"; break;
       case "recover": await upgrader.recover(); result = "recovered"; break;
-      case "acknowledge":
-        result = await upgrader.acknowledgeOperation(request.id);
-        exitCode = result === "acknowledged" ? 0 : 2;
-        break;
       case "upgrade": {
         const outcome = await upgrader.upgradeTo(request.targetVersion, {
           consented: request.consented,
@@ -52,7 +48,7 @@ export async function runOneShotUpgrade(
          operation.operation.targetVersion !== request.targetVersion)) {
       throw new Error("RUNNER_RECEIPT_MISMATCH");
     }
-    if (request.action !== "acknowledge" && request.action !== "status" && exitCode === 0) {
+    if (request.action !== "status" && exitCode === 0) {
       exitCode = receiptCode(operation);
     }
     if (operation.kind === "unreadable") exitCode = 1;

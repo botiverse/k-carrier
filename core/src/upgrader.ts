@@ -106,9 +106,6 @@ export interface Upgrader {
   /** K's single durable operation receipt; hosts project it, never mirror it. */
   operation(): Promise<OperationRead>;
 
-  /** Mark one exact terminal operation delivered by the host transport. */
-  acknowledgeOperation(operationId: string): Promise<"acknowledged" | "not-terminal" | "not-found" | "changed">;
-
   /** Atomically move quiesced K state to an audit-only fresh-install backup. */
   quarantineState(options: QuarantineOptions): Promise<QuarantineResult>;
 }

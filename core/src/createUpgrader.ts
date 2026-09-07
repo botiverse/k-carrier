@@ -31,8 +31,6 @@ import { quarantineState } from "./quarantine.ts";
 
 export interface CreateUpgraderOptions extends UpgraderConfig {
   clock?: Clock;
-  /** External helpers retain history without waiting for a dead transport's ACK. */
-  terminalReceiptPolicy?: "require-ack" | "archive";
   /** Reports who owns this install; default: we own it. */
   installOwnership?: () => "self" | "managed-elsewhere";
   /** Optional host semantic gate; a string result refuses the transition. */
@@ -152,7 +150,7 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
     }
   }
 
-  const operationLifecycle = createOperationLifecycle(opts.stateDir, clock, readState, opts.terminalReceiptPolicy);
+  const operationLifecycle = createOperationLifecycle(opts.stateDir, clock, readState);
   const drive = (request: Parameters<typeof driveUpgrade>[1]): Promise<UpgradeOutcome> =>
     driveUpgrade({
       stateDir: opts.stateDir,
@@ -263,15 +261,6 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
     },
 
     operation: operationLifecycle.read,
-
-    async acknowledgeOperation(operationId) {
-      const lock = await acquireUpgradeLock(opts.stateDir, clock.nowMs());
-      try {
-        return await operationLifecycle.acknowledge(operationId);
-      } finally {
-        await lock.release();
-      }
-    },
 
     quarantineState: (options) => quarantineState(opts.stateDir, options),
   };

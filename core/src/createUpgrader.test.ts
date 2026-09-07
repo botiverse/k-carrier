@@ -244,14 +244,9 @@ test("upgradeTo persists one K-owned operation receipt with previous stable and 
     assert.equal(receipt.operation.phase, "promoted");
     assert.equal(receipt.operation.outcome, "promoted");
     assert.deepEqual(receipt.operation.metadata, { originServerId: "server-1" });
-    assert.equal(receipt.operation.acknowledgedAtMs, null);
+    assert.equal(receipt.operation.acknowledgedAtMs, undefined);
 
-    assert.equal(await upgrader.acknowledgeOperation("request-1"), "acknowledged");
-    const acknowledged = await upgrader.operation();
-    assert.equal(acknowledged.kind, "observed");
-    if (acknowledged.kind === "observed") {
-      assert.notEqual(acknowledged.operation.acknowledgedAtMs, null);
-    }
+
   } finally {
     await download.close();
   }

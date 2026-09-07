@@ -5,7 +5,7 @@ export const RUNNER_PROTOCOL_VERSION = 1;
 export type RunnerRequest =
   | { protocolVersion: 1; action: "upgrade"; id: string; targetVersion: string; consented: boolean }
   | { protocolVersion: 1; action: "recover" | "status" }
-  | { protocolVersion: 1; action: "acknowledge"; id: string };
+;
 
 export interface RunnerResponse {
   protocolVersion: 1;
@@ -36,16 +36,13 @@ function textField(value: unknown, field: string): string {
 export function parseRunnerRequest(input: unknown): RunnerRequest {
   const value = objectValue(input);
   if (value.protocolVersion !== RUNNER_PROTOCOL_VERSION) throw new Error("RUNNER_PROTOCOL_UNSUPPORTED");
-  const keys = value.action === "upgrade" ? ["protocolVersion", "action", "id", "targetVersion", "consented"]
-    : value.action === "acknowledge" ? ["protocolVersion", "action", "id"] : ["protocolVersion", "action"];
+  const keys = value.action === "upgrade" ? ["protocolVersion", "action", "id", "targetVersion", "consented"] : ["protocolVersion", "action"];
   if (Object.keys(value).some((key) => !keys.includes(key))) throw new Error("RUNNER_PROTOCOL_INVALID: unknown field");
   switch (value.action) {
     case "upgrade":
       if (typeof value.consented !== "boolean") throw new Error("RUNNER_PROTOCOL_INVALID: consented must be boolean");
       return { protocolVersion: 1, action: "upgrade", id: textField(value.id, "id"),
         targetVersion: textField(value.targetVersion, "targetVersion"), consented: value.consented };
-    case "acknowledge":
-      return { protocolVersion: 1, action: "acknowledge", id: textField(value.id, "id") };
     case "recover":
     case "status":
       return { protocolVersion: 1, action: value.action };

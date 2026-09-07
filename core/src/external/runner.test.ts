@@ -4,7 +4,6 @@ import assert from "node:assert/strict";
 import { runOneShotUpgrade } from "./runner.ts";
 const base = (outcome: "up-to-date" | "held" | "rolled-back") => ({
   operation: async () => ({ kind: "genesis" as const }),
-  acknowledgeOperation: async () => "not-found" as const,
   recover: async () => {},
   upgradeTo: async () => outcome === "up-to-date" ? { result: "up-to-date" as const } : outcome === "held" ? { result: "held" as const, reason: "policy" } : { result: "rolled-back" as const, reason: "bad", report: null },
 });

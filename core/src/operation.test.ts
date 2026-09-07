@@ -6,7 +6,8 @@ import { promises as fs } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import {
-  acknowledgeOperation,
+  archiveOperation,
+  loadArchivedOperation,
   loadOperation,
   persistOperation,
   type OperationRecord,
@@ -34,34 +35,21 @@ function record(): OperationRecord {
   };
 }
 
-test("operation receipt is durable and acknowledgement binds the exact terminal id", async () => {
+test("archive preserves the original terminal receipt including historical delivery metadata", async () => {
   const dir = await stateDir();
-  await persistOperation(dir, record());
-  assert.deepEqual(await loadOperation(dir), { kind: "observed", operation: record() });
-
-  assert.equal(await acknowledgeOperation(dir, "other", 3), "changed");
-  assert.equal(await acknowledgeOperation(dir, "op-1", 3), "acknowledged");
-  const after = await loadOperation(dir);
-  assert.equal(after.kind, "observed");
-  if (after.kind === "observed") assert.equal(after.operation.acknowledgedAtMs, 3);
-
-  assert.equal(await acknowledgeOperation(dir, "op-1", 9), "acknowledged");
-  const replayed = await loadOperation(dir);
-  assert.equal(replayed.kind, "observed");
-  if (replayed.kind === "observed") {
-    assert.equal(
-      replayed.operation.acknowledgedAtMs,
-      3,
-      "an exact replay must preserve the first durable acknowledgement time",
-    );
-    assert.equal(replayed.operation.updatedAtMs, 3);
-  }
+  const original = { ...record(), acknowledgedAtMs: 3 };
+  await persistOperation(dir, original);
+  await archiveOperation(dir, original);
+  await archiveOperation(dir, original);
+  assert.deepEqual(await loadArchivedOperation(dir, "op-1"), { kind: "observed", operation: original });
+  assert.deepEqual(await loadOperation(dir), { kind: "observed", operation: original });
+  assert.deepEqual(await loadArchivedOperation(dir, "other"), { kind: "genesis" });
 });
 
-test("an active operation cannot be acknowledged as if it were terminal", async () => {
+test("an active operation cannot be archived as if it were terminal", async () => {
   const dir = await stateDir();
-  await persistOperation(dir, { ...record(), phase: "handing-over", outcome: null });
-  assert.equal(await acknowledgeOperation(dir, "op-1", 3), "not-terminal");
+  await assert.rejects(archiveOperation(dir, { ...record(), phase: "handing-over", outcome: null }), /active/);
+  assert.deepEqual(await loadArchivedOperation(dir, "op-1"), { kind: "genesis" });
 });
 
 test("corrupt operation is unreadable, never genesis", async () => {

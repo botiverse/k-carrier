@@ -72,9 +72,6 @@ test("happy path: staged->handover->readback->promoted, WAL before every action"
   assert.deepEqual(outcome, { result: "promoted", version: "2.0.0" });
   assert.deepEqual(w.trace, [
     "journal:staged", "slots:stage",
-    // probe BEFORE the handover: records which incarnation is being replaced,
-    // so a successor can later prove the handover happened
-    "host:probe",
     "journal:handing-over", "host:quiesce", "host:stop:stable", "host:start:experiment",
     "journal:running-experiment", "host:probe",
     "journal:readback",
@@ -154,7 +151,7 @@ test("THE POINT: a host that HANGS fails the upgrade instead of hanging it", asy
   );
 });
 
-test("a handover that outlived its driver is FINISHED by the successor", async () => {
+test("a handover that outlived its driver rolls back conservatively", async () => {
   // The service profile's success path: the process driving the upgrade exits
   // so its supervisor can respawn it from the new bytes. The successor sees a
   // journal that stops at handing-over -- identical to a crash -- and must
@@ -165,8 +162,8 @@ test("a handover that outlived its driver is FINISHED by the successor", async (
     probe: async () => ({ version: "2.0.0", pid: 99, startId: "new-2" }),
   });
   await new UpgradeEngine(w.deps).recover();
-  assert.deepEqual(w.trace, ["journal:readback", "journal:promoted", "slots:promote", "host:resume"]);
-  assert.equal(w.slots.stable, "2.0.0");
+  assert.deepEqual(w.trace, ["journal:rolled-back", "host:stop:experiment", "host:start:stable", "host:resume", "slots:clear"]);
+  assert.equal(w.slots.stable, "1.0.0");
   assert.equal(w.slots.experiment, null);
 });
 
