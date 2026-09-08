@@ -9,6 +9,14 @@ You build the upgrade program with K and your application's adapter. The install
 application does not run the upgrade engine. An install script, operator command or
 external supervisor launches the runner and reads its result.
 
+A product distributes three logical artifacts:
+
+- **Bootstrap script**: detects the platform, downloads and verifies the runner, then starts it.
+- **K runner**: the versioned installer/upgrader that owns the transaction.
+- **Product release**: the service bytes selected by the product or Hands release source.
+
+They may share one CDN, but each has its own version and SHA-256 identity. The bootstrap script and `self upgrade` are thin callers; neither carries a second upgrade state machine.
+
 ## How it fits together
 
 ```mermaid

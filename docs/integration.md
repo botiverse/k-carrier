@@ -5,7 +5,11 @@ The application exposes lifecycle and health controls; it does not execute K.
 The [design](design-v1.md) defines this execution boundary and the
 [runner protocol](one-shot-runner.md) specifies requests and results.
 
-## Before you start: three programs, one state directory
+## Before you start: three artifacts and three programs
+
+Every integration has three logical artifacts: a bootstrap script, a versioned K runner, and the product release being installed. They may share a CDN, but publish and verify their identities separately. The script and `self upgrade` should both start the same runner.
+
+The runtime then has three programs:
 
 | Piece | Built or supplied by | Responsibility |
 |---|---|---|
