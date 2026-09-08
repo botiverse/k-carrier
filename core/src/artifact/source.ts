@@ -39,6 +39,8 @@ export interface Release {
   url: string;
   sha256: string;
   size: number;
+  /** Optional explicit gzip representation. Outer size/hash always describe installed bytes. */
+  gzip?: { url: string; sha256: string; size: number };
 }
 
 export interface ReleaseSource {

@@ -32,6 +32,7 @@ import { ArtifactError } from "./errors.ts";
 import type { Release } from "./source.ts";
 import { collectStream } from "./collectStream.ts";
 import { partialPathFor } from "./partialPath.ts";
+import { decodeGzipArtifact } from "./gzip.ts";
 import type { DownloadOptions } from "./transferPolicy.ts";
 export { partialPathFor } from "./partialPath.ts";
 export type { DownloadOptions } from "./transferPolicy.ts";
@@ -41,6 +42,27 @@ export async function downloadVerified(
   release: Release,
   opts: DownloadOptions = {},
 ): Promise<Uint8Array> {
+  if (release.gzip !== undefined) {
+    const gzip = release.gzip;
+    if (!gzip || typeof gzip.url !== "string" || !gzip.url ||
+        !/^[a-f0-9]{64}$/.test(gzip.sha256) || !Number.isSafeInteger(gzip.size) || gzip.size <= 0 ||
+        !Number.isSafeInteger(release.size) || release.size < 0 ||
+        !/^[a-f0-9]{64}$/.test(release.sha256)) {
+      throw new ArtifactError("MANIFEST_INVALID", "invalid gzip artifact identity");
+    }
+    // Range and partial files refer to compressed bytes, never decoded offsets.
+    const compressed = await downloadVerified({
+      version: release.version, url: gzip.url, size: gzip.size, sha256: gzip.sha256,
+    }, opts);
+    try {
+      return await decodeGzipArtifact(compressed, release);
+    } catch (error) {
+      if (opts.resumeDir) {
+        await fs.rm(partialPathFor(opts.resumeDir, gzip.url), { force: true }).catch(() => {});
+      }
+      throw error;
+    }
+  }
   const url = release.url;
   const clock = opts.clock ?? systemClock;
   const timeoutMs = opts.timeoutMs ?? 10000;
@@ -147,7 +169,7 @@ async function fetchAndAppend(
     });
   };
   try {
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = { "Accept-Encoding": "identity" };
     if (partialSize > 0) headers["Range"] = `bytes=${partialSize}-`;
     let res: Response;
     armResponse();
