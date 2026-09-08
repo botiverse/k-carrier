@@ -13,7 +13,7 @@ import { currentPlatformKey, parseManifest } from "../../../core/src/artifact/st
 import { downloadVerified, partialPathFor } from "../../../core/src/artifact/download.ts";
 import { FakeServer } from "../fake-server/server.ts";
 import { MANIFEST_FILE, sha256Hex } from "../fake-server/manifest.ts";
-import { coreUpgraderUrl } from "./m1.ts";
+import { runnerFactoryUrl } from "./m1.ts";
 
 // ---------------------------------------------------------------------------
 // m1.download-resumes-after-kill (断点续传)
@@ -59,7 +59,7 @@ export async function checkDownloadResumesAfterKill(
     };
 
     const resumeDir = path.join(ctx.sandboxDir, "incoming");
-    const coreUrl = coreUpgraderUrl();
+    const coreUrl = runnerFactoryUrl();
     const coreSrc = new URL(".", coreUrl).href;
     const dlScript = [
       `const { downloadVerified, partialPathFor } = await import(${JSON.stringify(new URL("artifact/download.ts", coreSrc).href)});`,

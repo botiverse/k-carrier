@@ -1,5 +1,5 @@
 /**
- * createUpgrader — the one construction every entrypoint uses.
+ * createRunner — the one construction every entrypoint uses.
  *
  * Order of gates: lock -> ownership -> source -> policy -> compat ->
  * download -> engine. Everything before the engine can only produce `held`
@@ -29,7 +29,7 @@ import { driveUpgrade } from "./upgrade/drive.ts";
 import type { ArtifactTransferPolicy } from "./artifact/transferPolicy.ts";
 import { quarantineState } from "./quarantine.ts";
 
-export interface CreateUpgraderOptions extends UpgraderConfig {
+export interface RunnerOptions extends UpgraderConfig {
   clock?: Clock;
   /** Reports who owns this install; default: we own it. */
   installOwnership?: () => "self" | "managed-elsewhere";
@@ -68,7 +68,7 @@ export interface CreateUpgraderOptions extends UpgraderConfig {
   artifactTransferPolicy?: ArtifactTransferPolicy;
 }
 
-export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
+export function createRunner(opts: RunnerOptions): Upgrader {
   const clock = opts.clock ?? systemClock;
   const effects = fileEffects(opts.stateDir);
   const ownership = opts.installOwnership ?? ((): "self" => "self");

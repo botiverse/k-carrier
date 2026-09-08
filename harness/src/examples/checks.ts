@@ -71,9 +71,9 @@ async function fileSha256(p: string): Promise<string> {
   return sha256Hex(new Uint8Array(await fs.readFile(p)));
 }
 
-/** The swap-tool demo's @botiverse/k-carrier wiring (createUpgrader module URL). */
-function coreUpgraderUrl(): string {
-  return pathToFileURL(path.join(import.meta.dirname, "../../../core/src/createUpgrader.ts")).href;
+/** The swap-tool demo's @botiverse/k-carrier wiring (createRunner module URL). */
+function runnerFactoryUrl(): string {
+  return pathToFileURL(path.join(import.meta.dirname, "../../../core/src/createRunner.ts")).href;
 }
 
 // ---------------------------------------------------------------------------
@@ -111,7 +111,7 @@ export async function checkCliToolBlackbox(
     const up = await runCommand(binPath, ["self", "upgrade"], {
       env: {
         [RELEASE_BASE_ENV]: server.url,
-        K_CORE_UPGRADER: coreUpgraderUrl(),
+        K_CORE_UPGRADER: runnerFactoryUrl(),
       },
     });
     assert.equal(up.code, 0, `self upgrade must exit 0 (${up.stderr.trim()})`);
@@ -237,7 +237,7 @@ export async function checkPlainDaemonContract(
     const up = await runCommand(binPath, ["self", "upgrade"], {
       env: {
         [RELEASE_BASE_ENV]: server.url,
-        K_CORE_UPGRADER: coreUpgraderUrl(),
+        K_CORE_UPGRADER: runnerFactoryUrl(),
         K_STATE_DIR: stateDir,
       },
       timeoutMs: 30000,

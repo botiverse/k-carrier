@@ -19,7 +19,7 @@ export interface ProvenanceIdentity {
 }
 
 /**
- * Upgrader is the transaction facade constructed by createExternalUpgrader
+ * Upgrader is the transaction facade constructed by createRunner
  * inside the disposable runner. Application entry points submit runner
  * requests; they do not construct an in-process upgrade engine.
  */

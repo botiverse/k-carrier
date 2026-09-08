@@ -21,7 +21,7 @@ backup/restore independently for destructive migrations.
 
 ## 2. Build the runner
 
-Use `createExternalUpgrader(options)` inside the trusted adapter, as shown in
+Use `createRunner(options)` inside the trusted adapter, as shown in
 [external-service/adapter.ts](../examples/external-service/adapter.ts). Configure
 `stateDir`, `source`, `host` and policy there. The application controller can use
 `createCommandHost`; the protocol cannot select arbitrary adapter code or commands.
@@ -42,7 +42,7 @@ not publisher signatures.
 Keep runner code and scratch space outside both application slots. Launch it from
 an operator shell or external supervisor that survives stopping the application.
 Spawning a child inside the application's service unit does not establish isolation.
-An installer may use `execOneShotRunner` to download, verify, execute and clean the
+An installer may use `launchRunner` to download, verify, execute and clean the
 helper; it must not implement its own swap or rollback logic.
 
 ```sh

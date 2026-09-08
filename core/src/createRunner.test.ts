@@ -7,7 +7,7 @@ import path from "node:path";
 import os from "node:os";
 import { createHash } from "node:crypto";
 import http from "node:http";
-import { createUpgrader, type CreateUpgraderOptions } from "./createUpgrader.ts";
+import { createRunner, type RunnerOptions } from "./createRunner.ts";
 import type { ReleaseSource } from "./artifact/source.ts";
 import type { HostAdapter, ProcessEvidence, Slot } from "./lifecycle/hostAdapter.ts";
 import { persistOperation } from "./operation.ts";
@@ -81,7 +81,7 @@ async function serveDownload(): Promise<{ url: string; close: () => Promise<void
   };
 }
 
-async function baseOpts(dir: string, url: string): Promise<CreateUpgraderOptions> {
+async function baseOpts(dir: string, url: string): Promise<RunnerOptions> {
   const host = recordingHost();
   return {
     host,
@@ -95,7 +95,7 @@ async function baseOpts(dir: string, url: string): Promise<CreateUpgraderOptions
 test("policy=confirm holds BEFORE any disk side effect", async () => {
   const dir = await stateDir();
   const opts = { ...(await baseOpts(dir, await serveBytes())), policy: "confirm" as const };
-  const outcome = await createUpgrader(opts).upgrade();
+  const outcome = await createRunner(opts).upgrade();
   assert.equal(outcome.result, "held");
   // nothing staged: no slots directory was created at all
   await assert.rejects(() => fs.stat(path.join(dir, "slots", "experiment")));
@@ -104,7 +104,7 @@ test("policy=confirm holds BEFORE any disk side effect", async () => {
 test("a managed-elsewhere install refuses without consulting the source", async () => {
   const dir = await stateDir();
   let sourceConsulted = false;
-  const opts: CreateUpgraderOptions = {
+  const opts: RunnerOptions = {
     ...(await baseOpts(dir, await serveBytes())),
     installOwnership: () => "managed-elsewhere",
     source: {
@@ -112,7 +112,7 @@ test("a managed-elsewhere install refuses without consulting the source", async 
       fetchRelease: async () => { sourceConsulted = true; throw new Error("unreachable"); },
     },
   };
-  const outcome = await createUpgrader(opts).upgrade();
+  const outcome = await createRunner(opts).upgrade();
   assert.equal(outcome.result, "held");
   assert.match((outcome as { reason: string }).reason, /managed by another manager/u);
   assert.equal(sourceConsulted, false, "ownership must short-circuit before the source is asked");
@@ -120,11 +120,11 @@ test("a managed-elsewhere install refuses without consulting the source", async 
 
 test("checkCompatibility refuses before staging, and its reason survives", async () => {
   const dir = await stateDir();
-  const opts: CreateUpgraderOptions = {
+  const opts: RunnerOptions = {
     ...(await baseOpts(dir, await serveBytes())),
     checkCompatibility: async () => "no down-migration for schema 7",
   };
-  const outcome = await createUpgrader(opts).upgrade();
+  const outcome = await createRunner(opts).upgrade();
   assert.equal(outcome.result, "held");
   assert.match((outcome as { reason: string }).reason, /no down-migration for schema 7/u);
   await assert.rejects(() => fs.stat(path.join(dir, "slots", "experiment")));
@@ -136,14 +136,14 @@ test("a second concurrent upgrade is refused while the first holds the lock", as
   // Hold the lock by hand, then attempt an upgrade.
   const { acquireUpgradeLock } = await import("./txn/lock.ts");
   const held = await acquireUpgradeLock(dir, 1);
-  await assert.rejects(() => createUpgrader(opts).upgrade(), /UPGRADE_IN_PROGRESS/u);
+  await assert.rejects(() => createRunner(opts).upgrade(), /UPGRADE_IN_PROGRESS/u);
   await held.release();
 });
 
 test("check() reports the target without changing anything", async () => {
   const dir = await stateDir();
   const opts = await baseOpts(dir, await serveBytes());
-  const { current, target } = await createUpgrader(opts).check();
+  const { current, target } = await createRunner(opts).check();
   assert.equal(current, "0.0.0");
   assert.equal(target, "2.0.0");
   await assert.rejects(() => fs.stat(path.join(dir, "journal.jsonl")));
@@ -177,7 +177,7 @@ test("recover() settles durable work without consulting the release source", asy
     provenance: { who: "server-1", carrier: "web" },
     metadata: { originServerId: "server-1" },
   });
-  const upgrader = createUpgrader({
+  const upgrader = createRunner({
     host,
     stateDir: dir,
     source: {
@@ -213,7 +213,7 @@ test("recover() shares the upgrade lock and refuses a concurrent coordinator", a
   const opts = await baseOpts(dir, await serveBytes());
   const { acquireUpgradeLock } = await import("./txn/lock.ts");
   const held = await acquireUpgradeLock(dir, 1);
-  await assert.rejects(() => createUpgrader(opts).recover(), /UPGRADE_IN_PROGRESS/u);
+  await assert.rejects(() => createRunner(opts).recover(), /UPGRADE_IN_PROGRESS/u);
   await held.release();
 });
 
@@ -221,7 +221,7 @@ test("upgradeTo persists one K-owned operation receipt with previous stable and 
   const dir = await stateDir();
   const download = await serveDownload();
   try {
-    const upgrader = createUpgrader(await baseOpts(dir, download.url));
+    const upgrader = createRunner(await baseOpts(dir, download.url));
     const outcome = await upgrader.upgradeTo("2.0.0", {
       consented: true,
       provenance: { who: "server-1", carrier: "web" },

@@ -10,8 +10,8 @@ import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
 import { bootstrapStable } from "../bootstrap.ts";
-import { createCommandHost } from "./commandHost.ts";
-import type { RunnerRequest, RunnerResponse } from "./protocol.ts";
+import { createCommandHost } from "../lifecycle/commandHost.ts";
+import type { RunnerRequest, RunnerResponse } from "../protocol/runner.ts";
 
 const exec = promisify(execFile);
 const upgrade = (id: string, targetVersion: string): RunnerRequest => ({ protocolVersion: 1,

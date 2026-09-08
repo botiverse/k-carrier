@@ -124,7 +124,7 @@ export type TxnStateInput =
  *
  * The one place an inconsistent persisted world can slip in is the runtime
  * boundary that reads the journal and slots but only knows the phase at
- * runtime (see `createUpgrader.readState`); that boundary must decide the
+ * runtime (see `createRunner.readState`); that boundary must decide the
  * phase before calling this, failing closed if a phase is in flight but the
  * experiment slot is empty.
  */

@@ -33,8 +33,9 @@ See [design and protocol](docs/one-shot-runner.md),
 ## Repo layout
 
 ```
-core/       the framework — zero host-specific concepts (shells live in their
-            product's repo and consume core as a dependency)
+core/src/   launcher/ acquires and starts the runner; protocol/ defines its wire contract
+            runner/ handles requests; createRunner.ts composes the transaction engine
+            lifecycle/ controls the application; artifact/, txn/, converge/ implement upgrades
 harness/    generic acceptance bed: fake-host daemon + profile-tiered teeth
 examples/   external-service integration + internal engine test fixtures
 docs/       guides + design + test plan + prior art

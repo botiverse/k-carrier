@@ -1,7 +1,7 @@
 import type { Upgrader } from "../upgrader.ts";
 import { OperationReplay, type OperationRead } from "../operation.ts";
 import { systemClock, type Clock } from "../clock.ts";
-import { parseRunnerRequest, type RunnerRequest, type RunnerResponse } from "./protocol.ts";
+import { parseRunnerRequest, type RunnerRequest, type RunnerResponse } from "../protocol/runner.ts";
 
 export type RunnerUpgrader = Pick<Upgrader, "upgradeTo" | "recover" | "operation">;
 
@@ -21,7 +21,7 @@ function receiptCode(read: OperationRead): RunnerResponse["exitCode"] {
 }
 
 /** Runs in the disposable helper, never in the resident application's process. */
-export async function runOneShotUpgrade(
+export async function executeRequest(
   upgrader: RunnerUpgrader, input: RunnerRequest, clock: Clock = systemClock,
 ): Promise<RunnerResponse> {
   const request = parseRunnerRequest(input);

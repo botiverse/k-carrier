@@ -1,6 +1,6 @@
 import type { Readable, Writable } from "node:stream";
-import { parseRunnerRequest } from "./protocol.ts";
-import { runOneShotUpgrade, type RunnerUpgrader } from "./runner.ts";
+import { parseRunnerRequest } from "../protocol/runner.ts";
+import { executeRequest, type RunnerUpgrader } from "./execute.ts";
 
 /** Build-time adapter factory; request JSON can never name code to import. */
 export async function serveRunner(
@@ -14,7 +14,7 @@ export async function serveRunner(
       if (text.length > 16_384) throw new Error("RUNNER_REQUEST_TOO_LARGE");
     }
     const request = parseRunnerRequest(JSON.parse(text));
-    const response = await runOneShotUpgrade(await create(), request);
+    const response = await executeRequest(await create(), request);
     await new Promise<void>((resolve, reject) => {
       output.write(`${JSON.stringify(response)}\n`, (error) => error ? reject(error) : resolve());
     });

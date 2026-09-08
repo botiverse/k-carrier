@@ -10,7 +10,7 @@ node scripts/build-runner.mjs examples/external-service/adapter.ts /tmp/k-runner
 Run the complete disposable example (creates and cleans a temporary home):
 
 ```sh
-pnpm test:external
+pnpm test:runner
 ```
 
 The process test bootstraps stable, starts the real HTTP service, switches to a

@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createUpgrader } from "../createUpgrader.ts";
+import { createRunner } from "../createRunner.ts";
 import { staticManifestSource } from "../artifact/staticManifestSource.ts";
 import type { ProcessEvidence } from "../lifecycle/hostAdapter.ts";
 
@@ -36,7 +36,7 @@ test("THE POINT: declaring no lifecycle surface must not unlock retirement", asy
   const stateDir = await mkdtemp(path.join(tmpdir(), "k-retire-"));
   try {
     const published = staticManifestSource({ baseUrl: src.baseUrl });
-    const upgrader = createUpgrader({
+    const upgrader = createRunner({
       host: {
         async quiesce() {}, async stop() {}, async start() {}, async resume() {},
         async healthProbe(): Promise<ProcessEvidence> {

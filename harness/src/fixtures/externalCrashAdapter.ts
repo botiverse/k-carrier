@@ -3,7 +3,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { createOptions } from "../../../examples/external-service/adapter.ts";
-import { createExternalUpgrader } from "../../../core/src/index.ts";
+import { createRunner } from "../../../core/src/index.ts";
 export default function create() {
   const options = createOptions();
   const stop = options.host.stop;
@@ -15,5 +15,5 @@ export default function create() {
       for (;;) await sleep(100);
     }
   };
-  return createExternalUpgrader(options);
+  return createRunner(options);
 }

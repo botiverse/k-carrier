@@ -3,8 +3,9 @@
 // This barrel is the single supported entry point for the core framework;
 // deep imports into ./core/src/** are internal and not part of the public API.
 
-// Runner configuration; the engine factory is internal.
-export type { CreateUpgraderOptions } from "./createUpgrader.ts";
+// Compose the transaction engine inside a runner; no forwarding factory.
+export { createRunner } from "./createRunner.ts";
+export type { RunnerOptions } from "./createRunner.ts";
 
 // One-time adoption of an already-running trusted binary into K's stable
 // slot, plus the K-owned slot resolver host adapters use to launch it.
@@ -17,7 +18,7 @@ export * from "./operation.ts";
 export * from "./quarantine.ts";
 
 // The release-source boundary applications implement and the durable
-// provenance journal they wire into createExternalUpgrader.
+// provenance journal they wire into createRunner.
 export * from "./artifact/source.ts";
 export * from "./artifact/transferPolicy.ts";
 export * from "./provenance/journal.ts";
@@ -27,4 +28,8 @@ export * from "./lifecycle/hostAdapter.ts";
 
 // The built-in invariants and their types (WorldSnapshot, Invariant, ...).
 export * from "./invariants.ts";
-export * from "./oneShot.ts";
+export * from "./protocol/runner.ts";
+export * from "./runner/execute.ts";
+export * from "./runner/cli.ts";
+export * from "./launcher/launch.ts";
+export * from "./lifecycle/commandHost.ts";

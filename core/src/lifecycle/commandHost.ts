@@ -1,9 +1,14 @@
 import { execFile } from "node:child_process";
-import type { HostAdapter, ProcessEvidence, Slot } from "../lifecycle/hostAdapter.ts";
+import type { HostAdapter, ProcessEvidence, Slot } from "./hostAdapter.ts";
 import { slotArtifactPath } from "../bootstrap.ts";
 import { systemClock } from "../clock.ts";
 import { platformOpsFor } from "../platform/index.ts";
-import { objectValue } from "./protocol.ts";
+function controllerObject(value: unknown): Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("HOST_PROTOCOL_INVALID: expected an object");
+  }
+  return value as Record<string, unknown>;
+}
 
 export interface CommandHostOptions {
   /** Trusted external controller argv. Never a shell expression. */
@@ -47,7 +52,7 @@ export function createCommandHost(options: CommandHostOptions): HostAdapter {
       child.stdin?.on("error", () => { /* execFile reports early child failure */ });
       child.stdin?.end(JSON.stringify(input));
     });
-    const value = objectValue(JSON.parse(stdout));
+    const value = controllerObject(JSON.parse(stdout));
     if (value.protocolVersion !== 1 || value.ok !== true) throw new Error(`HOST_PROTOCOL_INVALID: ${action}`);
     return value;
   }
@@ -57,7 +62,7 @@ export function createCommandHost(options: CommandHostOptions): HostAdapter {
     start: async (slot) => { await call("start", slot); },
     resume: async () => { await call("resume"); },
     healthProbe: async (): Promise<ProcessEvidence> => {
-      const value = objectValue((await call("probe")).evidence);
+      const value = controllerObject((await call("probe")).evidence);
       if (typeof value.version !== "string" || !value.version || typeof value.startId !== "string" ||
           !value.startId || !Number.isSafeInteger(value.pid) || typeof value.pid !== "number" || value.pid <= 0 ||
           value.pid === process.pid) throw new Error("HOST_EVIDENCE_INVALID");

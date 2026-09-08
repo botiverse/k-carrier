@@ -5,7 +5,7 @@
  * an unreadable report is its own state, never "never observed"; an
  * observed pass survives a restart).
  *
- * These drive createUpgrader in-process: status() is the L5 read-back
+ * These drive createRunner in-process: status() is the L5 read-back
  * surface, and the teeth pin that it is a READ-BACK, not an invention.
  */
 import assert from "node:assert/strict";

@@ -16,7 +16,7 @@ import { promises as fs } from "node:fs";
 import { type ToothContext } from "../teeth/registry.ts";
 import { FakeServer } from "../fake-server/server.ts";
 import { runCommand } from "../artifact-factory/run.ts";
-import { buildSwapTool, coreUpgraderUrl, readState, serveRelease } from "./m1.ts";
+import { buildSwapTool, runnerFactoryUrl, readState, serveRelease } from "./m1.ts";
 import { CLI_TOOL_SOURCE } from "../../../examples/swap-tool/source.ts";
 import { ArtifactFactory } from "../artifact-factory/factory.ts";
 import { currentPlatformKey } from "../../../core/src/artifact/staticManifestSource.ts";
@@ -25,7 +25,7 @@ function swapEnv(ctx: ToothContext, baseUrl: string, servers: FakeServer[], extr
   return {
     K_RELEASE_BASE: baseUrl,
     K_STATE_DIR: path.join(ctx.sandboxDir, "state"),
-    K_CORE_UPGRADER: coreUpgraderUrl(),
+    K_CORE_UPGRADER: runnerFactoryUrl(),
     ...extra,
   };
 }

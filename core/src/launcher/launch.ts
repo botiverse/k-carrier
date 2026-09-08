@@ -4,7 +4,7 @@ import path from "node:path";
 import { downloadVerified } from "../artifact/download.ts";
 import type { Release } from "../artifact/source.ts";
 import { artifactTransferTimeouts } from "../artifact/transferPolicy.ts";
-import { parseRunnerRequest, type RunnerRequest } from "./protocol.ts";
+import { parseRunnerRequest, type RunnerRequest } from "../protocol/runner.ts";
 import { platformOpsFor } from "../platform/index.ts";
 
 export interface RunnerLaunch {
@@ -17,7 +17,7 @@ export interface RunnerLaunch {
 }
 
 /** Download -> integrity check -> execute once -> wait -> remove disposable bytes. */
-export async function execOneShotRunner(input: RunnerLaunch): Promise<number> {
+export async function launchRunner(input: RunnerLaunch): Promise<number> {
   const request = parseRunnerRequest(input.request);
   const budgets = artifactTransferTimeouts(input.release.size);
   const bytes = await downloadVerified(input.release, { timeoutMs: budgets.overallTimeoutMs,

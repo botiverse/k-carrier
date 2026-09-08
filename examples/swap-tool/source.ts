@@ -5,7 +5,7 @@
  * black-box contract (§1.76): `--version` and `self upgrade` (declared
  * explicitly in `k.target.ts` — the harness never guesses commands).
  *
- * `self upgrade` runs through core's Upgrader (createUpgrader +
+ * `self upgrade` runs through core's Upgrader (createRunner +
  * staticManifestSource + atomicWriteFile): gates in order (ownership ->
  * policy -> verified download -> transaction), then the app's install step
  * (swap the promoted slot's bytes over itself — L1': swap bytes = promote,
@@ -15,7 +15,7 @@
  * back instead of being promoted.
  *
  * Dependency wiring (the example's "@k-carrier/core" stand-in):
- * `K_CORE_UPGRADER` = file URL of core/src/createUpgrader.ts; sibling core
+ * `K_CORE_UPGRADER` = file URL of core/src/createRunner.ts; sibling core
  * modules are derived from it. `K_RELEASE_BASE` = releaseBase config,
  * `K_STATE_DIR` = stateDir (default: `<binDir>/state`).
  *
@@ -71,7 +71,7 @@ async function selfUpgrade() {
   if (!RELEASE_BASE) { fs.writeSync(2, "K_RELEASE_BASE not set\\n"); process.exit(2); }
   if (!CORE_UPGRADER) { fs.writeSync(2, "K_CORE_UPGRADER not set (the example's @k-carrier/core wiring)\\n"); process.exit(2); }
   const coreSrcUrl = new URL(".", CORE_UPGRADER).href;
-  const { createUpgrader } = await import(CORE_UPGRADER);
+  const { createRunner } = await import(CORE_UPGRADER);
   const { staticManifestSource } = await import(new URL("artifact/staticManifestSource.ts", coreSrcUrl).href);
   const { atomicWriteFile } = await import(new URL("artifact/swap.ts", coreSrcUrl).href);
   const { slotArtifactPath } = await import(new URL("txn/fileEffects.ts", coreSrcUrl).href);
@@ -104,7 +104,7 @@ async function selfUpgrade() {
   // party such a check would exist to distrust.
   const source = staticManifestSource({ baseUrl: RELEASE_BASE });
 
-  const upgrader = createUpgrader({
+  const upgrader = createRunner({
     host,
     source,
     policy: process.env.K_POLICY ?? "auto",
@@ -128,7 +128,7 @@ async function confirmUpgrade(version) {
   if (!RELEASE_BASE) { fs.writeSync(2, "K_RELEASE_BASE not set\\n"); process.exit(2); }
   if (!CORE_UPGRADER) { fs.writeSync(2, "K_CORE_UPGRADER not set (the example's @k-carrier/core wiring)\\n"); process.exit(2); }
   const coreSrcUrl = new URL(".", CORE_UPGRADER).href;
-  const { createUpgrader } = await import(CORE_UPGRADER);
+  const { createRunner } = await import(CORE_UPGRADER);
   const { staticManifestSource } = await import(new URL("artifact/staticManifestSource.ts", coreSrcUrl).href);
   const { atomicWriteFile } = await import(new URL("artifact/swap.ts", coreSrcUrl).href);
   const { slotArtifactPath } = await import(new URL("txn/fileEffects.ts", coreSrcUrl).href);
@@ -147,7 +147,7 @@ async function confirmUpgrade(version) {
     },
     async resume() {},
   };
-  const upgrader = createUpgrader({
+  const upgrader = createRunner({
     host,
     source: staticManifestSource({ baseUrl: RELEASE_BASE }),
     policy: "confirm",

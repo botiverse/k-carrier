@@ -3,14 +3,14 @@
  * (test-plan M5 rows: 点名面读回一致；面在 allowlist 才可作证；未注册面被引用
  * ⇒ 拒; fail-closed 退役序; 禁投影).
  *
- * These drive createUpgrader in-process (the library plane — the converge
+ * These drive createRunner in-process (the library plane — the converge
  * machinery is exactly the kind of internal tooth the black-box plane
  * cannot reach).
  */
 import assert from "node:assert/strict";
 import * as path from "node:path";
 import { type ToothContext } from "../teeth/registry.ts";
-import { createUpgrader, type CreateUpgraderOptions } from "../../../core/src/createUpgrader.ts";
+import { createRunner, type RunnerOptions } from "../../../core/src/createRunner.ts";
 import { staticManifestSource } from "../../../core/src/artifact/staticManifestSource.ts";
 import {
   buildSurfaceAllowlist,
@@ -66,8 +66,8 @@ function makeUpgrader(
   ctx: ToothContext,
   server: FakeServer,
   surfaces: ReadbackSurface[],
-): ReturnType<typeof createUpgrader> {
-  const opts: CreateUpgraderOptions = {
+): ReturnType<typeof createRunner> {
+  const opts: RunnerOptions = {
     host: simpleHost(),
     source: staticManifestSource({ baseUrl: server.url }),
     policy: "auto",
@@ -75,7 +75,7 @@ function makeUpgrader(
     stateDir: stateDir(ctx),
     lifecycleSurfaces: surfaces,
   };
-  return createUpgrader(opts);
+  return createRunner(opts);
 }
 
 // ---------------------------------------------------------------------------

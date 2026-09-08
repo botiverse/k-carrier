@@ -52,7 +52,7 @@ ascending cost:
    field names identical to the TS source (this file already does). Where CI
    can, assert the shapes agree so a drift is visible instead of silent.
 2. **Property test the real engine.** Run model-based property tests against
-   the actual `createUpgrader`/`UpgradeEngine` (not a mirror), asserting the
+   the actual `createRunner`/`UpgradeEngine` (not a mirror), asserting the
    same properties the Lean model proves — this binds "the properties the model
    proves" to "what the real code actually does".
 3. **(Long-term) extraction.** Generate or hand-write the TS transition core

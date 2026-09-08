@@ -10,7 +10,7 @@ import { ArtifactFactory } from "../artifact-factory/factory.ts";
 import { processAlive } from "../fake-host/daemon.ts";
 import { commandForArtifact, runCommand } from "../artifact-factory/run.ts";
 import { PLAIN_DAEMON_SOURCE } from "../../../examples/service-daemon/source.ts";
-import { coreUpgraderUrl, readState } from "./m1.ts";
+import { runnerFactoryUrl, readState } from "./m1.ts";
 
 /** External service driver; the resident never owns recovery. */
 export type HostShape = "spawn";
@@ -55,7 +55,7 @@ export function serviceEnv(
   return {
     K_RELEASE_BASE: baseUrl,
     K_STATE_DIR: stateDir(ctx),
-    K_CORE_UPGRADER: coreUpgraderUrl(),
+    K_CORE_UPGRADER: runnerFactoryUrl(),
     // Every process this tooth spawns — and, via inheritance, every process
     // the driver spawns — carries the sandbox marker, so the sandbox
     // teardown's verifyProcessTreeDead is the backstop for any leak: a "red"

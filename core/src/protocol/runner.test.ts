@@ -1,7 +1,7 @@
 /** @invariant Unsupported requests cannot reach host code. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseRunnerRequest } from "./protocol.ts";
+import { parseRunnerRequest } from "./runner.ts";
 test("runner protocol rejects unknown fields and versions", () => {
   assert.deepEqual(parseRunnerRequest({ protocolVersion: 1, action: "recover" }), { protocolVersion: 1, action: "recover" });
   assert.throws(() => parseRunnerRequest({ protocolVersion: 2, action: "recover" }), /UNSUPPORTED/);
@@ -9,7 +9,7 @@ test("runner protocol rejects unknown fields and versions", () => {
 });
 
 test("unknown request cannot run an adapter factory", async () => {
-  const { serveRunner } = await import("./cli.ts");
+  const { serveRunner } = await import("../runner/cli.ts");
   const { Readable, Writable } = await import("node:stream");
   let created = false;
   let output = "";

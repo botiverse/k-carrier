@@ -5,6 +5,15 @@ production publication are separate from framework implementation.
 
 [中文图解](external-runner.html) · [研究来源](external-runner-research.md)
 
+## Code layout
+
+`launcher/` downloads, verifies and executes the helper. `protocol/` defines the
+shared request/response contract without process or state effects. `runner/`
+serves stdin/stdout and maps requests to transaction calls. `createRunner.ts`
+composes the engine, while `lifecycle/commandHost.ts` controls the application.
+The transaction and artifact modules do not depend on the launcher or transport.
+The root public barrel exports these functions directly, with no forwarding factory.
+
 ## The decision
 
 An upgrade is an operation *on* a program. The owner of that operation must
@@ -62,7 +71,7 @@ own backup/restore contract; binary rollback alone cannot reverse them.
 
 ## Runnable integration
 
-Implement a trusted adapter returning `createExternalUpgrader(options)`. This
+Implement a trusted adapter returning `createRunner(options)`. This
 constructs the transaction engine inside the runner; there is no second
 transaction journal or parallel job state.
 
@@ -80,7 +89,7 @@ request cannot supply code paths, arbitrary shell commands or release URLs.
 Release selection/authentication and installed-directory authority remain in
 the trusted adapter. Do not run an adapter received from an untrusted caller.
 
-`execOneShotRunner({release, request, scratchDir, interpreter?})` implements the
+`launchRunner({release, request, scratchDir, interpreter?})` implements the
 bootstrap: download under bounded transfer budgets, check size and SHA-256,
 write into a private temporary child directory, execute, wait for exit, and
 clean that directory. SHA checks integrity against the supplied manifest;
@@ -174,7 +183,7 @@ Before durable promote intent, recovery restores stable; after that intent,
 recovery replays the commit. A bad candidate rolls back; a controller hang remains recovery-required;
 unknown schemas and another live lock owner are refused.
 
-`core/src/external/process.test.ts` builds the helper, starts a real HTTP
+`core/src/runner/process.test.ts` builds the helper, starts a real HTTP
 service with no K import, upgrades it, verifies PID/startId/version and stable
 slot, tries a hash-valid artifact reporting a wrong version, and checks actual
 rollback. It kills the helper **after stop and before start**, verifies a
@@ -182,7 +191,7 @@ concurrent helper is refused, removes the distribution manifest, and recovers
 with a newly launched helper. It also verifies current and archived replay,
 terminal receipt preservation and id/target conflicts.
 
-`core/src/external/bootstrap.test.ts` proves mismatched helper bytes never
+`core/src/launcher/launch.test.ts` proves mismatched helper bytes never
 execute and completed helper bytes are cleaned. Protocol/runner/controller
 tests cover version rejection, missing success receipt, exception evidence,
 nonzero commands, malformed probes and timeout.

@@ -100,7 +100,7 @@ async function selfUpgrade() {
   if (!RELEASE_BASE) { wsync(2, "K_RELEASE_BASE not set"); process.exit(2); }
   if (!CORE_UPGRADER) { wsync(2, "K_CORE_UPGRADER not set"); process.exit(2); }
   const coreSrcUrl = new URL(".", CORE_UPGRADER).href;
-  const { createUpgrader } = await import(CORE_UPGRADER);
+  const { createRunner } = await import(CORE_UPGRADER);
   const { staticManifestSource } = await import(new URL("artifact/staticManifestSource.ts", coreSrcUrl).href);
 
   // The external driver starts and probes each replacement itself.
@@ -149,7 +149,7 @@ async function selfUpgrade() {
     async resume() {},
   };
 
-  const upgrader = createUpgrader({
+  const upgrader = createRunner({
     host,
     source: staticManifestSource({ baseUrl: RELEASE_BASE }),
     policy: "auto",

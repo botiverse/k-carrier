@@ -18,7 +18,7 @@ export interface RunnerResponse {
   error: string | null;
 }
 
-export function objectValue(value: unknown): Record<string, unknown> {
+function objectValue(value: unknown): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("RUNNER_PROTOCOL_INVALID: expected an object");
   }
