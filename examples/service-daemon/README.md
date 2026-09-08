@@ -1,4 +1,7 @@
-# service-daemon — the daemon-profile example
+# service-daemon — the daemon-profile fixture
+
+Internal harness fixture. Application integration uses the
+[external-service runner](../external-service/README.md).
 
 **Proves:** the daemon profile's support claim — a long-running service
 with a 3-method HostAdapter surface exercises L2 + L3 in process reality:

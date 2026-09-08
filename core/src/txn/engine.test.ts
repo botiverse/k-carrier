@@ -152,10 +152,8 @@ test("THE POINT: a host that HANGS fails the upgrade instead of hanging it", asy
 });
 
 test("a handover that outlived its driver rolls back conservatively", async () => {
-  // The service profile's success path: the process driving the upgrade exits
-  // so its supervisor can respawn it from the new bytes. The successor sees a
-  // journal that stops at handing-over -- identical to a crash -- and must
-  // tell the two apart by evidence alone.
+  // The runner died before promote intent. Even a healthy candidate cannot
+  // authorize commitment; recovery must restore the stable slot.
   const w = makeWorld({
     slots: { stable: "1.0.0", experiment: "2.0.0" },
     journal: [entry(0, "staged"), entry(1, "handing-over", { version: "2.0.0", priorStartId: "old-1" })],

@@ -31,13 +31,12 @@ function record(): OperationRecord {
     reason: null,
     provenance: { who: "server-1", carrier: "web" },
     metadata: { originServerId: "server-1" },
-    acknowledgedAtMs: null,
   };
 }
 
-test("archive preserves the original terminal receipt including historical delivery metadata", async () => {
+test("archive preserves the complete terminal result", async () => {
   const dir = await stateDir();
-  const original = { ...record(), acknowledgedAtMs: 3 };
+  const original = record();
   await persistOperation(dir, original);
   await archiveOperation(dir, original);
   await archiveOperation(dir, original);

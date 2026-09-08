@@ -10,10 +10,10 @@ CLI self-update libraries stop at replacing bytes; fleet updaters assume a machi
 
 K does not replace platform packaging or artifact delivery. It wraps an
 addressable release in a transaction with rollback and convergence readback.
-Because the process driving an upgrade may die on the success path, the
-successor proves the handoff from live evidence rather than trusting a flag.
+The external runner survives stopping the application and proves the candidate
+from live evidence. If the runner crashes, recovery follows durable intent.
 
-## External execution (new integrations)
+## External execution
 
 Build a disposable runner with a trusted adapter; the application exposes lifecycle
 and health controls and contains no upgrade engine. Installer/self-update/Web
@@ -21,12 +21,11 @@ launchers select and verify the helper, then observe K's persistent outcome.
 See [design and protocol](docs/one-shot-runner.md),
 [source research](docs/external-runner-research.md), and the
 [real-process example](examples/external-service/README.md).
-Existing embedded consumers remain supported during migration.
 
 ## Start here
 
-- **[`docs/integration.md`](docs/integration.md)** — from-zero guide: the problem in plain words, concept primer, tiered adoption with code.
-- [`docs/design-v1.md`](docs/design-v1.md) — full design: six layers, architecture, decision record.
+- **[`docs/integration.md`](docs/integration.md)** — from-zero guide to the external runner and application controller.
+- [`docs/design-v1.md`](docs/design-v1.md) — current design: external execution, transactions and recovery.
 - [`docs/harness-design.md`](docs/harness-design.md) — the test framework, designed first: harness as executable spec (teeth registry, real-process crash injection, adversarial self-verification).
 - [`docs/test-plan.md`](docs/test-plan.md) — executable test plan (M0–M6, must-red per cell).
 - [`docs/prior-art.md`](docs/prior-art.md) — the source-level survey this design stands on (Tailscale / Datadog), and the license-defense record behind `NOTICE`.
@@ -37,7 +36,7 @@ Existing embedded consumers remain supported during migration.
 core/       the framework — zero host-specific concepts (shells live in their
             product's repo and consume core as a dependency)
 harness/    generic acceptance bed: fake-host daemon + profile-tiered teeth
-examples/   one runnable demo per profile (swap-tool / service-daemon / hosted-service)
+examples/   external-service integration + internal engine test fixtures
 docs/       guides + design + test plan + prior art
 ```
 

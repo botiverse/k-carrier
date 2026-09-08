@@ -53,7 +53,7 @@ size），不验来源真实性；原两级签名链、`m2.*` 四颗齿与 harne
 | fail-closed 退役序 | 未过 host_lifecycle_converged 前退旧管理器 ⇒ 拒 + typed HOLD | 强行退役路径存在 ⇒ 红 |
 | ownership 检测 | 受管标记存在 ⇒ `held: managed-elsewhere`（typed、指向管理者） | 受管副本完成自升 ⇒ 红 |
 
-已落地齿以 `k-harness --list` 为准——本文件**不手抄齿名**（手抄清单是 `--list` 的副本，只会漂向'少列一颗'；ratchet 7 只能查'写下来的存在'，查不了'该写的没写'）。逐颗齿（层/档/must-red/定义位置）直接 `k-harness --list`。 本层判据形状：quiesce↔resume 账本逐字节等价（含回滚后 resume）；probe 证据**绑定活化身**（探针说谎/报旧 startId ⇒ 红）；每开关故障关掉齿必须绿；service 升级两种宿主形状（spawn 自起 / respawn 交给 owner）——真停旧、真起新、旧 pid 验证死、新化身 fresh startId；坏版本 ⇒ 旧版**真的拉回来在跑**（不是槽位回退）；卡死 driver ⇒ 宿主调用预算超时 → 锁释放 → successor 凭**证据**（v2 + fresh startId）判交接完成，凭标志不恢复。`host_lifecycle_converged` / 禁投影 / 退役序 → M5 齿。
+已落地齿以 `k-harness --list` 为准——本文件**不手抄齿名**（手抄清单是 `--list` 的副本，只会漂向'少列一颗'；ratchet 7 只能查'写下来的存在'，查不了'该写的没写'）。逐颗齿（层/档/must-red/定义位置）直接 `k-harness --list`。 本层判据形状：quiesce↔resume 账本逐字节等价（含回滚后 resume）；probe 证据**绑定活化身**（探针说谎/报旧 startId ⇒ 红）；每开关故障关掉齿必须绿；service 由外部进程驱动升级——真停旧、真起新、旧 pid 验证死、新化身 fresh startId；坏版本使旧版真正恢复运行；卡死 driver 经调用预算超时退出，由另一个外部进程恢复，提交意图之前统一回滚 stable，跳过恢复必须失败。`host_lifecycle_converged` / 禁投影 / 退役序 → M5 齿。
 
 ## M4 — L4 同意与通知
 

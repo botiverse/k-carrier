@@ -170,17 +170,17 @@ test("DaemonFakeHost incarnations carry the sandbox marker; teardown proves them
 });
 
 test("THE POINT: a nested tooth context still resolves to the SANDBOX's marker", async () => {
-  // Teeth derive per-shape contexts like <sandbox>/respawn. Marking spawned
-  // processes with basename() of THAT yields "respawn" -- a value no teardown
+  // Teeth derive per-shape contexts like <sandbox>/service. Marking spawned
+  // processes with basename() of THAT yields "service" -- a value no teardown
   // scan matches, so the scan finds zero, the teardown reports success, and
   // the leaked process keeps running. A zero that means "the query matched
   // nothing" is the most convincing kind of false green.
   const sb = await createSandbox({ prefix: "nested" });
   try {
     assert.equal(sandboxMarkerFor(sb.dir), path.basename(sb.dir));
-    assert.equal(sandboxMarkerFor(path.join(sb.dir, "respawn")), path.basename(sb.dir));
+    assert.equal(sandboxMarkerFor(path.join(sb.dir, "service")), path.basename(sb.dir));
     assert.equal(sandboxMarkerFor(path.join(sb.dir, "spawn", "deeper")), path.basename(sb.dir));
-    assert.notEqual(sandboxMarkerFor(path.join(sb.dir, "respawn")), "respawn");
+    assert.notEqual(sandboxMarkerFor(path.join(sb.dir, "service")), "service");
   } finally {
     await sb.teardown();
   }

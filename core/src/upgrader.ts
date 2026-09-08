@@ -19,12 +19,9 @@ export interface ProvenanceIdentity {
 }
 
 /**
- * Upgrader is the shared transaction facade. New integrations construct it in
- * an external disposable runner (createExternalUpgrader), not in the resident. Every entrypoint the
- * app exposes (daemon-internal auto-update, `myapp self upgrade`, install
- * script, remote drive) constructs the SAME Upgrader — one canonical
- * executor, so there is no entrypoint that "swaps bytes but skips
- * convergence" (the class of bug this framework exists to kill).
+ * Upgrader is the transaction facade constructed by createExternalUpgrader
+ * inside the disposable runner. Application entry points submit runner
+ * requests; they do not construct an in-process upgrade engine.
  */
 export interface Upgrader {
   /**

@@ -83,7 +83,6 @@ test("bundled helper upgrades a real service, replays, recovers and rolls back w
   const oldReplay = await run(upgrade("first", "2.0.0"));
   assert.equal(oldReplay.result, "replayed");
   assert.equal(oldReplay.exitCode, 0);
-  if (oldReplay.operation.kind === "observed") assert.equal(oldReplay.operation.operation.acknowledgedAtMs, undefined);
   assert.equal((await host.healthProbe()).version, "2.0.0");
   await publish("4.0.0");
   const crashHelper = path.join(dir, "crash-runner.mjs");

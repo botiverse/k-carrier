@@ -93,7 +93,7 @@ const TOOTH_IDS = new Set([
   "m1.swap-tool-rollback",
   "m3.service-upgrade",
   "m3.service-rollback",
-  "m3.stuck-driver-evidence-recovery",
+  "m3.stuck-driver-rollback-recovery",
   "m1.download-resumes-after-kill",
 ]);
 
@@ -189,18 +189,18 @@ test("known-red: m1.swap-tool-rollback catches a promoted bad version", async ()
 
 
 
-test("known-red: m3.service-upgrade catches an upgrade that never lands (both host shapes)", async () => {
+test("known-red: m3.service-upgrade catches an upgrade that never lands (external driver)", async () => {
   const { ctx, teardown } = await ctxFor("red-m3-upgrade");
   try {
     // mutation: a bad version is served — it rolls back, so the fresh
-    // incarnation assertion goes RED on both host shapes
+    // incarnation assertion goes RED on external driver
     await assert.rejects(checkM3ServiceUpgrade(ctx, { serveBadVersion: true }), /must exit 0/);
   } finally {
     await teardown();
   }
 });
 
-test("known-red: m3.service-rollback catches a promoted good version (both host shapes)", async () => {
+test("known-red: m3.service-rollback catches a promoted good version (external driver)", async () => {
   const { ctx, teardown } = await ctxFor("red-m3-rollback");
   try {
     // mutation: a GOOD version is served — it promotes
@@ -221,11 +221,10 @@ test("known-red: m1.download-resumes-after-kill catches a restart-from-zero down
   }
 });
 
-test("known-red: m3.stuck-driver-evidence-recovery catches a successor that never recovers", async () => {
+test("known-red: m3.stuck-driver-rollback-recovery catches an external driver that never recovers", async () => {
   const { ctx, teardown } = await ctxFor("red-m3-stuck");
   try {
-    // mutation: the successor skips recovery — the transaction stays
-    // pending at handing-over, so the promoted assertion goes RED
+    // Mutation skips external recovery: the interrupted transaction stays pending.
     await assert.rejects(checkM3StuckDriverEvidence(ctx, { skipRecovery: true }), /must finish the transaction/);
   } finally {
     await teardown();

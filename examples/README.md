@@ -1,20 +1,10 @@
-# Examples — one per adoption profile
+# Examples and test fixtures
 
-**Goal (project-level, from day one): K serves every application form, not just
-complex hosts.** These examples are the living proof — each profile ships a
-minimal, runnable app, and CI runs the profile-tiered harness teeth against
-all three. If a profile has no green example, the claim "K supports that
-form" does not exist.
+Use [external-service](external-service/README.md) for application integration.
+It builds a separate runner and controls an application with no K dependency.
 
-| Example | Profile | Shape | Demonstrates |
-|---|---|---|---|
-| `swap-tool/` | cli | tiny single-binary CLI, no resident process | zero-HostAdapter adoption; upgrade effective next run; signature chain + journal for free. **First real adopter: standalone raft CLI** (Computer-injected copies are `held: managed-elsewhere` by ownership detection) |
-| `service-daemon/` | daemon | small long-running service, no hosted workloads | 3-method HostAdapter; two-slot transaction, crash-safe rollback, same-PID convergence proof |
-| `hosted-service/` | managed | fake host with live "sessions" + an OS-lifecycle surface | full stack: quiesce/resume session preservation, named-surface lifecycle readback, policy/notification, optional drive. Shares its fake host with `harness/`. |
-
-Status: all three demos landed — each is a runnable app accepted by the
-harness (swap-tool via `k-harness --bin`, hosted-service via
-`k-harness --adapter`, service-daemon via its registered tooth); the teeth
-`examples.*` make each profile's claim CI-enforced. The full managed
-upgrade loop (L1 two-slot + L4/L5) lands when the core upgrader wiring
-does; each demo README states exactly what it proves today.
+`swap-tool`, `service-daemon` and `hosted-service` are internal engine test
+fixtures consumed by the harness. Their in-process factory calls exercise
+transaction and lifecycle mechanisms; they are not supported application
+integration paths. Run `pnpm test` for these fixtures and `pnpm test:external`
+for the external runner protocol and real service upgrade/recovery tests.

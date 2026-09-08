@@ -176,7 +176,6 @@ test("recover() settles durable work without consulting the release source", asy
     reason: "coordinator exited during handover",
     provenance: { who: "server-1", carrier: "web" },
     metadata: { originServerId: "server-1" },
-    acknowledgedAtMs: null,
   });
   const upgrader = createUpgrader({
     host,
@@ -244,7 +243,6 @@ test("upgradeTo persists one K-owned operation receipt with previous stable and 
     assert.equal(receipt.operation.phase, "promoted");
     assert.equal(receipt.operation.outcome, "promoted");
     assert.deepEqual(receipt.operation.metadata, { originServerId: "server-1" });
-    assert.equal(receipt.operation.acknowledgedAtMs, undefined);
 
 
   } finally {

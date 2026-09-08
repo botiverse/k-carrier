@@ -76,8 +76,6 @@ export interface OperationRecord {
   reason: string | null;
   provenance: ProvenanceIdentity | null;
   metadata: Record<string, string>;
-  /** Historical format-1 metadata. Ignored by K; preserved when archiving old records. */
-  acknowledgedAtMs?: number | null;
 }
 
 export type OperationRead =

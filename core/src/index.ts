@@ -3,8 +3,8 @@
 // This barrel is the single supported entry point for the core framework;
 // deep imports into ./core/src/** are internal and not part of the public API.
 
-// The upgrader factory and its configuration.
-export * from "./createUpgrader.ts";
+// Runner configuration; the engine factory is internal.
+export type { CreateUpgraderOptions } from "./createUpgrader.ts";
 
 // One-time adoption of an already-running trusted binary into K's stable
 // slot, plus the K-owned slot resolver host adapters use to launch it.
@@ -17,7 +17,7 @@ export * from "./operation.ts";
 export * from "./quarantine.ts";
 
 // The release-source boundary applications implement and the durable
-// provenance journal they wire into createUpgrader.
+// provenance journal they wire into createExternalUpgrader.
 export * from "./artifact/source.ts";
 export * from "./artifact/transferPolicy.ts";
 export * from "./provenance/journal.ts";

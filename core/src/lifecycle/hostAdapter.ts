@@ -11,21 +11,14 @@
  *  - healthProbe(): evidence must be bound to one live process (same-PID /
  *    startId), never assembled from files or caches. A probe that cannot
  *    prove which process answered is not a probe.
- *  - start(): may return BEFORE the process exists. Some hosts cannot start
- *    themselves at all -- a service that is replaced by exiting, letting its
- *    supervisor respawn it from the new bytes, is started by that supervisor,
- *    asynchronously. So start() means "the successor has been asked for",
- *    never "the successor is running": only healthProbe() can say that.
+ *  - start(): may return before readiness. The external controller asks
+ *    the service manager to start the selected artifact; healthProbe()
+ *    then proves that the requested incarnation is actually running.
  *
- * New integrations run K outside the resident process and service unit; this
- * keeps the transaction owner alive during stop/start. The following describes
- * the legacy embedded integration and the recovery model retained for crashes:
- * A consequence worth stating, because it decides who finishes an upgrade:
- * on such hosts the process driving the transaction DIES on the success path.
- * The successor finds a journal that stops mid-handover -- indistinguishable
- * from a crash -- and K resolves it by EVIDENCE (a live process reporting the
- * experiment version from a different incarnation), never by a flag saying the
- * restart was planned. A crash could set that flag just as easily.
+ * K runs outside the resident process and service unit, so stopping the
+ * application does not kill the transaction owner. A runner crash before
+ * durable promote intent restores stable; after that intent, recovery
+ * replays the commit. A live candidate alone never authorizes promotion.
  */
 export interface HostAdapter {
   /** Park all hosted workloads durably. Idempotent. */

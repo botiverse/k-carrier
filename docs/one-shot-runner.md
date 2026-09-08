@@ -1,9 +1,7 @@
 # K as an external upgrade framework
 
-Status: implemented in this repository; application integration and production
-publication are separate. This supersedes the embedded-executor recommendation
-in design-v1 §5.0 for **new integrations**. Existing `createUpgrader` consumers
-continue using the same engine and default receipt policy.
+K executes only in a disposable external runner. Application integration and
+production publication are separate from framework implementation.
 
 [中文图解](external-runner.html) · [研究来源](external-runner-research.md)
 
@@ -32,7 +30,7 @@ The runner is a process outside the application slots and service process tree.
 The example builds one JavaScript file requiring an independently installed
 Node 24. The build contains K and a trusted application adapter. The application
 binary contains **no K dependency**. Native packaging (SEA or another publisher
-build system) can wrap the same entry point; this PR does not publish a native
+build system) can wrap the same entry point; this framework does not publish a native
 artifact or require a permanently installed K daemon.
 
 “Disposable” describes code lifetime, **not state lifetime**. After a helper
@@ -49,7 +47,6 @@ application's data compatibility and recovery obligations.
 
 | Candidate | Consequence | Decision |
 |---|---|---|
-| Keep upgrading from the resident process | Success kills the transaction owner; rescue depends on old code | Superseded for new integrations |
 | Add a permanent K service | K needs another installed lifecycle and updater | Unnecessary for this scope |
 | Fresh helper calling old app's `upgrade` | Different PID, same dependency and old gates | Rejected |
 | Fresh helper + external operations adapter + durable K state | App can be stopped or broken while operations continue | Implemented |
@@ -66,8 +63,8 @@ own backup/restore contract; binary rollback alone cannot reverse them.
 ## Runnable integration
 
 Implement a trusted adapter returning `createExternalUpgrader(options)`. This
-uses **the existing** `createUpgrader` engine with `terminalReceiptPolicy:
-"archive"`; there is no second transaction journal or parallel job state.
+constructs the transaction engine inside the runner; there is no second
+transaction journal or parallel job state.
 
 ```sh
 # Node 24 and pnpm; build the example adapter into a disposable executable.
@@ -96,7 +93,7 @@ Use it from an operator shell or an independent supervisor. A service manager
 that kills all descendants of the application will also kill a helper launched
 inside that service unit; `spawn()` alone does not escape a cgroup or Windows
 job. Web integration must have an external launch facility and query K state
-on reconnect. K does not introduce an authenticated network API in this PR.
+on reconnect. K does not introduce an authenticated network API in this framework.
 
 ## Protocol v1
 
@@ -109,8 +106,8 @@ logs belong on stderr; stdout is reserved for the protocol.
 {"protocolVersion":1,"action":"upgrade","id":"job-123","targetVersion":"2.0.0","consented":true}
 ```
 
-Other requests are `{"protocolVersion":1,"action":"recover"}`, `status`, and
-`{"protocolVersion":1,"action":"acknowledge","id":"job-123"}`. `consented`
+Other requests are `{"protocolVersion":1,"action":"recover"}` and
+`{"protocolVersion":1,"action":"status"}`. `consented`
 represents approval already obtained by the caller, not a request to bypass
 ownership or compatibility. Never derive it from an unauthenticated Web body.
 
@@ -119,7 +116,6 @@ ownership or compatibility. Never derive it from an unauthenticated Web body.
 | upgrade | Exactly the requested version; core rejects a source returning another | 0 promoted/up-to-date; 1 failure/rollback; 2 policy hold; 3 unresolved operation |
 | recover | Settle journal under the same lock, without release lookup/download | 0 settled successfully; 1 recorded failure/rollback; 3 still unresolved |
 | status | Read the current operation, no lifecycle calls | 0 readable (inspect outcome); 1 unreadable |
-| acknowledge | Mark delivery of one exact current terminal receipt | 0 acknowledged; 2 missing/changed/nonterminal |
 
 Responses contain the original K `operation` and any error. Exception handling
 never invents a `rolled-back` outcome. A nonzero controller exit, timeout,
@@ -127,33 +123,22 @@ process signal, missing receipt, or wrong request/target binding cannot become
 successful upgrade completion. A successful **status query** is not successful
 upgrade. A replay describes a historical operation, not current live health.
 
-## Receipts, retry and old state
+## Receipts, retry and recovery
 
-The existing `operation.json` remains the current operation. In external mode,
-before replacing a terminal receipt K persists it at
-`receipts/<sha256(operation-id)>.json` under the same upgrade lock. An unsent
-receipt is retained with `acknowledgedAtMs: null`; history retention does not
-claim transport delivery. Active operations and corrupt state still block.
-This removes the dependency on an old client returning to acknowledge before
-another upgrade can begin. No receipt deletion or forced lock bypass exists.
+`operation.json` holds the current operation. Before replacing a terminal receipt,
+K archives it at `receipts/<sha256(operation-id)>.json` under the same upgrade lock.
+Receipts record transaction outcomes, not transport delivery. There is no ACK action
+or field. Active operations and corrupt state still block conflicting work.
 
-An id binds to one target. Same-id terminal replay returns the current or
-archived receipt **without download or lifecycle actions**; changing the target
-under that id fails. After recovery settles an interrupted id, retry returns
-its recovered outcome; a fresh attempt uses a fresh id. To continue after a
-policy hold, submit the approved version with a new id. `OperationReplay` is
-also exposed to embedded callers: code previously retrying the same terminal
-id must consume this typed receipt instead of expecting another transaction.
+An id binds to one target. Same-id terminal replay returns the current or archived
+receipt without download or lifecycle actions; changing the target fails. After
+recovery settles an interrupted id, retry returns that result. Use a fresh id for
+a fresh attempt, including an approved attempt after a policy hold.
 
-New external helpers read the same v1 state layout and check receipt shape.
-This is not a promise to accept every historical or future state format.
-Unreadable current/archive records refuse before recovery begins. Existing
-embedded adapters keep their ACK gate until deliberately migrated. Historical
-receipts absent from disk cannot be reconstructed. Archive files are retained
-without automatic GC; retention is an explicit future policy, not silent data
-loss. File sync plus rename matches K's existing durability primitives; physical
-power-cut durability still depends on filesystem semantics (directory fsync is
-not added by this change).
+The runner checks persisted state format and receipt shape. Unreadable records
+refuse before recovery begins. Missing history cannot be reconstructed. Archive
+files have no automatic GC. File sync plus rename uses the platform durability
+primitives; physical power-cut guarantees still depend on filesystem semantics.
 
 ## Host control contract
 
@@ -185,7 +170,8 @@ forget command as a successful stop.
 The existing engine journals intent before stage/handoff/promote and retains
 stable during candidate evaluation. Runner death during download, stop/start,
 readback or terminal reporting leaves that same state for a new runner.
-A bad candidate rolls back; a controller hang remains recovery-required;
+Before durable promote intent, recovery restores stable; after that intent,
+recovery replays the commit. A bad candidate rolls back; a controller hang remains recovery-required;
 unknown schemas and another live lock owner are refused.
 
 `core/src/external/process.test.ts` builds the helper, starts a real HTTP
@@ -194,7 +180,7 @@ slot, tries a hash-valid artifact reporting a wrong version, and checks actual
 rollback. It kills the helper **after stop and before start**, verifies a
 concurrent helper is refused, removes the distribution manifest, and recovers
 with a newly launched helper. It also verifies current and archived replay,
-unacknowledged receipt preservation and id/target conflicts.
+terminal receipt preservation and id/target conflicts.
 
 `core/src/external/bootstrap.test.ts` proves mismatched helper bytes never
 execute and completed helper bytes are cleaned. Protocol/runner/controller
@@ -202,6 +188,6 @@ tests cover version rejection, missing success receipt, exception evidence,
 nonzero commands, malformed probes and timeout.
 
 Linux real-process tests run locally and in the existing suite. macOS/Windows
-use the existing CI/platform lanes; this PR does not claim live Computer
+use the existing CI/platform lanes; this framework does not claim live Computer
 migration, Windows native self-delete behavior or publication of a Computer
 alpha. The new example proves an external service integration, not fleet rollout.

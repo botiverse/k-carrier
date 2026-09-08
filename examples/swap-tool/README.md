@@ -1,4 +1,7 @@
-# swap-tool — the cli-profile example
+# swap-tool — the cli-profile fixture
+
+Internal harness fixture. Application integration uses the
+[external-service runner](../external-service/README.md).
 
 **Proves:** the cli profile's support claim — a zero-dependency CLI (no
 resident process, no HostAdapter) gets a verifiable self-upgrade by

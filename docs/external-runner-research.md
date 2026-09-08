@@ -73,8 +73,8 @@ and receipt retention without transport ACK blocking the next operation.
 | Shared engine and journal | Yes | No second installer state machine |
 | Target version chosen by ReleaseSource | Yes | Requested version checked against returned release |
 | HostAdapter methods | Yes | External command implementation; app has zero K code in demo |
-| Same K lock | Yes | Runner and embedded entry cannot transact concurrently |
-| Current receipt + required ACK | Embedded default retained | External mode archives terminal history and moves on without claiming delivery |
+| Same K lock | Yes | Concurrent runners cannot transact simultaneously |
+| Terminal receipts | Archive and replay | Transport delivery never blocks the next operation |
 | Recovery after interrupted service handoff | Yes | Fresh downloadable runner can own it while application is down |
 | Native per-platform delivery | Publisher responsibility | Bundled Node helper implemented; no claim of published native binaries |
 

@@ -145,14 +145,14 @@ registerTooth({
 });
 
 registerTooth({
-  id: "m3.stuck-driver-evidence-recovery",
+  id: "m3.stuck-driver-rollback-recovery",
   profiles: ["service"],
   layers: ["L0", "L1", "L2", "L3"],
   kind: { kind: "invariant" },
   mustRed: [
     {
-      mutate: "the successor decides the handover by a flag, not by evidence (or never recovers at all)",
-      caughtOnlyBy: "this", // only this tooth wedges the driver and demands evidence-based recovery
+      mutate: "the external driver skips recovery and leaves interrupted work unresolved",
+      caughtOnlyBy: "this", // only this tooth wedges the driver and demands external rollback recovery
     },
   ],
   run: checkM3StuckDriverEvidence,

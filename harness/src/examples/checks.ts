@@ -239,7 +239,6 @@ export async function checkPlainDaemonContract(
         [RELEASE_BASE_ENV]: server.url,
         K_CORE_UPGRADER: coreUpgraderUrl(),
         K_STATE_DIR: stateDir,
-        K_HOST_SHAPE: "spawn",
       },
       timeoutMs: 30000,
     });
