@@ -9,13 +9,27 @@ You build the upgrade program with K and your application's adapter. The install
 application does not run the upgrade engine. An install script, operator command or
 external supervisor launches the runner and reads its result.
 
-A product distributes three logical artifacts:
+## Three things you distribute
 
-- **Bootstrap script**: detects the platform, downloads and verifies the runner, then starts it.
-- **K runner**: the versioned installer/upgrader that owns the transaction.
-- **Product release**: the service bytes selected by the product or Hands release source.
+As the product publisher, you build and publish three separate deliverables:
 
-They may share one CDN, but each has its own version and SHA-256 identity. The bootstrap script and `self upgrade` are thin callers; neither carries a second upgrade state machine.
+| Deliverable | What you publish | Who uses it |
+|---|---|---|
+| Bootstrap script | A small `install.sh` that selects the platform and obtains a verified runner | The person installing your product |
+| K installer/upgrader (runner) | K bundled with your product's trusted adapter | The script or your product's `self upgrade` entrypoint |
+| Product release | The application executable that will occupy a K slot | The runner, through your ReleaseSource |
+
+All three can live on the same CDN and come from one build repository. They have
+different jobs: the script starts the installer, and the installer installs the
+product. The script and `self upgrade` share the runner protocol and persistent
+state; neither carries a second upgrade state machine. The controller described
+below is an implementation role, not a mandatory fourth download.
+
+The installer has its own release version, independent of the product version.
+You can publish an installer fix for an unchanged product release, including fixes
+for old installation state. It must be able to run without the installed product
+working. See the [distribution layout and release process](docs/integration.md#publish-three-deliverables)
+for what to host and how the two downloads connect.
 
 ## How it fits together
 

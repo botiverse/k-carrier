@@ -5,11 +5,68 @@ The application exposes lifecycle and health controls; it does not execute K.
 The [design](design-v1.md) defines this execution boundary and the
 [runner protocol](one-shot-runner.md) specifies requests and results.
 
-## Before you start: three artifacts and three programs
+## Publish three deliverables
 
-Every integration has three logical artifacts: a bootstrap script, a versioned K runner, and the product release being installed. They may share a CDN, but publish and verify their identities separately. The script and `self upgrade` should both start the same runner.
+Using K means distributing **a bootstrap script, a K installer/upgrader, and your
+product's release**. K is the reusable framework; you build the installer with
+your trusted product adapter. Installing the framework dependency alone does not
+publish these deliverables for you.
 
-The runtime then has three programs:
+| Deliverable | Built and published by | Downloaded or started by |
+|---|---|---|
+| `install.sh` | Your product's release process | The person installing the product |
+| Installer/runner containing K and your adapter | Your installer build, with its own version | `install.sh` or `self upgrade` |
+| Product executable | Your application's release build | The runner's ReleaseSource |
+
+For example, one CDN could serve this layout (illustrative paths, not K's required
+URL scheme):
+
+```text
+https://downloads.example.com/my-service/
+  install.sh
+  installers/1.4.1/linux-x64/runner.mjs
+  installers/1.4.1/manifest.json
+  releases/2.8.0/linux-x64/service
+  releases/2.8.0/manifest.json
+```
+
+Here the bootstrap script selects installer **1.4.1** for the host platform,
+obtains its authenticated download URL, SHA-256 and size, verifies it, then runs
+it with an upgrade request for product **2.8.0**. The runner's adapter resolves
+that product version to its own URL, SHA-256 and size and K verifies those bytes
+before staging them. `self upgrade` delegates to the same runner contract. It
+must arrange execution outside the service's process-management boundary too.
+
+The manifests stand for your distribution metadata; K does not require one
+shared manifest format for both downloads. The launcher accepts a runner Release,
+and the adapter implements the product ReleaseSource. Keep those identities
+separate even when both are served by Hands or the same CDN. A checksum detects
+changed bytes; the trusted delivery of the script and metadata establishes who
+published them.
+
+The `.mjs` runner in this example requires an independently available Node 24;
+it is not a standalone native executable. Supply that runtime through your
+installation prerequisites or package a native runner for each platform. The
+runtime must remain usable when the product is stopped or replaced.
+
+You can release installer **1.4.2** to repair installation logic while continuing
+to install product **2.8.0**. Publish the new runner and its metadata, then update
+the launcher's selected installer release. Both entrypoints need a defined way
+to obtain that selection; publishing new bytes alone does not update a launcher
+that pins the old release. Preserve published versioned artifacts rather than
+silently replacing the bytes behind a fixed hash.
+
+External execution also lets product-specific setup code repair or archive old
+installation state without requiring the old application to start. Keep that
+work in the installer adapter, with explicit ownership and data-preservation
+rules. Ordinary K `recover` only settles its recorded transaction; it does not
+delete user data or act as a general repair command. Installer independence does
+not make arbitrary older runners safe to run against newer persistent state.
+
+## Execution roles and persistent state
+
+The three deliverables above are a distribution model. At execution time, these
+are the roles involved:
 
 | Piece | Built or supplied by | Responsibility |
 |---|---|---|
