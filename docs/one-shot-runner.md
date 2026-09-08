@@ -20,8 +20,8 @@ An upgrade is an operation *on* a program. The owner of that operation must
 survive stopping the program. K therefore supplies a disposable runner,
 protocol, verified bootstrap, external host controller, and retained receipts.
 The application supplies observations and lifecycle controls, not another
-upgrade state machine. This removes the dependency on the old application's
-upgrade code being healthy enough to install its replacement.
+upgrade state machine. The runner remains usable while the application is stopped
+or unhealthy, so recovery does not depend on application upgrade code.
 
 ```mermaid
 flowchart LR
