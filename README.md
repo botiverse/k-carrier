@@ -36,3 +36,12 @@ operations are implemented; its acceptance harness and CI gate are still in
 progress.
 
 Status: incubating. TypeScript first. License: **Apache-2.0**.
+
+### Optional gzip release transport
+
+A `Release` may carry an optional `gzip` URL, compressed size, and SHA-256. K
+verifies the compressed bytes, bounded-decompresses them, then verifies the
+canonical release size and SHA-256. Missing gzip metadata uses the canonical
+URL; a selected gzip failure is terminal and does not silently bypass the
+advertised representation. Resume offsets remain offsets in the compressed
+object.
