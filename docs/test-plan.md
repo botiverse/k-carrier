@@ -8,6 +8,12 @@
 
 ---
 
+## Runner 执行边界
+
+`pnpm test:runner` 执行 launcher、protocol、runner 和 commandHost 的直接测试，以及真实 helper 进程验收。覆盖 helper 字节不符拒绝执行、清理和退出码、协议拒绝发生在 adapter 工厂前、回执绑定、控制器失败/限时、真实升级回滚、请求重放、并发锁与 helper 被杀后的离线恢复。这些用例未全部注册到齿表；`--list` 不是完整运行清单。
+
+框架只支持外部执行，但机制测试仍可使用内存 effects 与进程内 fake host。集成测试必须把 runner 与应用分开，产品验收再覆盖真实 supervisor/进程树/数据保留。两层不能互相冒充。
+
 ## M0 — harness 自举（先于一切功能层）
 
 | 测什么 | 怎么算过 | must-red |
@@ -36,7 +42,7 @@
 L0.5 已于 2026-08-06 移除（决定：不支持签名）。K 只验完整性（sha256 +
 size），不验来源真实性；原两级签名链、`m2.*` 四颗齿与 harness 的测试密钥链一并
 删除。留一个没人接的签名接口比没有更糟——接入方会以为来路已经有人管了。理由，
-以及它与 OS 代码签名的区别，见 `docs/design-v1.md` §L0.5。
+以及它与 OS 代码签名的区别，见 `docs/design-v1.md` 的执行与信任边界。
 
 **防回滚不在这层**：manifest 版本低于当前且非 pinned ⇒ 默认拒，这是 L0 的
 `source-fails-closed` 管的，与签名无关。

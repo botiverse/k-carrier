@@ -5,6 +5,11 @@ production publication are separate from framework implementation.
 
 [中文图解](external-runner.html) · [研究来源](external-runner-research.md)
 
+## Reading this reference
+
+Start with the [integration guide](integration.md) for setup and ownership.
+This reference specifies the runner and controller wire contracts.
+
 ## Code layout
 
 `launcher/` downloads, verifies and executes the helper. `protocol/` defines the
@@ -107,7 +112,7 @@ on reconnect. K does not introduce an authenticated network API in this framewor
 ## Protocol v1
 
 One JSON request on stdin, one JSON response on stdout, then process exit.
-Input is bounded to 16 KiB. Unknown fields, actions, wire versions, empty ids,
+Decoded input is bounded to 16,384 JavaScript string code units. Unknown fields, actions, wire versions, empty ids,
 and nonboolean consent are refused before the adapter factory runs. Adapter
 logs belong on stderr; stdout is reserved for the protocol.
 
@@ -123,7 +128,7 @@ ownership or compatibility. Never derive it from an unauthenticated Web body.
 | Command | Effect | Exit meaning |
 |---|---|---|
 | upgrade | Exactly the requested version; core rejects a source returning another | 0 promoted/up-to-date; 1 failure/rollback; 2 policy hold; 3 unresolved operation |
-| recover | Settle journal under the same lock, without release lookup/download | 0 settled successfully; 1 recorded failure/rollback; 3 still unresolved |
+| recover | Settle journal under the same lock, without release lookup/download | 0 successful/no recorded outcome; 1 recorded failure/rollback; 2 held receipt; 3 still unresolved |
 | status | Read the current operation, no lifecycle calls | 0 readable (inspect outcome); 1 unreadable |
 
 Responses contain the original K `operation` and any error. Exception handling
@@ -131,6 +136,17 @@ never invents a `rolled-back` outcome. A nonzero controller exit, timeout,
 process signal, missing receipt, or wrong request/target binding cannot become
 successful upgrade completion. A successful **status query** is not successful
 upgrade. A replay describes a historical operation, not current live health.
+
+A response with `result: "recovered"` and an operation outcome of `rolled-back`
+uses exit code 1: recovery restored stable, but the requested upgrade did not
+succeed. A held receipt maps to 2. For status, exit 0 only means the receipt was
+readable, including `operation.kind: "genesis"` (no recorded operation).
+
+Successful execution replies contain `protocolVersion`, `action`, `result`,
+`exitCode`, `operation` and `error`. Rejected input or adapter construction failure
+may produce only `protocolVersion`, `result`, `exitCode` and `error`; clients must
+not assume an operation exists on that error path. Runner termination can leave
+no complete response: query status and recover the existing state as needed.
 
 ## Receipts, retry and recovery
 

@@ -5,11 +5,30 @@ The application exposes lifecycle and health controls; it does not execute K.
 The [design](design-v1.md) defines this execution boundary and the
 [runner protocol](one-shot-runner.md) specifies requests and results.
 
+## Before you start: three programs, one state directory
+
+| Piece | Built or supplied by | Responsibility |
+|---|---|---|
+| Launcher | Your installer, operator CLI or supervisor | Authenticate/download the runner and start it outside the application's service unit |
+| Runner | Your publisher bundles K with a trusted adapter | Select the application release through the adapter and own the transaction |
+| Application controller | Your integration | Stop/start/probe the application; it can be command-based or implement HostAdapter directly |
+
+The adapter is configuration and trusted code inside the runner, not an extra
+resident daemon. `createRunner(options)` returns the transaction interface;
+it does **not** spawn a process. `serveRunner(factory)` handles stdin/stdout;
+`launchRunner(...)` starts the built helper and returns its exit code, forwarding
+stdout/stderr. The helper release and application release are separate artifacts.
+
+Allocate a persistent `stateDir` for each installation. All upgrades and recovery
+attempts for that installation use the same directory; unrelated applications use
+different directories. Protect it as application management state. Keep application
+data and temporary runner code outside its slots.
+
 ## 1. Define the application contract
 
-Choose `swap` when K only replaces bytes, or `service` when it manages a resident.
-For service mode, implement quiesce, stop, start, healthProbe and resume through
-an external controller. Stop must confirm termination; start must be idempotent;
+The current integration API requires a HostAdapter. There is no profile flag or
+host-free default: this guide integrates a resident service. Implement quiesce,
+stop, start, healthProbe and resume through an external controller. Stop must confirm termination; start must be idempotent;
 probe must return version, pid and startId from one live incarnation. Quiesce and
 resume must preserve the workloads you promise to preserve, including rollback.
 
@@ -19,7 +38,25 @@ Implement `checkCompatibility(from, to)` when application data or protocol chang
 can make a transition unsafe. K restores binaries, not application data; provide
 backup/restore independently for destructive migrations.
 
-## 2. Build the runner
+## 2. Establish the rollback baseline
+
+Before the first upgrade, the stable slot must contain trusted, usable application
+bytes. For an existing installation, call `bootstrapStable({stateDir, version,
+artifactPath})` from a trusted setup step with its current executable. This seeds
+the fallback; it does not download a release, authenticate the input or start the
+service. It refuses conflicting transaction state and does not overwrite an
+initialized stable slot. Run this once, not as a way to reset failed upgrades.
+
+The controller must be able to start the slot selected by K, using
+`slotArtifactPath(stateDir, slot)` or the path supplied by `createCommandHost`.
+K manages an `artifact.bin` per slot; a product needing a package layout or install
+hooks must supply that contract explicitly. The service example copies its selected
+script to an `.mjs` runtime path because Node needs the module extension.
+
+See the [walkthrough](../examples/external-service/README.md) for concrete setup,
+upgrade, observation and cleanup commands.
+
+## 3. Build the runner
 
 Use `createRunner(options)` inside the trusted adapter, as shown in
 [external-service/adapter.ts](../examples/external-service/adapter.ts). Configure
@@ -37,7 +74,7 @@ For product delivery, publish and authenticate the runner artifact and interpret
 with your platform's distribution mechanism. SHA-256 and size are integrity checks,
 not publisher signatures.
 
-## 3. Launch from outside the application
+## 4. Launch from outside the application
 
 Keep runner code and scratch space outside both application slots. Launch it from
 an operator shell or external supervisor that survives stopping the application.
@@ -53,11 +90,21 @@ Only pass `consented: true` after the launcher's authenticated caller has approv
 the operation. Logs go to stderr; stdout is reserved for the response. A Web UI
 needs an external launch facility and queries the durable result after reconnect.
 
-## 4. Observe, retry and recover
+## 5. Observe, retry and recover
 
-Read the response's operation and exit code. A completed status query does not
-prove a successful upgrade. Same-id/same-target retry returns the stored result;
-it never re-executes the transaction. Use a new id for a new attempt.
+Read the response's operation and exit code, not only its `result` string.
+A successful recovery can return exit 1 because it restored the old version and
+recorded `rolled-back`; that means the upgrade did not succeed, not necessarily
+that recovery failed. Exit 2 denotes a policy hold and 3 unresolved work.
+Inspect `operation.operation.outcome` (when `operation.kind` is `observed`), its
+`reason`, and the response `error` to distinguish them.
+
+`status` reports the current receipt only, with no lifecycle calls; it does not
+prove current live health. `genesis` means no receipt has been recorded, not that
+the service is uninstalled. There is no archive-list or by-id status action; a
+same-id upgrade retry replays its current or archived result without re-executing
+the transaction. Reusing an id with a different target is
+rejected. Use a new id for a new attempt, after resolving any active transaction.
 
 Terminal receipts archive automatically before replacement. There is no delivery
 confirmation action or gate. Active operations, unreadable state and live lock
@@ -69,7 +116,7 @@ stable; after that intent, replay the commit. The launcher or external superviso
 owns restarting recovery after power loss. Never infer completion from process
 spawn alone or bypass the lock to clear an unresolved result.
 
-## 5. Verify application behavior
+## 6. Verify application behavior
 
 Run `pnpm check` and the external process tests, then test your actual controller
 on each supported platform. Verify stop/start, one-incarnation readiness, broken
@@ -80,3 +127,41 @@ before retiring their previous manager; undeclared observations are not passes.
 
 The other repository examples and harness modules exercise internal engine
 mechanisms. They are test fixtures, not alternate application integration paths.
+
+## Using Hands as the release platform
+
+Hands owns application publication and distribution policy; K owns a transaction
+on one installation. The product adapter connects them through ReleaseSource:
+
+```text
+Publisher → Hands release/channel/platform selection → product ReleaseSource
+                                                      ↓
+Launcher → K runner → verified application bytes → stage / probe / commit or rollback
+```
+
+The product adapter maps a Hands-selected artifact to `{version, url, sha256,
+size}`. It supplies app identity, platform and channel/cohort policy to the release
+platform, and must refuse missing or mismatched targets. An `upgrade` request
+names an exact application version; it must not silently become a moving latest
+release. K itself has no Hands account, app slug, channel or rollout percentage.
+Access control and any authenticated manifest/download resolution belong to the
+adapter and launcher's distribution boundary.
+
+A launcher may also obtain the runner artifact from Hands. That is a separate
+artifact identity from the requested application version: verify the helper before
+executing it, then let its adapter resolve the application release. Publishing a
+release is not evidence that a machine installed it. If installation results are
+reported to a server, forward K's operation id and outcome; do not invent success
+from a download or process-start event. The current runner provides local receipts,
+not an automatic Hands status uploader.
+
+Withdrawing a Hands release changes distribution policy; rolling back in K restores
+this installation's previous stable bytes. A fleet rollback would require an
+explicit command path and local execution on each device, not merely a channel
+change. K's recovery can restore existing slot bytes while the release source is
+unavailable; this does not guarantee an online source can authorize or download
+an arbitrary historical version.
+
+This describes the integration boundary, not a bundled Hands connector or evidence
+of a deployed product integration. The runnable example uses a local release
+manifest so its tests do not depend on a live Hands service.

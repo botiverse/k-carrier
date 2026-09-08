@@ -50,7 +50,7 @@ stdin 接收一条有大小上限的 JSON 请求，stdout 返回一条 JSON 响�
 
 ## 生命周期与收敛
 
-两种进程模型都由外部 runner 执行：swap 只替换工件，不管理常驻进程；service 管理一个常驻实例。
+应用的字节替换和常驻服务交接都由独立执行方驱动。当前 createRunner 必须提供 HostAdapter，没有 profile 开关或无宿主默认值；正式接入示例覆盖常驻服务，CLI 字节替换夹具用于内部机制测试。
 
 service 的 HostAdapter 提供 quiesce、stop、start、healthProbe、resume。quiesce 持久暂停工作，stop 返回前确认旧进程停止，start 幂等启动指定槽，healthProbe 从同一个活实例返回 version、pid、startId，resume 在候选或回滚槽恢复工作。start 返回不等于已就绪，只有 probe 能证明这一点。
 

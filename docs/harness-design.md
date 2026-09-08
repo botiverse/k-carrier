@@ -1,13 +1,28 @@
 # K 测试框架（harness）设计 v1
 
-08-05：测试框架要**提前设计成完整的一块**，不是随层补测试。本文是 harness 的架构设计；`test-plan.md` 是跑在它上面的计划。
+## 当前测试边界
+
+K 只通过外部 runner 接入应用。测试按机制与真实进程边界分层，而不是按内嵌/外部两种产品模式分层：
+
+| 层 | 现有执行位置 | 证明什么 |
+|---|---|---|
+| 事务机制 | core 单元测试、harness 注册齿、DST/effects | 锁、WAL、两槽、故障交错、回滚和收敛规则 |
+| 执行边界 | protocol、launcher、runner、commandHost 的 Node 测试 | 拒绝非法请求、校验 helper、退出码与回执绑定、控制器限时 |
+| 真实 runner 集成 | `core/src/runner/process.test.ts` | 构建 helper，控制无 K 依赖的服务，升级/回滚/重放，以及杀掉 helper 后由另一个 helper 离线恢复 |
+| 产品平台验收 | 接入产品自己的控制器与目标机器 | 服务管理范围、真实进程终止、工作负载、应用数据和平台安装合同 |
+
+`pnpm test` 执行前面三层；`pnpm test:runner` 单独运行执行边界和真实 runner 集成。已有注册齿继续负责可复用机制与 mutation 契约；runner 边界测试目前直接由 Node test runner 执行，未注册为 harness 齿。不能把注册齿清单当成全部 runner 验收清单。
+
+恢复的判据也随设计统一：runner 在持久 promote 意图之前死亡，恢复必须回滚；意图之后按 WAL 重放提交。resident 不运行恢复，不存在“继任应用凭健康证据替前任提交”的验收路径。M3 卡死测试由新的外部执行进程恢复，保留跳过恢复必须失败的反向验证。
+
+内存假宿主与内部工厂调用仍然用于快速测试；这些测试不证明应用与 runner 处于不同服务单元。真实 runner 测试补足进程边界，但仍不替代真实产品/OS 的进程树和断电验收。现有进程 kill 场景是定向用例，不是所有 OS 失败点的穷举证明。
 
 ## 0. 定位：harness = 框架的可执行规格（executable spec）
 
 顺序反转：**先有 harness，后有功能层**。每个功能层落地的定义 = "它让 harness 里预先写好的那组齿从 RED 变 GREEN"。测试不是功能的附件，是功能的规格。三个推论：
 1. M0（harness 自举）先于一切层实现；
-2. **不允许 harness 外的 ad-hoc 测试**——新齿必须进 registry（否则齿的 must-red/分档/自验纪律管不到它）；
-3. harness 只吃 core 的公共 API + HostAdapter ⇒ 它同时是 **API 的第一个消费者**（dogfood：API 不好用，harness 先痛）。
+2. 可复用的 harness 机制判据必须注册并声明反向验证；协议、启动器和进程边界也有直接运行的 Node 测试，执行清单由 package scripts 确定；
+3. 适配器验收使用 HostAdapter，机制测试可直接构造 effects/引擎；公共 API 和打包接入由真实 runner 示例另外验证。
 
 ## 1. 组件架构
 
@@ -31,11 +46,11 @@ harness/
 
 ### 1.2 fake-server（假发布端）
 - 本地静态文件服务 + manifest 构造器（含 Range 续传——不认 Range 的桩会让"续传"悄悄退化成普通下载）。
-- **篡改 API**：`corruptByte(file, offset) / swapFiles / serveOlderVersion / dropFile` —— 完整性齿全部走"真篡改→真拒绝"，不 mock 校验函数。判据是 sha256：K 验完整性不验来源（design-v1 §L0.5），所以篡改的判据也只能是"服务的字节还对不对得上 manifest 的摘要"。
+- **篡改 API**：`corruptByte(file, offset) / swapFiles / serveOlderVersion / dropFile` —— 完整性齿全部走"真篡改→真拒绝"，不 mock 校验函数。判据是 sha256：K 验完整性不验来源（设计文档的执行与信任边界），所以篡改的判据也只能是"服务的字节还对不对得上 manifest 的摘要"。
 
 ### 1.3 scenario（场景运行器）
 - **一场景一沙箱**：独立 temp stateDir + 独立 fake-server 端口 → 全部并行安全、可重复。
-- **虚拟时钟注入**：core 的超时/重试全走注入 clock（框架级 clock seam —— 我们 web 侧 clock-ratchet 的同款纪律），场景可快进；无真实 sleep。
+- **虚拟时钟注入**：core 的超时/重试全走注入 clock（框架级 clock seam —— 我们 web 侧 clock-ratchet 的同款纪律），场景可快进；逻辑测试不用真实 sleep；真实进程/网络集成使用有上限的等待。
 - 场景 = 声明式脚本（步骤 + 期望 outcome + 期望 journal 尾部），跑完输出结构化 receipt（给 CI 和人两用）。
 
 ### 1.4 crash（崩溃注入编排器，承重件）
