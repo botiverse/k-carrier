@@ -97,8 +97,10 @@ In words:
    current service, and waits for confirmation that the old process is gone.
 6. It asks the controller to start the candidate from the experiment slot,
    then probes it. The probe must come from one live process and report the
-   expected version with a pid and a **startId**, so a stale process or a
-   cached answer cannot pass.
+   expected version with a pid and a **startId**. K probed once before
+   stopping the old service and journaled that startId; if the same one
+   comes back now, the old process was never replaced and the upgrade rolls
+   back.
 7. Only now does the worker write **promote intent** to the journal. That
    line is the point of no return: before it, the safe move is always to put
    the old version back; after it, the safe move is always to finish the

@@ -70,7 +70,9 @@ async function selfUpgrade() {
         if (r.status !== 0) {
           throw new Error("experiment artifact failed to start (status " + r.status + ")");
         }
-        return { version: r.stdout.trim(), pid: process.pid, startId };
+        // The evidence belongs to the process that answered: the headless
+        // probe run, a fresh incarnation each time.
+        return { version: r.stdout.trim(), pid: r.pid, startId: r.pid + "-" + process.hrtime.bigint().toString(36) };
       }
       return { version: VERSION, pid: process.pid, startId };
     },
@@ -121,7 +123,7 @@ async function confirmUpgrade(version) {
       if (fs.existsSync(experiment)) {
         const r = spawnSync(process.execPath, [experiment, "--probe"], { encoding: "utf8", timeout: 5000 });
         if (r.status !== 0) throw new Error("experiment artifact failed to start");
-        return { version: r.stdout.trim(), pid: process.pid, startId };
+        return { version: r.stdout.trim(), pid: r.pid, startId: r.pid + "-" + process.hrtime.bigint().toString(36) };
       }
       return { version: VERSION, pid: process.pid, startId };
     },

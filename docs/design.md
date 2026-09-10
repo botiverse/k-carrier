@@ -132,6 +132,12 @@ obligations:
 
 - The controller must work while the old application is down.
 - `start` returning does not establish readiness; the probe does.
+- K probes once before handover and records that incarnation's `startId`
+  with the handing-over intent. Readback evidence carrying the same
+  `startId` is refused and rolls back: the old service was not replaced.
+- `start` must not execute the artifact in place inside the slot on
+  Windows; promotion renames slot directories and a running executable locks
+  its directory. Copy or hard-link to a runtime path outside the slots.
 - A stateless service satisfies `quiesce` and `resume` by acknowledging. The
   obligations apply to workloads the product promises to preserve.
 - Adapters with no effects surviving their worker may omit `fence`. All

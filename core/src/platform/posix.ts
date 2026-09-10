@@ -4,7 +4,14 @@
  */
 import { execFileSync } from "node:child_process";
 import { promises as fs, readFileSync } from "node:fs";
+import path from "node:path";
 import type { PlatformOps } from "./ops.ts";
+
+/** fsync a directory so entries created/renamed inside it survive power loss. */
+async function syncDirectory(dir: string): Promise<void> {
+  const fh = await fs.open(dir, "r");
+  try { await fh.sync(); } finally { await fh.close(); }
+}
 
 async function atomicReplace(filePath: string, data: Uint8Array): Promise<void> {
   const tmpPath = `${filePath}.tmp`;
@@ -28,6 +35,7 @@ async function atomicReplace(filePath: string, data: Uint8Array): Promise<void> 
     }
     // Atomic on POSIX: a reader sees either the old file or the whole new one.
     await fs.rename(tmpPath, filePath);
+    await syncDirectory(path.dirname(filePath)); // the new name itself must be durable
   } catch (err) {
     await fs.unlink(tmpPath).catch(() => {});
     throw err;
@@ -96,7 +104,12 @@ export const posixOps: PlatformOps = {
   },
   async renamePath(from, to) {
     await fs.rename(from, to);
+    const target = path.dirname(to);
+    await syncDirectory(target);
+    const source = path.dirname(from);
+    if (source !== target) await syncDirectory(source);
   },
+  syncDirectory,
   async makeExecutable(filePath) {
     await fs.chmod(filePath, 0o755);
   },

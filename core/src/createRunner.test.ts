@@ -35,15 +35,17 @@ function recordingHost(): HostAdapter & { calls: string[]; version: string } {
   const h = {
     calls: [] as string[],
     version: "1.0.0",
+    incarnation: 1,
     async quiesce() { h.calls.push("quiesce"); },
     async stop(slot: Slot) { h.calls.push(`stop:${slot}`); },
     async start(slot: Slot) {
       h.calls.push(`start:${slot}`);
+      h.incarnation += 1; // every start is a new incarnation, per the contract
       if (slot === "experiment") h.version = "2.0.0";
     },
     async healthProbe(): Promise<ProcessEvidence> {
       h.calls.push("probe");
-      return { version: h.version, pid: 1, startId: "s1" };
+      return { version: h.version, pid: 1, startId: `s${h.incarnation}` };
     },
     async resume() { h.calls.push("resume"); },
   };

@@ -38,6 +38,9 @@ export function fileJournalStore(stateDir: string): JournalStore {
       } finally {
         await fh.close();
       }
+      // The first append creates the file; its directory entry is only
+      // durable once the parent is fsync'd. Cheap enough to do every time.
+      await platformOpsFor().syncDirectory(stateDir);
     },
     async readAll(): Promise<JournalEntry[]> {
       let text: string;

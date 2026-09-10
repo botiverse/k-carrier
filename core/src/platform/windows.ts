@@ -63,6 +63,11 @@ export const windowsOps: PlatformOps = {
     // Plain state moves DO work on Windows (unlike replacing a running .exe).
     await fs.rename(from, to);
   },
+  async syncDirectory() {
+    // FlushFileBuffers is not permitted on a directory handle; NTFS journals
+    // metadata itself. Nothing to do (a real no-op).
+    await Promise.resolve();
+  },
   async makeExecutable() {
     // No executable bit on Windows; nothing to do (a real no-op).
     await Promise.resolve();

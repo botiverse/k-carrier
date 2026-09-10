@@ -174,6 +174,11 @@ Each slot holds one `artifact.bin` and its `VERSION`. Package layouts and
 additional install hooks need a product contract. Application data belongs
 outside the slots. `status` reads `operation.json` without taking the lock.
 
+Journal entries are `{seq, timestampMs, intent, detail}`. The `handing-over`
+entry's `detail.priorStartId` records the incarnation probed before the
+upgrade touched anything; it is absent when nothing was live. Renames and
+journal appends fsync the containing directory on POSIX.
+
 ## Supervisor scratch layout
 
 ```text

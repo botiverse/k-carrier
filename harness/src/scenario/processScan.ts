@@ -43,7 +43,9 @@ export function findPidsByMarkerToken(name: string, value: string): number[] {
     }
     return pids;
   }
-  const out = execFileSync("ps", ["eaxo", "pid=,command="], { encoding: "utf8" });
+  // `e` appends every process's environment; on a busy machine that exceeds
+  // execFileSync's 1 MiB default and fails with ENOBUFS. Same bound as Windows.
+  const out = execFileSync("ps", ["eaxo", "pid=,command="], { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
   const pids: number[] = [];
   for (const line of out.split("\n")) {
     if (!line.includes(token)) continue;

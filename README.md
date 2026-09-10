@@ -51,7 +51,7 @@ Artifact hashes check integrity; your distribution channel establishes trust.
 
 | Area | State |
 |---|---|
-| Two-slot transaction, journal, lock, receipts | Done; generated crash matrix and seeded simulation; Lean model covers the happy path only |
+| Two-slot transaction, journal, lock, receipts | Done; generated crash matrix, seeded simulation, and a Lean model of all phases, rollback and crash/recovery interleavings (host honesty assumed) |
 | External runner protocol, supervisor, bounded recovery | Done; Linux/macOS process tests |
 | Command controller boundary | Done; demo controller only |
 | Verified download with resume and gzip | Done |

@@ -7,6 +7,8 @@
  *  - Crash anywhere -> recover() lands on stable-running or completes the
  *    transition, decided by journal replay. Never dual-run, never bricked.
  *  - Promote only after the caller-supplied predicate evaluation passed.
+ *  - Readback is bound to a NEW incarnation: the startId probed before
+ *    handover is journaled, and evidence carrying it again is refused.
  *  - Rollback is always available until promote; its reason is journaled.
  */
 import type { HostAdapter, ProcessEvidence } from "../lifecycle/hostAdapter.ts";
@@ -130,11 +132,23 @@ export class UpgradeEngine {
     const versions = await this.deps.effects.slots.slotVersions();
     if (versions.stable === target.version) return { result: "up-to-date" };
 
+    // Record the incarnation this upgrade replaces, before anything on disk
+    // changes. A probe that FAILS means nothing is live to compare against (a
+    // stopped service is still upgradable); a probe that WEDGES is not
+    // information and is let out, exactly as for the readback probe below.
+    let prior: ProcessEvidence | null = null;
+    try {
+      prior = await this.withBudget("healthProbe", () => this.deps.host.healthProbe());
+    } catch (err) {
+      if (err instanceof HostCallUncertain) throw err;
+      prior = null;
+    }
+
     await this.journal("staged", { version: target.version });
     await this.deps.effects.slots.stageExperiment(target);
 
     // The external runner survives normal service replacement.
-    await this.journal("handing-over", { version: target.version });
+    await this.journal("handing-over", { version: target.version, ...(prior ? { priorStartId: prior.startId } : {}) });
     await this.withBudget("quiesce", () => this.deps.host.quiesce());
     await this.withBudget("stop", () => this.deps.host.stop("stable"));
     await this.withBudget("start", () => this.deps.host.start("experiment"));
@@ -156,6 +170,14 @@ export class UpgradeEngine {
     }
 
     await this.journal("readback", { version: target.version });
+    // The same startId after stop/start means the old process answered: it
+    // was never stopped, or the probe served cached evidence. A version
+    // string alone cannot tell those apart; the incarnation identity can.
+    if (prior !== null && evidence.startId === prior.startId) {
+      return this.rollbackOutcome(
+        `live process is still the pre-upgrade incarnation (startId ${evidence.startId}); the old service was not replaced`,
+      );
+    }
     const refusal = await this.withBudget("readback", () => this.deps.evaluatePredicates(evidence, target.version));
     if (refusal !== null) {
       return this.rollbackOutcome(`predicates refused: ${refusal}`);

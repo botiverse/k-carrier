@@ -118,5 +118,6 @@ cooperative shutdown and a loopback health protocol; an unreachable endpoint is
 not generally proof that an arbitrary production process has died. A product
 controller must establish process ownership and termination through its service
 manager, authenticate control access, and implement workload preservation.
-The demo copies selected slot bytes to `active.mjs` so Node treats them as ESM;
-that runtime copy is not a third rollback slot. Localhost is not authentication.
+The demo copies selected slot bytes to `active.mjs` so Node treats them as ESM
+and so the running file is never inside a slot directory that promotion will
+rename; that runtime copy is not a third rollback slot. Localhost is not authentication.

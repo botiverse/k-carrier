@@ -10,7 +10,8 @@
  *    equivalent — including when resume() happens on the ROLLED-BACK slot.
  *  - healthProbe(): evidence must be bound to one live process (same-PID /
  *    startId), never assembled from files or caches. A probe that cannot
- *    prove which process answered is not a probe.
+ *    prove which process answered is not a probe. K probes once before
+ *    handover and refuses readback evidence that repeats that startId.
  *  - start(): may return before readiness. The external controller asks
  *    the service manager to start the selected artifact; healthProbe()
  *    then proves that the requested incarnation is actually running.

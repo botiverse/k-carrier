@@ -43,11 +43,12 @@ async function serve(): Promise<{ baseUrl: string; close: () => void }> {
   return { baseUrl: `http://127.0.0.1:${port}/app`, close: () => server.close() };
 }
 
+let probes = 0; // every probe answers as a fresh incarnation
 function host() {
   return {
     async quiesce() {}, async stop() {}, async start() {}, async resume() {},
     async healthProbe(): Promise<ProcessEvidence> {
-      return { version: "2.0.0", pid: process.pid, startId: "fresh" };
+      return { version: "2.0.0", pid: process.pid, startId: `fresh-${++probes}` };
     },
   };
 }

@@ -137,8 +137,16 @@ Fresh installation and historical-state repair remain product setup work.
 
 The controller starts the K-selected artifact via `slotArtifactPath` or the path
 provided by `createCommandHost`. Each slot contains one `artifact.bin`; package
-layouts and additional install hooks need a product contract. The example uses
-an `.mjs` runtime copy because Node needs that extension.
+layouts and additional install hooks need a product contract.
+
+Promotion renames the slot directories. On Windows a running executable
+locks its directory against rename, so a controller there must copy or
+hard-link the artifact to a runtime path outside the slots before starting
+it, and must not execute `artifact.bin` in place. On POSIX running from the
+slot works because open files survive a rename, but copying keeps the
+runtime path stable across promotion on every platform. The example copies
+the selected artifact to `active.mjs` for both reasons (Node also needs the
+extension).
 
 K restores executables, not data migrations. Keep repair/cleanup limited to owned
 installation state and provide backup/restore for destructive data changes.
