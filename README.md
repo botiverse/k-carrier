@@ -32,7 +32,7 @@ successor proves the handoff from live evidence rather than trusting a flag.
 ## Start here
 
 - **[`docs/integration.md`](docs/integration.md)** — from-zero guide: the problem in plain words, concept primer, tiered adoption with code.
-- [`docs/design-v1.md`](docs/design-v1.md) — full design: six layers, architecture, decision record.
+- [`docs/design.md`](docs/design.md) — full design: six layers, architecture, decision record.
 - [`docs/harness-design.md`](docs/harness-design.md) — the test framework, designed first: harness as executable spec (teeth registry, real-process crash injection, adversarial self-verification).
 - [`docs/test-plan.md`](docs/test-plan.md) — executable test plan (M0–M6, must-red per cell).
 - [`docs/prior-art.md`](docs/prior-art.md) — the source-level survey this design stands on (Tailscale / Datadog), and the license-defense record behind `NOTICE`.

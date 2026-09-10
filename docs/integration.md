@@ -325,7 +325,7 @@ parses a manifest itself. Multiple streams are usually one base URL each
 
 **K verifies integrity, not authenticity.** It checks `sha256` + `size` on the
 assembled bytes. It does **not** verify who produced them: there is no
-signature chain and no trust root (removed 2026-08-06 — `docs/design-v1.md`
+signature chain and no trust root (removed 2026-08-06 — `docs/design.md`
 §L0.5 has the decision).
 
 A digest is not a signature. `sha256` proves the bytes you received are the

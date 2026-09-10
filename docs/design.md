@@ -1,4 +1,4 @@
-# K (k-carrier) 升级框架 设计文档 v1.2（通用核 + 宿主壳）
+# K (k-carrier) 升级框架 设计文档（通用核 + 宿主壳）
 
 随代码更新；删除决定见文内标注。
 依据：设计方向（开源 forcing-function / 并集定位）+ 源码调研（`docs/prior-art.md`）+ OS-supervisor 退役设计 + 载体无关不变式。

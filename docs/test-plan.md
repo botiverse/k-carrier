@@ -2,7 +2,7 @@
 
 > 跑在 `harness-design.md` 设计的测试框架上；harness 先于功能层（executable-spec 顺序），本计划的每颗齿都进 harness 的 teeth 注册表。
 
-对应 design v1.2 §3 的教义，这里是**可执行计划**：按里程碑排、每格给"测什么 / 怎么算过 / 必须会红的例子(must-red)"。规矩承自 mutation-runner 契约：**每颗齿声明时同时声明它的 must-red；全绿或全红都不发结论；先跑已知红/已知绿自验，harness 自己不合格不准验别人。**
+对应 design.2 §3 的教义，这里是**可执行计划**：按里程碑排、每格给"测什么 / 怎么算过 / 必须会红的例子(must-red)"。规矩承自 mutation-runner 契约：**每颗齿声明时同时声明它的 must-red；全绿或全红都不发结论；先跑已知红/已知绿自验，harness 自己不合格不准验别人。**
 
 里程碑与 profile 绑定：**每个里程碑的出口 = 对应 example demo 变绿**（没绿 demo 就没那档的支持 claim）。
 
@@ -36,7 +36,7 @@
 L0.5 已于 2026-08-06 移除（决定：不支持签名）。K 只验完整性（sha256 +
 size），不验来源真实性；原两级签名链、`m2.*` 四颗齿与 harness 的测试密钥链一并
 删除。留一个没人接的签名接口比没有更糟——接入方会以为来路已经有人管了。理由，
-以及它与 OS 代码签名的区别，见 `docs/design-v1.md` §L0.5。
+以及它与 OS 代码签名的区别，见 `docs/design.md` §L0.5。
 
 **防回滚不在这层**：manifest 版本低于当前且非 pinned ⇒ 默认拒，这是 L0 的
 `source-fails-closed` 管的，与签名无关。

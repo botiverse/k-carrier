@@ -1,4 +1,4 @@
-# K 测试框架（harness）设计 v1
+# K 测试框架（harness）设计
 
 08-05：测试框架要**提前设计成完整的一块**，不是随层补测试。本文是 harness 的架构设计；`test-plan.md` 是跑在它上面的计划。
 
@@ -31,7 +31,7 @@ harness/
 
 ### 1.2 fake-server（假发布端）
 - 本地静态文件服务 + manifest 构造器（含 Range 续传——不认 Range 的桩会让"续传"悄悄退化成普通下载）。
-- **篡改 API**：`corruptByte(file, offset) / swapFiles / serveOlderVersion / dropFile` —— 完整性齿全部走"真篡改→真拒绝"，不 mock 校验函数。判据是 sha256：K 验完整性不验来源（design-v1 §L0.5），所以篡改的判据也只能是"服务的字节还对不对得上 manifest 的摘要"。
+- **篡改 API**：`corruptByte(file, offset) / swapFiles / serveOlderVersion / dropFile` —— 完整性齿全部走"真篡改→真拒绝"，不 mock 校验函数。判据是 sha256：K 验完整性不验来源（design §L0.5），所以篡改的判据也只能是"服务的字节还对不对得上 manifest 的摘要"。
 
 ### 1.3 scenario（场景运行器）
 - **一场景一沙箱**：独立 temp stateDir + 独立 fake-server 端口 → 全部并行安全、可重复。
