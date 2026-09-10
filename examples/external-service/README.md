@@ -67,7 +67,7 @@ probe/start/stop/quiesce/resume go to the application controller.
 For interrupted work, start a runner against the same state directory and submit
 `{"protocolVersion":1,"action":"recover"}`. Recovery completes persisted intent
 or restores stable; it does not initiate another upgrade. See the
-[protocol's exit-code table](../../docs/one-shot-runner.md#protocol-v1), including
+[protocol's exit-code table](../../docs/design.md#protocol-v1), including
 why a successful rollback is exit 1.
 
 Stop this demo before removing its temporary home:

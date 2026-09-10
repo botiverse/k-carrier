@@ -79,6 +79,6 @@ and receipt retention without transport ACK blocking the next operation.
 | Native per-platform delivery | Publisher responsibility | Bundled Node helper implemented; no claim of published native binaries |
 
 The design and executable acceptance cases are in
-[one-shot-runner.md](../one-shot-runner.md). The API surface intentionally remains
+[design.md](../design.md). The API surface intentionally remains
 small: a package dependency solver, fleet policy database, second job journal,
 and automatic data migration framework would add unrelated complexity.

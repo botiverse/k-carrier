@@ -38,7 +38,7 @@ Artifact hashes check integrity; your distribution channel establishes trust.
 
 - [Runnable example](examples/external-service/README.md)
 - [Integration and distribution guide](docs/integration.md)
-- [Design](docs/design.md) and [runner protocol](docs/one-shot-runner.md)
+- [Design and runner protocol](docs/design.md)
 - [Test plan](docs/test-plan.md) and [harness design](docs/harness-design.md)
 - [Prior art](docs/prior-art/design-influences.md) and [external installer research](docs/prior-art/external-runner-research.md)
 

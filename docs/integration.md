@@ -2,8 +2,8 @@
 
 Build a disposable external runner containing K and a trusted application adapter.
 The application exposes lifecycle and health controls; it does not execute K.
-The [design](design.md) defines this execution boundary and the
-[runner protocol](one-shot-runner.md) specifies requests and results.
+The [design](design.md) defines the execution boundary and
+[runner protocol](design.md#protocol-v1).
 
 ## Publish three deliverables
 
@@ -63,6 +63,35 @@ rules. Ordinary K `recover` only settles its recorded transaction; it does not
 delete user data or act as a general repair command. Installer independence does
 not make arbitrary older runners safe to run against newer persistent state.
 
+## Distribute a built installer
+
+The installer is a **release artifact**, not source that end users compile.
+Build K and the trusted product adapter together in CI, then publish the artifact
+with its installer version, supported targets, size and checksum. A cross-platform
+runner is also a built artifact; packaging and execution model are separate choices.
+
+| Delivery form | What the user downloads | What must already be available |
+|---|---|---|
+| Standalone executable per OS/architecture | An installer with its runtime included | Supported OS/architecture; no separate Node installation |
+| Bundled JavaScript runner (`.mjs`) | K and the product adapter in one file | Independent Node 24, plus any platform tools used by the adapter |
+
+A JavaScript bundle can be shared across platforms only if the adapter and its
+dependencies support them. One file does not make lifecycle operations portable.
+A standalone executable is normally built separately for each supported target;
+the bootstrap selects the matching artifact.
+
+The repository's `build-runner.mjs` currently produces the JavaScript form. It does
+not build, sign or publish standalone executables. A product publisher choosing
+standalone delivery must provide that build and validate it on each target. For
+installation on machines without Node, ship the runtime inside the installer or
+provision an independent runtime explicitly; do not rely on the application's
+runtime surviving its own replacement.
+
+The bootstrap downloads the **finished installer**, verifies it, then executes it
+directly or through the declared interpreter. The installer subsequently obtains
+the **product release**. These two artifacts retain separate versions and hashes.
+Native packaging does not change the runner protocol or the persistent state.
+
 ## Execution roles and persistent state
 
 The three deliverables above are a distribution model. At execution time, these
@@ -118,6 +147,8 @@ See the [walkthrough](../examples/external-service/README.md) for concrete setup
 upgrade, observation and cleanup commands.
 
 ## 3. Build the runner
+
+These are publisher/build-machine steps, not commands for end users.
 
 Use `createRunner(options)` inside the trusted adapter, as shown in
 [external-service/adapter.ts](../examples/external-service/adapter.ts). Configure
