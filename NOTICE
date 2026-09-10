@@ -21,6 +21,6 @@ implementation here is original.
   signature verification — it verifies artifact integrity via sha256 + size
   only. No distsign / signing code is present in this repository.
 
-See docs/prior-art.md for the full analysis, including what each project does
+See docs/prior-art.md and docs/external-runner-research.md for the full analysis, including what each project does
 and where k-carrier deliberately differs (fail-closed restart, post-upgrade
 convergence read-back, and rollback).
