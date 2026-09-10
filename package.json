@@ -2,7 +2,7 @@
   "name": "@botiverse/k-carrier",
   "version": "0.1.8",
   "packageManager": "pnpm@11.18.0",
-  "description": "A fail-closed upgrade carrier for long-running managed services: two-slot upgrade transactions (promote/rollback), host-driven quiesce/resume handoff, and post-upgrade convergence read-back.",
+  "description": "Reliable application upgrades run by an independent installer: two-slot transactions with promote/rollback, a durable journal, live readback, and bounded crash recovery for self-distributed services.",
   "repository": {
     "type": "git",
     "url": "https://github.com/botiverse/k-carrier"

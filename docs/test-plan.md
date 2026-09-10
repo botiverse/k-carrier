@@ -25,7 +25,7 @@ checks; protocol and real-runner Node tests also contribute coverage.
 
 | Area | Required behavior | Failure that must be detected |
 |---|---|---|
-| Runner acquisition | Verify helper size/hash before execution; preserve exit result and clean scratch code | Corrupt helper runs or helper failure becomes success |
+| Runner acquisition | Verify runner size/hash before execution; preserve exit result and clean scratch code | Corrupt runner executes or worker failure becomes success |
 | Request boundary | Validate wire version, fields, id, target and consent before loading the adapter | Invalid input reaches trusted product code |
 | Ownership and policy | New upgrades respect installation owner, approved target and compatibility | Another manager's install is changed or the selected version changes after consent |
 | Product acquisition | Verify exact target bytes; bound stalled transfers and validate resumed content | Corrupt, truncated or mismatched bytes reach staging |
@@ -37,9 +37,9 @@ checks; protocol and real-runner Node tests also contribute coverage.
 | Workloads and data | Test the product's promised quiesce/resume and migration behavior | Rollback restores bytes but loses promised workload state |
 | Observation | Preserve unreadable/absent/observed distinctions; report actual outcome | Missing data becomes success, or historical success is presented as current health |
 
-The real-runner suite builds a helper and controls a separate service with no K
-import. It covers successful upgrade, wrong-version rollback, concurrent-helper
-refusal, helper death between stop and start, offline recovery and receipt replay.
+The real-runner suite builds a runner and controls a separate service with no K
+import. It covers successful upgrade, wrong-version rollback, concurrent-worker
+refusal, worker death between stop and start, offline recovery and receipt replay.
 Generated crash cases and seeded simulation cover mechanism-level interleavings.
 Neither establishes exhaustive OS failure or physical power-cut coverage.
 

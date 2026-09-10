@@ -2,8 +2,10 @@
 
 Build an independent installer from K and a trusted product adapter. The
 application exposes lifecycle/health controls; it does not run K's transaction
-engine. Start with the [runnable example](../examples/external-service/README.md).
-The [design](design.md) is the reference for protocols, outcomes and recovery.
+engine. Read [how an upgrade works](guide.md) first if you have not, then
+start with the [runnable example](../examples/external-service/README.md).
+The [design](design.md) states the obligations; the [reference](reference.md)
+has protocols, exit codes and file layout.
 
 ## Publish three deliverables
 
@@ -40,13 +42,51 @@ End users download finished artifacts; these build choices belong to publishers.
 
 | Form | Delivered artifact | Runtime requirement |
 |---|---|---|
-| Standalone per OS/architecture | Installer with runtime included | Supported target and any external platform tools |
+| Single executable per OS/architecture | Node SEA with the runner embedded, built with `--cjs` | Supported target and any external platform tools; no Node on the machine |
 | Cross-platform JavaScript | K and adapter bundled into one `.mjs` | Independently available Node 24 and adapter dependencies |
 
 One JS file is portable only if its adapter and dependencies support the targets.
-The repository builds the JS form; standalone builds, signing and publication are
-publisher responsibilities. For machines without Node, include a runtime or
-provision it explicitly. It must survive stopping/replacing the application.
+`scripts/build-runner.mjs` produces both bundle forms; SEA injection, signing
+and publication are publisher responsibilities. Whichever form you ship must
+survive stopping and replacing the application.
+
+### Build a single executable
+
+Node's single-executable-application (SEA) tooling embeds the runner into a
+copy of the Node binary. The supervisor executes the result directly, with no
+`interpreter` option. This procedure was verified end to end: a SEA runner
+promoted the example service under `launchRunner`.
+
+```sh
+# 1. CommonJS entry; SEA cannot load an ESM main script.
+node scripts/build-runner.mjs --cjs examples/external-service/adapter.ts dist/runner.cjs
+
+# 2. Prepare the blob.
+printf '%s' '{"main":"dist/runner.cjs","output":"dist/sea-prep.blob","disableExperimentalSEAWarning":true}' > dist/sea-config.json
+node --experimental-sea-config dist/sea-config.json
+
+# 3. Inject into a Node binary for the target platform.
+cp "$(command -v node)" dist/runner
+# macOS only: codesign --remove-signature dist/runner
+npx postject dist/runner NODE_SEA_BLOB dist/sea-prep.blob \
+  --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 \
+  --macho-segment-name NODE_SEA   # macOS only
+# macOS only: codesign --sign - dist/runner   (use your release identity)
+
+# 4. Publish dist/runner with its sha256 and size; launch it with no interpreter.
+```
+
+Build one SEA per target OS and architecture with that platform's Node
+binary. The result is around 140 MB uncompressed; the optional gzip transport
+in release metadata exists for this.
+
+**The SEA pitfall.** Inside a SEA, `process.execPath` is the SEA itself. An
+adapter or controller that spawns `process.execPath some-script.mjs` re-runs
+the embedded runner instead of the script, and the upgrade fails at the first
+controller call. Make the controller a native executable or its own SEA, or
+pass an explicit interpreter path into the adapter at build time. The example
+adapter uses `process.execPath` and therefore only works under an external
+Node.
 
 The bootstrap selects a compatible installer, downloads and verifies it, passes
 the request, supervises settlement, then cleans temporary code. It must not contain
@@ -69,6 +109,10 @@ promised by quiesce must be restorable on both the candidate and rollback slots.
 later mutate the installation. `createCommandHost` drains recorded controller
 processes first. Adapters with no effects surviving their worker may omit fence;
 all other adapters must supply it and test it against their real service manager.
+A command controller always receives `fence`; if it queues nothing, it
+acknowledges. A stateless service implements `quiesce` and `resume` as
+acknowledgements too. The full obligations only apply to workloads your
+product promises to preserve across an upgrade.
 
 Choose one persistent `stateDir` per installation for slots, journal and receipts.
 Keep application data, installer scratch code and interpreter outside the slots.
@@ -116,15 +160,16 @@ launch facility and a way to retrieve the result after reconnection.
 
 ## 4. Observe and recover
 
-Inspect both the operation outcome and exit code. `status` reads a receipt, not
-current service health. `genesis` means no recorded operation, not uninstalled.
-A replay is historical; a successful recovery can still exit 1 if it restored
-stable and recorded a rolled-back upgrade. See [exit meanings](design.md#protocol-v1).
+Inspect both the operation outcome and exit code; the
+[walkthrough](guide.md#reading-the-result) explains the two results that
+surprise people, and the [reference](reference.md#protocol-v1) lists every
+code.
 
 Retry the same id/target to replay a terminal result. Use a new id for a new
 attempt; there is no by-id status or archive-list action. Terminal receipts are
 archived without an acknowledgement gate. Active work, corrupt state and a live
-lock owner still prevent conflicting transactions.
+lock owner still prevent conflicting transactions. See
+[receipts and retries](reference.md#receipts-and-retries).
 
 After installer failure, run a compatible verified installer with `recover` over
 the same state. Recovery needs no release lookup: before durable promote intent
@@ -134,7 +179,7 @@ to bypass unresolved work.
 
 Use `launchRunner` for a supervised install, or `superviseRunner` when the caller
 needs a structured result. Both enforce execution/recovery deadlines and recover
-only the original operation. Exit 3 leaves a verified helper and `recovery.json`;
+only the original operation. Exit 3 leaves a verified runner and `recovery.json`;
 call `resumeRunner(path)` to retry offline. Keep that directory until recovery
 settles. The [example installer](../examples/external-service/install.mjs) wires
 this flow. Directly invoking a worker does not supervise it.
@@ -145,7 +190,7 @@ worker still blocks takeover. Product OS startup hooks and service-unit isolatio
 must be validated separately; K does not install a permanent watchdog. If a
 request died before its operation was recorded, bound recovery refuses rather
 than guessing which earlier operation it owns. Inspect `status` and explicitly
-run operator `recover` on the retained helper when current-state repair is needed.
+run operator `recover` on the retained runner when current-state repair is needed.
 
 ## 5. Validate the product
 
@@ -156,6 +201,11 @@ isolation. Observe declared OS lifecycle surfaces before retiring their previous
 manager. A green framework test is not product acceptance.
 
 ## Using Hands as the release platform
+
+Hands is the release-management platform K's authors use to publish installers
+and application releases. Any platform that answers "which version, at which
+URL, with which SHA-256 and size" fits the same way; nothing here is specific
+to Hands.
 
 Hands supplies publication, channel/platform selection and artifact metadata.
 Your adapter maps its response to a K ReleaseSource with exact version, URL,

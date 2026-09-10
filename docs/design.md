@@ -1,30 +1,33 @@
 # K design
 
-K executes installation transactions in an independent, disposable runner built
-with a trusted product adapter. Scripts, CLI commands and remote controls launch
-that runner. The application provides lifecycle operations and health evidence.
+This document is the normative contract for K's execution model, transaction,
+supervision and controller boundary. It states obligations; it does not
+explain them. Read [how an upgrade works](guide.md) first for the narrative
+and vocabulary, and the [reference](reference.md) for wire formats, exit
+codes, budgets and file layout.
 
 ## Execution and trust
 
 ```mermaid
 flowchart LR
-  Entry[Script / CLI / remote control] --> Launcher[Verify and launch installer]
-  Launcher --> Runner[K + product adapter]
-  Runner --> State[Lock / journal / slots / receipts]
-  Runner --> Controller[Product lifecycle controller]
+  Entry[Bootstrap / CLI / remote control] --> Supervisor[Verify and launch runner]
+  Supervisor --> Worker[K + product adapter]
+  Worker --> State[Lock / journal / slots / receipts]
+  Worker --> Controller[Product lifecycle controller]
   Controller --> App[Application]
 ```
 
-The runner and its runtime live outside the application slots and service unit.
-Stopping the application must leave the runner alive. A child process can still
-belong to a systemd cgroup or Windows job; the publisher must arrange isolation.
-The temporary supervisor retains recovery code until settlement. Installation
-state persists. An OS hook or operator must restart installation after reboot.
-
-The adapter is fixed at build time. Requests select an action and target version,
-not code, commands or download URLs. The publisher authenticates distribution
-metadata and caller authority. K checks artifact SHA-256 and size; these checks
-do not establish publisher identity. See [packaging](integration.md#distribute-a-built-installer).
+- The runner and its runtime live outside the application slots and service
+  unit. Stopping the application must leave the worker alive. A child
+  process can still belong to a systemd cgroup or Windows job; the publisher
+  must arrange isolation.
+- The supervisor retains recovery code until settlement. Installation state
+  persists. An OS hook or operator must restart installation after reboot.
+- The adapter is fixed at build time. Requests select an action and a target
+  version, never code, commands or download URLs.
+- The publisher authenticates distribution metadata and caller authority. K
+  checks artifact SHA-256 and size; these checks do not establish publisher
+  identity. See [packaging](integration.md#distribute-a-built-installer).
 
 ## Components
 
@@ -32,7 +35,7 @@ Paths are relative to `core/src/`.
 
 | Component | Responsibility |
 |---|---|
-| `launcher/` | Acquire, verify, execute and clean installer code |
+| `launcher/` | Acquire, verify, execute and clean runner code; supervise recovery |
 | `protocol/` | Validate the bounded request/response contract |
 | `runner/` | Serve stdin/stdout, execute requests and map outcomes to exit codes |
 | `createRunner.ts` | Assemble source, host, policy and transaction state |
@@ -40,131 +43,83 @@ Paths are relative to `core/src/`.
 | `artifact/`, `txn/`, `converge/` | Verified acquisition, durable transactions and readiness predicates |
 
 `createRunner(options)` constructs the transaction interface. `serveRunner(factory)`
-serves it in the installer process. `launchRunner({release, request, scratchDir,
+serves it in the runner process. `launchRunner({release, request, scratchDir,
 interpreter?})` verifies and supervises a worker, writes one final response and
-returns its exit code. `superviseRunner` returns the same result as data, including
-any retained `recoveryFile`; `resumeRunner(recoveryFile)` verifies that retained
-artifact and performs operation-bound recovery without distribution access.
+returns its exit code. `superviseRunner` returns the same result as data,
+including any retained `recoveryFile`. `resumeRunner(recoveryFile)` verifies
+that retained runner and performs operation-bound recovery without
+distribution access.
 
 ## Transaction and recovery
 
-Each installation has one lock, stable/experiment executable slots and a journal.
-K stages verified candidate bytes, quiesces work, stops the old service, starts
-the candidate and evaluates live readiness. Passing candidates are promoted;
-failed candidates restore stable. Application data belongs outside the slots.
+Each installation has one lock, stable and experiment executable slots, and a
+journal. K stages verified candidate bytes, quiesces work, stops the old
+service, starts the candidate and evaluates live readiness. Passing candidates
+are promoted; failed candidates restore stable. Application data belongs
+outside the slots.
 
-The phases are idle, staged, handing-over, running-experiment, readback, promoted
-and rolled-back. Intent is journaled before effects. Recovery takes the same
-lock and uses existing slot bytes without release lookup:
+The phases are `idle`, `staged`, `handing-over`, `running-experiment`,
+`readback`, `promoted` and `rolled-back`. Intent is journaled before effects.
+Recovery takes the same lock and uses existing slot bytes without release
+lookup:
 
 - Before durable promote intent: restore stable.
 - After durable promote intent: replay commit idempotently.
 
-A running candidate alone does not authorize commit. Corrupt or unknown state
-and another live lock owner prevent conflicting operations. Filesystem durability
-and controller behavior determine the real platform guarantees.
+A running candidate alone does not authorize commit. Corrupt or unknown state,
+and another live lock owner, prevent conflicting operations. Filesystem
+durability and controller behavior determine the real platform guarantees.
 
 ## Transaction completion
 
-**Required for the initial release:** every started operation has an owner that
-waits for a durable terminal result or explicitly reports unresolved recovery.
-An installer invocation must first settle unfinished work before admitting a new
-upgrade. Recovering an interrupted operation does not retry its requested upgrade.
+**Required for the initial release.** Every started operation has an owner
+that waits for a durable terminal result or explicitly reports unresolved
+recovery. An installer invocation must first settle unfinished work before
+admitting a new upgrade. Recovering an interrupted operation does not retry
+its requested upgrade.
 
-The installer uses a temporary supervisor outside the application service unit.
-It retains the verified worker artifact while the operation is active, enforces
-execution and recovery budgets, and starts a recovery worker after an abnormal
-exit. It stops supervising after completion or an explicit unresolved result.
-Recovery attempts and total elapsed time are bounded; exhaustion preserves state
-and provides a recovery command rather than reporting success.
+The supervisor:
+
+- runs outside the application service unit;
+- retains the verified runner while the operation is active;
+- enforces execution and recovery budgets ([values](reference.md#supervisor-budgets));
+- starts a recovery worker after an abnormal exit;
+- stops supervising after completion or an explicit unresolved result.
+
+Recovery attempts and total elapsed time are bounded. Exhaustion preserves
+state and provides a recovery command rather than reporting success.
 
 Before takeover, the supervisor must establish that the prior worker and its
-outstanding controller effects cannot still mutate the installation. An expired
-deadline or absent worker alone is insufficient. Recovery must bind to the original
-operation id under K's transaction lock: if another operation has since run, inspect
-or replay the original result without modifying the newer operation. Reuse the
-existing journal and receipts; supervision does not create another transaction log.
+outstanding controller effects cannot still mutate the installation. An
+expired deadline or an absent worker alone is insufficient. An unconfirmed
+exit forbids takeover.
 
-Cleanup follows settlement: persist the outcome, release owned resources, then
-remove disposable code. Never delete slots, a live owner's lock, or recovery logs
-to make an interrupted operation appear complete. If recovery remains unresolved,
-preserve the evidence and a verified means to invoke it again. Installer startup
-handles leftover work; machine reboot still requires an OS hook or operator to
-start the installer.
+Recovery must bind to the original operation id under K's transaction lock.
+If another operation has since run, recovery inspects or replays the original
+result without modifying the newer operation. Recovery reuses the existing
+journal and receipts; supervision does not create another transaction log.
 
-The supervisor defaults to a 10-minute worker budget, two recovery attempts of
-2 minutes each, and a 14-minute total execution budget. These are configurable;
-artifact acquisition has separate transfer budgets. Termination allows one
-additional second to observe worker exit. An unconfirmed exit forbids takeover.
-Unbound operator `recover` runs once; automated retries always include the original
-id and target. No result or a malformed/mismatched receipt is unresolved, not success.
+Cleanup follows settlement: persist the outcome, release owned resources,
+then remove disposable code. Never delete slots, a live owner's lock, or
+recovery logs to make an interrupted operation appear complete. If recovery
+remains unresolved, preserve the evidence and a verified means to invoke it
+again. Installer startup handles leftover work; machine reboot still requires
+an OS hook or operator to start the installer.
 
-All engine host calls, including fencing, readback, resume and recovery, have a
-positive budget (default 120 seconds). Uncertain effects retain the worker's lock
-until it exits. Bundled workers exit after flushing their response, so pending
-application promises cannot retain ownership indefinitely. Custom in-process
-callers must also exit on `HostCallUncertain` rather than reuse that worker.
+Every engine host call has a positive budget. Uncertain effects retain the
+worker's lock until it exits. Bundled workers exit after flushing their
+response; custom in-process callers must also exit on `HostCallUncertain`
+rather than reuse that worker.
 
-Unique process-owned contender directories serialize creation and reclamation of
-`upgrade.lock`, including its partial-write window. Only dead owners' unique
-entries are reclaimed. PID reuse conservatively refuses acquisition; age never
-proves that a live owner is dead. This filesystem protocol requires local atomic
-creation and coherent directory reads; it is not a distributed/NFS lock.
-
-## Protocol v1
-
-One JSON request on stdin, one response on stdout, then exit. Decoded input is
-bounded to 16,384 JavaScript string code units. Unknown fields/actions/versions,
-invalid ids or targets, and nonboolean consent are rejected before the adapter
-factory runs. Logs use stderr. Request ids and target strings are nonempty,
-trimmed strings of at most 256 code units.
-
-```json
-{"protocolVersion":1,"action":"upgrade","id":"job-123","targetVersion":"2.0.0","consented":true}
-```
-
-The other requests are `{"protocolVersion":1,"action":"recover"}` and
-`{"protocolVersion":1,"action":"status"}`. Automated recovery adds
-`"expected":{"id":"job-123","targetVersion":"2.0.0"}`. The binding is checked
-under the lock before any controller action. Missing/mismatched history refuses
-recovery; a completed original operation replays even when newer work is pending.
-`consented` records approval already
-obtained by an authenticated caller. Ownership and compatibility checks still apply.
-
-| Action | Effect | Exit code |
-|---|---|---|
-| upgrade | Install the exact requested version; reject a mismatched source result | 0 promoted/up-to-date; 1 failure/rollback; 2 held; 3 unresolved |
-| recover | Settle persisted work under the same lock | 0 successful/no recorded outcome; 1 recorded failure/rollback; 2 held receipt; 3 unresolved |
-| status | Read the current receipt without lifecycle calls | 0 readable; 1 unreadable |
-
-Execution replies contain `protocolVersion`, `action`, `result`, `exitCode`,
-`operation` and `error`. Input rejection or adapter-construction failure may return
-only `protocolVersion`, `result`, `exitCode` and `error`. Termination can leave no
-complete response; inspect the persistent state and recover as needed.
-
-Successful upgrade completion must match the request id and target. Exceptions
-cannot manufacture a rollback receipt. Status exit 0 means readable, including
-`genesis` (no recorded operation); it does not prove current health. Recovery can
-return `result: "recovered"` with exit 1 after restoring stable and recording a
-rolled-back upgrade. Always inspect the operation outcome.
-
-## Receipts and retries
-
-`operation.json` holds the current operation. Before starting another, K archives
-a terminal receipt at `receipts/<sha256(operation-id)>.json` under the same lock.
-Archive files currently have no automatic garbage collection.
-
-An id binds to one target. Same-id terminal retries return the current or archived
-result without repeating lifecycle effects; another target is rejected. Recovery
-settles the interrupted operation, so retrying its id returns that outcome. A new
-attempt, including one after a policy hold, needs a new id. Replayed results are
-historical, not live health observations. Receipt retention is independent of
-transport delivery. Unreadable records refuse operations; missing history cannot
-be reconstructed. Status reads the current receipt, not an arbitrary archived id.
+The lock is a local filesystem protocol requiring atomic creation and
+coherent directory reads ([details](reference.md#lock-protocol)). It is not a
+distributed or NFS lock. Operation ids, receipt archival and replay rules are
+in the [reference](reference.md#receipts-and-retries).
 
 ## Host control contract
 
-`createRunner` requires a HostAdapter. Its operations are:
+`createRunner` requires a HostAdapter. Its operations and the controller's
+obligations:
 
 | Operation | Controller obligation |
 |---|---|
@@ -175,36 +130,38 @@ be reconstructed. Status reads the current receipt, not an arbitrary archived id
 | healthProbe | Return version, pid and startId from one ready live instance |
 | resume | Restore parked work on either candidate or rolled-back stable |
 
-The controller must work while the old application is down. Start returning does
-not establish readiness. If OS lifecycle surfaces are declared, K also requires
-them to reference the promoted artifact before retiring their previous manager;
-undeclared surfaces remain unobserved.
+- The controller must work while the old application is down.
+- `start` returning does not establish readiness; the probe does.
+- A stateless service satisfies `quiesce` and `resume` by acknowledging. The
+  obligations apply to workloads the product promises to preserve.
+- Adapters with no effects surviving their worker may omit `fence`. All
+  other adapters must supply it and test it against their real service
+  manager. `createCommandHost` always delivers `fence`; a command controller
+  that queues nothing acknowledges it.
+- If OS lifecycle surfaces are declared, K also requires them to reference
+  the promoted artifact before retiring their previous manager. Undeclared
+  surfaces are not observed.
 
-`createCommandHost` runs an external controller via argv, without a shell. Its
-stdin is `{protocolVersion:1, action}` plus K-selected `slot` and `artifactPath`
-for start/stop. Successful stdout is `{protocolVersion:1,ok:true}`; `probe` adds
-`evidence:{version,pid,startId}`. Output is bounded to 64 KiB; calls have a positive
-timeout, default 30 seconds. The command helper's own PID is invalid service
-evidence, and reported errors exclude arbitrary stderr.
-
-Before delivering a command, `createCommandHost` durably records the controller
-PID in a unique file under `controllers/`. Recovery waits for recorded controllers
-to exit, then calls the controller's `fence` action to settle any queued/detached
-service-manager effects. Failure or timeout prevents lifecycle replay. The PID is
-never used to kill an arbitrary old process; reuse or inaccessible identity can
-cause a conservative unresolved result. Controllers must do nothing without a
-complete request. Their `fence` acknowledgement is a product contract, not something
-K can infer from process exit. Fire-and-forget stop cannot establish termination.
+`createCommandHost` runs an external controller via argv without a shell,
+records the controller pid durably before each call, and drains recorded
+controllers before `fence` during recovery. Wire format, bounds and pid
+handling are in the [reference](reference.md#command-controller-protocol).
+The recorded pid is never used to kill an arbitrary process. `fence`
+acknowledgement is a product contract, not something K infers from process
+exit. Fire-and-forget stop cannot establish termination.
 
 ## Product responsibilities
 
-The adapter defines release lookup, installation ownership, consent, notification
-and compatibility policy. Package-manager-owned installations defer to their
-owner. K restores executables; products provide data-migration compatibility,
-backup/restore and any promised workload continuity. Service upgrades can interrupt
-availability. Remote authorization, distribution channels and cloud reconnection
-belong to the product integration.
+The adapter defines release lookup, installation ownership, consent,
+notification and compatibility policy. Package-manager-owned installations
+defer to their owner. K restores executables; products provide data-migration
+compatibility, backup and restore, and any promised workload continuity.
+Service upgrades can interrupt availability. Remote authorization,
+distribution channels and cloud reconnection belong to the product
+integration.
 
-Use the [integration guide](integration.md) and [service example](../examples/external-service/README.md)
-to build an installer. The [test plan](test-plan.md) describes framework and product
-acceptance; [prior art](prior-art/design-influences.md) records design influences.
+Use the [integration guide](integration.md) and
+[service example](../examples/external-service/README.md) to build an
+installer. The [test plan](test-plan.md) describes framework and product
+acceptance; [prior art](prior-art/design-influences.md) records design
+influences.

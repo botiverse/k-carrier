@@ -8,7 +8,7 @@ Run the commands from the repository root with Node 24 and pnpm installed.
 ## Prepare an installation
 
 The temporary home contains the example controller, application data and a K state
-subdirectory. The helper and interpreter are outside the K slots. The setup step
+subdirectory. The runner and interpreter are outside the K slots. The setup step
 creates trusted v1 bytes, seeds stable, starts the service and prepares a v2 release.
 
 ```sh
@@ -75,12 +75,12 @@ keep the reported recovery file and run:
 node examples/external-service/install.mjs recover /path/from/output/recovery.json
 ```
 
-This verifies the retained helper and works without release distribution access.
+This verifies the retained runner and works without release distribution access.
 It recovers the original operation only. For operator-directed recovery of current
 unfinished work, start a runner against the same state directory and submit
 `{"protocolVersion":1,"action":"recover"}`. Recovery completes persisted intent
 or restores stable; it does not initiate another upgrade. See the
-[protocol's exit-code table](../../docs/design.md#protocol-v1), including
+[protocol's exit-code table](../../docs/reference.md#protocol-v1), including
 why a successful rollback is exit 1.
 
 Stop this demo before removing its temporary home:
@@ -107,6 +107,11 @@ replay, concurrent lock rejection, killing the runner between stop and start,
 recovery with the release source removed, bounded failed recovery, a controller
 surviving its worker, and restarting after the whole invocation is lost. The test owns and cleans its own
 home; it does not reuse the walkthrough's directory.
+
+This adapter and controller spawn Node via `process.execPath`, which is only
+correct under an external Node interpreter. Inside a single executable (SEA),
+`process.execPath` is the SEA itself; see the
+[integration guide](../../docs/integration.md#build-a-single-executable) before packaging this pattern.
 
 This controller is a demo, not a production supervisor. Its service implements
 cooperative shutdown and a loopback health protocol; an unreachable endpoint is

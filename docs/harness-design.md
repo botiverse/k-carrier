@@ -9,8 +9,8 @@ service manager, installer packaging and data.
 | Layer | Implementation | Evidence |
 |---|---|---|
 | Mechanisms | Core unit tests, harness checks, injected effects | Locking, journal ordering, slots, policy, rollback and convergence |
-| Execution boundary | Protocol, launcher, runner and command-controller tests | Input rejection, verified helper execution, bounded calls, receipt and exit-code binding |
-| Real processes | `core/src/runner/process.test.ts` | A separate helper upgrades an application with no K dependency; another helper recovers after a crash |
+| Execution boundary | Protocol, launcher, runner and command-controller tests | Input rejection, verified runner execution, bounded calls, receipt and exit-code binding |
+| Real processes | `core/src/runner/process.test.ts` | A separate runner upgrades an application with no K dependency; another worker recovers after a crash |
 | Product acceptance | Product repository and target machines | Real service isolation, packaging, workload restoration and data compatibility |
 
 `pnpm test` runs the first three layers; `pnpm test:runner` selects the runner
@@ -59,7 +59,7 @@ not infer CLI names. See `node harness/src/cli.ts --help` for current options.
 The crash enumerator crosses the transaction transition table with three points:
 before journal write, after journal write and after the action. The matrix uses
 injected effects and simulated crashes. Directed real-process tests separately
-kill a helper between stop and start and verify recovery. The generated matrix
+kill a worker between stop and start and verify recovery. The generated matrix
 is not a claim that every point was tested with OS kills or physical power loss.
 
 Seeded simulation explores additional effect interleavings. Its receipts preserve

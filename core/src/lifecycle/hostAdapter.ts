@@ -29,7 +29,11 @@ export interface HostAdapter {
    */
   fence?(): Promise<void>;
 
-  /** Park all hosted workloads durably. Idempotent. */
+  /**
+   * Park all hosted workloads durably. Idempotent. A stateless service
+   * acknowledges and returns; the obligation covers only workloads the
+   * product promises to preserve across an upgrade.
+   */
   quiesce(): Promise<void>;
 
   /** Stop the resident service process tree for the given slot. */
@@ -44,7 +48,10 @@ export interface HostAdapter {
    */
   healthProbe(): Promise<ProcessEvidence>;
 
-  /** Resume workloads parked by quiesce(). Must also work after rollback. */
+  /**
+   * Resume workloads parked by quiesce(). Must also work after rollback,
+   * i.e. on the previous version. Trivial when quiesce() is trivial.
+   */
   resume(): Promise<void>;
 }
 
@@ -64,8 +71,8 @@ export interface HostAdapter {
  * reconstructed after a failure, it was never disturbed.
  *
  * ⚠️ `stable` here is a POSITION, not the name of a release channel. If your
- * product also has a channel called "stable" (ours does), they are unrelated:
- * a channel says which stream you follow, a slot says which copy on disk.
+ * product also has a channel called "stable", they are unrelated: a channel
+ * says which stream you follow, a slot says which copy on disk.
  */
 export type Slot = "stable" | "experiment";
 
