@@ -227,9 +227,16 @@ platform as far as K is concerned:
 - `fetchRelease(version)`: for exactly this version, what are the URL,
   SHA-256 and size (plus optional gzip metadata)?
 
-The bytes can live anywhere the URL reaches: the platform itself, a CDN, or a
-`data:` URL as in the example. K downloads, verifies and installs; it never
-decides policy.
+A release platform and a CDN are different roles, even when one host plays
+both. The release platform is the control plane: it decides which version a
+machine should run and vouches for that version's hash and size. The CDN is
+the data plane: it stores bytes and serves whatever URL it is asked for. K
+trusts only the metadata; the bytes are verified against it, so the CDN
+needs no trust and can be anything the URL reaches, including the platform
+itself, an object store, or the `data:` URL the example uses. Authenticate the
+release platform (its TLS identity, a signature on the manifest, or an
+authenticated API); K's hash check cannot substitute for that, because it
+only proves the bytes match what the metadata claimed.
 
 Common shapes, from simplest up:
 
