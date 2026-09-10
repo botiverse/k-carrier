@@ -1,4 +1,4 @@
-# K (k-carrier) 测试计划 v1
+# K (k-carrier) 测试计划
 
 > 跑在 `harness-design.md` 设计的测试框架上；harness 先于功能层（executable-spec 顺序），本计划的每颗齿都进 harness 的 teeth 注册表。
 

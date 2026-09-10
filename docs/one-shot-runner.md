@@ -3,7 +3,7 @@
 K executes only in a disposable external runner. Application integration and
 production publication are separate from framework implementation.
 
-[中文图解](external-runner.html) · [研究来源](external-runner-research.md)
+[研究来源](prior-art/external-runner-research.md)
 
 ## Reading this reference
 
@@ -54,7 +54,7 @@ to invoke recovery. A dead helper cannot schedule its own replacement.
 
 ## Source research and what we take from it
 
-The source-level comparison is in [external-runner-research.md](external-runner-research.md).
+The source-level comparison is in [external-runner-research.md](prior-art/external-runner-research.md).
 The conclusion is narrower than “copy rustup”: borrow the external executable
 boundary, retain K's shared transaction engine, and explicitly preserve the
 application's data compatibility and recovery obligations.

@@ -49,7 +49,7 @@ inventing a universal file replacement routine.
 ## Datadog: existing experiments are useful, not grounds for a new control plane
 
 The previous repository survey is preserved in
-[prior-art.md](prior-art.md). This change also
+[design influences](design-influences.md). This change also
 checked the published [installer test interface](https://pkg.go.dev/github.com/DataDog/datadog-agent/test/new-e2e/tests/installer/windows): it distinguishes
 direct installation from starting/promoting/stopping experiments through the
 installer service. The current raw repository path guessed during this research
@@ -79,6 +79,6 @@ and receipt retention without transport ACK blocking the next operation.
 | Native per-platform delivery | Publisher responsibility | Bundled Node helper implemented; no claim of published native binaries |
 
 The design and executable acceptance cases are in
-[one-shot-runner.md](one-shot-runner.md). The API surface intentionally remains
+[one-shot-runner.md](../one-shot-runner.md). The API surface intentionally remains
 small: a package dependency solver, fleet policy database, second job journal,
 and automatic data migration framework would add unrelated complexity.
