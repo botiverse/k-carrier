@@ -8,6 +8,8 @@ CLI self-update libraries stop at replacing bytes; fleet updaters assume a machi
 
 ## What K owns
 
+Upgrading software is non-trivial once it must remain trustworthy: the target may be running, the machine may lose power, the new process may fail to start, and the old process may already be too broken to repair itself. A reliable updater needs atomic replacement, crash recovery, rollback, and proof from the live process or named OS surface. K packages those hard parts as a reusable transaction so products provide only their release source and, when needed, service lifecycle adapter.
+
 ## External installer boundary
 
 K is an upgrade transaction, not a resident watchdog. A product may start a
