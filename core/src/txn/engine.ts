@@ -133,9 +133,9 @@ export class UpgradeEngine {
     if (versions.stable === target.version) return { result: "up-to-date" };
 
     // Record the incarnation this upgrade replaces, before anything on disk
-    // changes. A probe that FAILS means nothing is live to compare against (a
-    // stopped service is still upgradable); a probe that WEDGES is not
-    // information and is let out, exactly as for the readback probe below.
+    // changes. A failed probe provides no usable baseline; it does not prove
+    // the service is stopped. The controller must still confirm stop before
+    // start. An uncertain probe is let out, as for the readback probe below.
     let prior: ProcessEvidence | null = null;
     try {
       prior = await this.withBudget("healthProbe", () => this.deps.host.healthProbe());

@@ -177,7 +177,10 @@ outside the slots. `status` reads `operation.json` without taking the lock.
 Journal entries are `{seq, timestampMs, intent, detail}`. The `handing-over`
 entry's `detail.priorStartId` records the incarnation probed before the
 upgrade touched anything; it is absent when nothing was live. Renames and
-journal appends fsync the containing directory on POSIX.
+journal appends fsync the containing directory on POSIX. Slot publication
+also syncs the copied artifact, VERSION file and staging directory first.
+A failed directory sync stops the operation. Windows directory sync is a
+no-op and provides no equivalent power-loss durability guarantee.
 
 ## Supervisor scratch layout
 

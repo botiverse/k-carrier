@@ -64,8 +64,9 @@ export const windowsOps: PlatformOps = {
     await fs.rename(from, to);
   },
   async syncDirectory() {
-    // FlushFileBuffers is not permitted on a directory handle; NTFS journals
-    // metadata itself. Nothing to do (a real no-op).
+    // Node does not provide a portable directory flush here. This no-op
+    // supplies no power-loss durability guarantee; NTFS journaling alone
+    // is not an acknowledgement that these particular writes reached disk.
     await Promise.resolve();
   },
   async makeExecutable() {
