@@ -8,6 +8,20 @@ CLI self-update libraries stop at replacing bytes; fleet updaters assume a machi
 
 ## What K owns
 
+## External installer boundary
+
+K is an upgrade transaction, not a resident watchdog. A product may start a
+short-lived external runner from `install.sh`, an update command, or a service
+control path. That runner owns release resolution, download and hash checks,
+slot switching, lifecycle probing, rollback, and the durable receipt; it exits
+after the result is recorded. The product process only exposes the adapter
+needed to stop, start, and probe a service.
+
+A `swap` integration can use the same runner without a service adapter. A
+`service` integration adds stop/start/health convergence. A watchdog or worker
+exit-code protocol can trigger the runner, but it is an optional integration
+pattern and is not K's core state machine.
+
 K does not replace platform packaging or artifact delivery. It wraps an
 addressable release in a transaction with rollback and convergence readback.
 Because the process driving an upgrade may die on the success path, the
