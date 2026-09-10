@@ -31,8 +31,10 @@ test("supervisor: worker crash, bounded hangs, commit replay, offline retry and 
   process.env.K_EXAMPLE_HOME = dir;
   const stateDir = path.join(dir, "k");
   const host = createCommandHost({ stateDir, command: [process.execPath, path.join(dir, "controller.mjs"), dir] });
+  let externalStop: Promise<void> | undefined;
   t.after(async () => {
     await fs.writeFile(path.join(dir, "release-controller"), "cleanup").catch(() => {});
+    await externalStop?.catch(() => {});
     await host.stop("stable").catch(() => {});
     if (previous === undefined) delete process.env.K_EXAMPLE_HOME; else process.env.K_EXAMPLE_HOME = previous;
     await fs.rm(dir, { recursive: true, force: true });
@@ -112,7 +114,9 @@ test("supervisor: worker crash, bounded hangs, commit replay, offline retry and 
     ["2.0.0", "2.0.0", "2.0.0", "2.0.0", "3.0.0"], "recovery must never fetch/retry the requested upgrade");
 
   // The old worker dies while a real controller is still capable of stopping
-  // the service. A successor must not overlap that pending effect.
+  // the service. Launch that controller from the harness so its lifetime is
+  // independent of worker-owned OS jobs on every platform. A successor must
+  // not overlap its pending effect.
   let controller = await fs.readFile(path.join(dir, "controller.mjs"), "utf8");
   controller = controller.replace("case 'stop':", `case 'stop':
     if (request.slot === 'stable') {
@@ -121,16 +125,24 @@ test("supervisor: worker crash, bounded hangs, commit replay, offline retry and 
     }`);
   await fs.writeFile(path.join(dir, "controller.mjs"), controller);
   await publish("4.0.0");
+  await fs.writeFile(path.join(dir, "fault"), "external-controller");
   const pending = superviseRunner({ ...common, request: request("orphan", "4.0.0"), executionTimeoutMs: 6000,
-    recoveryTimeoutMs: 200, recoveryAttempts: 1 });
+    recoveryTimeoutMs: 1000, recoveryAttempts: 1 });
+  await until(() => fs.stat(path.join(dir, "needs-controller")).then(() => true, () => false));
+  await fs.rm(path.join(dir, "fence-attempt"), { force: true });
+  externalStop = host.stop("stable");
+  void externalStop.catch(() => {});
   await until(() => fs.stat(path.join(dir, "controller-live")).then(() => true, () => false));
   const orphanPid = Number(await fs.readFile(path.join(dir, "controller-live"), "utf8"));
   const orphan = await pending;
   assert.equal(orphan.exitCode, 3, JSON.stringify(orphan));
   assert.ok(orphan.recoveryFile);
   assert.ok(platformOpsFor().isProcessAlive(orphanPid));
+  await fs.stat(path.join(dir, "fence-attempt")); // recovery reached the production fence
   assert.equal((await host.healthProbe()).version, "3.0.0", "recovery cannot stop/start while old controller is live");
   await fs.writeFile(path.join(dir, "release-controller"), "go");
+  await externalStop;
+  await fs.unlink(path.join(dir, "fault"));
   await until(async () => !platformOpsFor().isProcessAlive(orphanPid));
   const drained = await resumeRunner(orphan.recoveryFile, { executionTimeoutMs: 6000 });
   assert.equal(drained.exitCode, 1, JSON.stringify(drained));
@@ -151,7 +163,8 @@ test("supervisor: worker crash, bounded hangs, commit replay, offline retry and 
   await until(() => fs.stat(path.join(dir, "stopped")).then(() => true, () => false));
   const workerPid = Number(await fs.readFile(path.join(dir, "stopped"), "utf8"));
   supervisor.kill("SIGKILL");
-  platformOpsFor().killProcess(workerPid);
+  try { platformOpsFor().killProcess(workerPid); }
+  catch (error) { if (platformOpsFor().isProcessAlive(workerPid)) throw error; }
   await ownerEnded;
   await until(async () => !platformOpsFor().isProcessAlive(workerPid));
   await fs.unlink(path.join(dir, "fault"));

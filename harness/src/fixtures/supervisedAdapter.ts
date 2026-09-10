@@ -12,6 +12,10 @@ export default function create() {
   const fault = () => fs.readFile(faultPath, "utf8").catch(() => "");
   const stop = options.host.stop;
   options.host.stop = async (slot) => {
+    if (slot === "stable" && await fault() === "external-controller") {
+      await fs.writeFile(path.join(dir, "needs-controller"), String(process.pid));
+      return hang();
+    }
     await stop(slot);
     const mode = await fault();
     if (slot === "stable" && ["stop-crash", "stop-hang", "recovery-hang"].includes(mode)) {
@@ -32,6 +36,7 @@ export default function create() {
   };
   const fence = options.host.fence!;
   options.host.fence = async () => {
+    await fs.writeFile(path.join(dir, "fence-attempt"), String(process.pid));
     if (await fault() === "recovery-hang" && await fs.stat(path.join(dir, "stopped")).then(() => true, () => false)) return hang();
     return fence();
   };
