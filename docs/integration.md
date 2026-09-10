@@ -1,259 +1,153 @@
-# Integrating K with an application
+# Integrating K
 
-Build a disposable external runner containing K and a trusted application adapter.
-The application exposes lifecycle and health controls; it does not execute K.
-The [design](design.md) defines the execution boundary and
-[runner protocol](design.md#protocol-v1).
+Build an independent installer from K and a trusted product adapter. The
+application exposes lifecycle/health controls; it does not run K's transaction
+engine. Start with the [runnable example](../examples/external-service/README.md).
+The [design](design.md) is the reference for protocols, outcomes and recovery.
 
 ## Publish three deliverables
 
-Using K means distributing **a bootstrap script, a K installer/upgrader, and your
-product's release**. K is the reusable framework; you build the installer with
-your trusted product adapter. Installing the framework dependency alone does not
-publish these deliverables for you.
+| Deliverable | Responsibility |
+|---|---|
+| Bootstrap script (`install.sh`) | Select, download, verify and launch the installer |
+| Installer/runner | K plus your product adapter, published with its own version |
+| Product release | The application executable selected by the adapter's ReleaseSource |
 
-| Deliverable | Built and published by | Downloaded or started by |
-|---|---|---|
-| `install.sh` | Your product's release process | The person installing the product |
-| Installer/runner containing K and your adapter | Your installer build, with its own version | `install.sh` or `self upgrade` |
-| Product executable | Your application's release build | The runner's ReleaseSource |
-
-For example, one CDN could serve this layout (illustrative paths, not K's required
-URL scheme):
+All three can share a CDN and build repository. For example:
 
 ```text
 https://downloads.example.com/my-service/
   install.sh
-  installers/1.4.1/linux-x64/runner.mjs
+  installers/1.4.1/linux-x64/installer
   installers/1.4.1/manifest.json
   releases/2.8.0/linux-x64/service
   releases/2.8.0/manifest.json
 ```
 
-Here the bootstrap script selects installer **1.4.1** for the host platform,
-obtains its authenticated download URL, SHA-256 and size, verifies it, then runs
-it with an upgrade request for product **2.8.0**. The runner's adapter resolves
-that product version to its own URL, SHA-256 and size and K verifies those bytes
-before staging them. `self upgrade` delegates to the same runner contract. It
-must arrange execution outside the service's process-management boundary too.
+These paths and manifest names are illustrative, not a K schema. The bootstrap
+verifies installer 1.4.1, then asks it to install product 2.8.0. The adapter
+resolves the product's URL, SHA-256 and size independently. Authenticate both
+sets of metadata; hashes alone do not establish publisher identity.
 
-The manifests stand for your distribution metadata; K does not require one
-shared manifest format for both downloads. The launcher accepts a runner Release,
-and the adapter implements the product ReleaseSource. Keep those identities
-separate even when both are served by Hands or the same CDN. A checksum detects
-changed bytes; the trusted delivery of the script and metadata establishes who
-published them.
-
-The `.mjs` runner in this example requires an independently available Node 24;
-it is not a standalone native executable. Supply that runtime through your
-installation prerequisites or package a native runner for each platform. The
-runtime must remain usable when the product is stopped or replaced.
-
-You can release installer **1.4.2** to repair installation logic while continuing
-to install product **2.8.0**. Publish the new runner and its metadata, then update
-the launcher's selected installer release. Both entrypoints need a defined way
-to obtain that selection; publishing new bytes alone does not update a launcher
-that pins the old release. Preserve published versioned artifacts rather than
-silently replacing the bytes behind a fixed hash.
-
-External execution also lets product-specific setup code repair or archive old
-installation state without requiring the old application to start. Keep that
-work in the installer adapter, with explicit ownership and data-preservation
-rules. Ordinary K `recover` only settles its recorded transaction; it does not
-delete user data or act as a general repair command. Installer independence does
-not make arbitrary older runners safe to run against newer persistent state.
+`install.sh` and `self upgrade` use the same runner protocol and installation
+state. To ship an installer-only fix, publish a new installer and update their
+selection mechanism. Keep versioned artifacts immutable. The controller is an
+execution role, not a mandatory fourth deliverable.
 
 ## Distribute a built installer
 
-The installer is a **release artifact**, not source that end users compile.
-Build K and the trusted product adapter together in CI, then publish the artifact
-with its installer version, supported targets, size and checksum. A cross-platform
-runner is also a built artifact; packaging and execution model are separate choices.
+End users download finished artifacts; these build choices belong to publishers.
 
-| Delivery form | What the user downloads | What must already be available |
+| Form | Delivered artifact | Runtime requirement |
 |---|---|---|
-| Standalone executable per OS/architecture | An installer with its runtime included | Supported OS/architecture; no separate Node installation |
-| Bundled JavaScript runner (`.mjs`) | K and the product adapter in one file | Independent Node 24, plus any platform tools used by the adapter |
+| Standalone per OS/architecture | Installer with runtime included | Supported target and any external platform tools |
+| Cross-platform JavaScript | K and adapter bundled into one `.mjs` | Independently available Node 24 and adapter dependencies |
 
-A JavaScript bundle can be shared across platforms only if the adapter and its
-dependencies support them. One file does not make lifecycle operations portable.
-A standalone executable is normally built separately for each supported target;
-the bootstrap selects the matching artifact.
+One JS file is portable only if its adapter and dependencies support the targets.
+The repository builds the JS form; standalone builds, signing and publication are
+publisher responsibilities. For machines without Node, include a runtime or
+provision it explicitly. It must survive stopping/replacing the application.
 
-The repository's `build-runner.mjs` currently produces the JavaScript form. It does
-not build, sign or publish standalone executables. A product publisher choosing
-standalone delivery must provide that build and validate it on each target. For
-installation on machines without Node, ship the runtime inside the installer or
-provision an independent runtime explicitly; do not rely on the application's
-runtime surviving its own replacement.
+The bootstrap selects a compatible installer, downloads and verifies it, passes
+the request, waits for its result, then cleans temporary code. It must not contain
+another swap/rollback algorithm. K provides `launchRunner` for Node callers;
+there is not yet a complete product-ready shell bootstrap template.
 
-The bootstrap downloads the **finished installer**, verifies it, then executes it
-directly or through the declared interpreter. The installer subsequently obtains
-the **product release**. These two artifacts retain separate versions and hashes.
-Native packaging does not change the runner protocol or the persistent state.
+## 1. Define the adapter and state
 
-## Execution roles and persistent state
+`createRunner` requires a HostAdapter. Supply release lookup, installation
+ownership, consent policy,
+notification handling and lifecycle operations through trusted build-time code.
+Use `checkCompatibility(from, to)` for transitions constrained by data/protocol
+compatibility. Another package manager's installation is `managed-elsewhere`.
 
-The three deliverables above are a distribution model. At execution time, these
-are the roles involved:
+The controller implements quiesce, stop, start, healthProbe and resume, either
+directly or through `createCommandHost`. Stop confirms termination; start is
+idempotent; probe returns version, pid and startId from one live instance. Work
+promised by quiesce must be restorable on both the candidate and rollback slots.
 
-| Piece | Built or supplied by | Responsibility |
-|---|---|---|
-| Launcher | Your installer, operator CLI or supervisor | Authenticate/download the runner and start it outside the application's service unit |
-| Runner | Your publisher bundles K with a trusted adapter | Select the application release through the adapter and own the transaction |
-| Application controller | Your integration | Stop/start/probe the application; it can be command-based or implement HostAdapter directly |
+Choose one persistent `stateDir` per installation for slots, journal and receipts.
+Keep application data, installer scratch code and interpreter outside the slots.
+Run the installer outside the application's service-management boundary: spawning
+a child does not escape a systemd cgroup or Windows job.
 
-The adapter is configuration and trusted code inside the runner, not an extra
-resident daemon. `createRunner(options)` returns the transaction interface;
-it does **not** spawn a process. `serveRunner(factory)` handles stdin/stdout;
-`launchRunner(...)` starts the built helper and returns its exit code, forwarding
-stdout/stderr. The helper release and application release are separate artifacts.
+## 2. Establish the initial installation
 
-Allocate a persistent `stateDir` for each installation. All upgrades and recovery
-attempts for that installation use the same directory; unrelated applications use
-different directories. Protect it as application management state. Keep application
-data and temporary runner code outside its slots.
+K's upgrade flow requires trusted, usable bytes in stable. For an existing
+installation, a trusted setup step calls
+`bootstrapStable({stateDir, version, artifactPath})` with its current executable.
+This seeds a fallback; it does not authenticate/download those bytes or start a
+service. It refuses conflicting state and does not overwrite initialized stable.
+Fresh installation and historical-state repair remain product setup work.
 
-## 1. Define the application contract
+The controller starts the K-selected artifact via `slotArtifactPath` or the path
+provided by `createCommandHost`. Each slot contains one `artifact.bin`; package
+layouts and additional install hooks need a product contract. The example uses
+an `.mjs` runtime copy because Node needs that extension.
 
-The current integration API requires a HostAdapter. There is no profile flag or
-host-free default: this guide integrates a resident service. Implement quiesce,
-stop, start, healthProbe and resume through an external controller. Stop must confirm termination; start must be idempotent;
-probe must return version, pid and startId from one live incarnation. Quiesce and
-resume must preserve the workloads you promise to preserve, including rollback.
+K restores executables, not data migrations. Keep repair/cleanup limited to owned
+installation state and provide backup/restore for destructive data changes.
 
-Declare installation ownership, consent policy, notification sink and a trusted
-ReleaseSource. A package-manager-owned installation must report managed-elsewhere.
-Implement `checkCompatibility(from, to)` when application data or protocol changes
-can make a transition unsafe. K restores binaries, not application data; provide
-backup/restore independently for destructive migrations.
+## 3. Build and launch
 
-## 2. Establish the rollback baseline
-
-Before the first upgrade, the stable slot must contain trusted, usable application
-bytes. For an existing installation, call `bootstrapStable({stateDir, version,
-artifactPath})` from a trusted setup step with its current executable. This seeds
-the fallback; it does not download a release, authenticate the input or start the
-service. It refuses conflicting transaction state and does not overwrite an
-initialized stable slot. Run this once, not as a way to reset failed upgrades.
-
-The controller must be able to start the slot selected by K, using
-`slotArtifactPath(stateDir, slot)` or the path supplied by `createCommandHost`.
-K manages an `artifact.bin` per slot; a product needing a package layout or install
-hooks must supply that contract explicitly. The service example copies its selected
-script to an `.mjs` runtime path because Node needs the module extension.
-
-See the [walkthrough](../examples/external-service/README.md) for concrete setup,
-upgrade, observation and cleanup commands.
-
-## 3. Build the runner
-
-These are publisher/build-machine steps, not commands for end users.
-
-Use `createRunner(options)` inside the trusted adapter, as shown in
-[external-service/adapter.ts](../examples/external-service/adapter.ts). Configure
-`stateDir`, `source`, `host` and policy there. The application controller can use
-`createCommandHost`; the protocol cannot select arbitrary adapter code or commands.
+On the build machine, bundle your trusted adapter with K:
 
 ```sh
 pnpm install --frozen-lockfile
 node scripts/build-runner.mjs examples/external-service/adapter.ts /tmp/k-runner.mjs
 ```
 
-The example requires an independently installed Node 24. Follow the
-[example setup](../examples/external-service/README.md) before running it.
-For product delivery, publish and authenticate the runner artifact and interpreter
-with your platform's distribution mechanism. SHA-256 and size are integrity checks,
-not publisher signatures.
-
-## 4. Launch from outside the application
-
-Keep runner code and scratch space outside both application slots. Launch it from
-an operator shell or external supervisor that survives stopping the application.
-Spawning a child inside the application's service unit does not establish isolation.
-An installer may use `launchRunner` to download, verify, execute and clean the
-helper; it must not implement its own swap or rollback logic.
+Follow the [example setup](../examples/external-service/README.md) before invoking
+that example runner. After authenticating the caller and obtaining approval for
+the target, submit a request from an operator shell or independent supervisor:
 
 ```sh
 printf '%s' '{"protocolVersion":1,"action":"upgrade","id":"install-2","targetVersion":"2.0.0","consented":true}' | node /tmp/k-runner.mjs
 ```
 
-Only pass `consented: true` after the launcher's authenticated caller has approved
-the operation. Logs go to stderr; stdout is reserved for the response. A Web UI
-needs an external launch facility and queries the durable result after reconnect.
+`consented` records approval; it is not authorization supplied by an untrusted
+network client. Requests cannot select adapter modules, commands or release URLs.
+Logs go to stderr and the response to stdout. Web entrypoints need an external
+launch facility and a way to retrieve the result after reconnection.
 
-## 5. Observe, retry and recover
+## 4. Observe and recover
 
-Read the response's operation and exit code, not only its `result` string.
-A successful recovery can return exit 1 because it restored the old version and
-recorded `rolled-back`; that means the upgrade did not succeed, not necessarily
-that recovery failed. Exit 2 denotes a policy hold and 3 unresolved work.
-Inspect `operation.operation.outcome` (when `operation.kind` is `observed`), its
-`reason`, and the response `error` to distinguish them.
+Inspect both the operation outcome and exit code. `status` reads a receipt, not
+current service health. `genesis` means no recorded operation, not uninstalled.
+A replay is historical; a successful recovery can still exit 1 if it restored
+stable and recorded a rolled-back upgrade. See [exit meanings](design.md#protocol-v1).
 
-`status` reports the current receipt only, with no lifecycle calls; it does not
-prove current live health. `genesis` means no receipt has been recorded, not that
-the service is uninstalled. There is no archive-list or by-id status action; a
-same-id upgrade retry replays its current or archived result without re-executing
-the transaction. Reusing an id with a different target is
-rejected. Use a new id for a new attempt, after resolving any active transaction.
+Retry the same id/target to replay a terminal result. Use a new id for a new
+attempt; there is no by-id status or archive-list action. Terminal receipts are
+archived without an acknowledgement gate. Active work, corrupt state and a live
+lock owner still prevent conflicting transactions.
 
-Terminal receipts archive automatically before replacement. There is no delivery
-confirmation action or gate. Active operations, unreadable state and live lock
-owners still prevent starting a conflicting transaction.
+After installer failure, run a compatible verified installer with `recover` over
+the same state. Recovery needs no release lookup: before durable promote intent
+it restores stable; after it, it replays commit. An external supervisor or
+operator must trigger this after power loss. Never clear a lock or receipt merely
+to bypass unresolved work.
 
-After runner failure, launch a verified runner and submit `recover`. It settles
-persisted work without release lookup: before durable promote intent, restore
-stable; after that intent, replay the commit. The launcher or external supervisor
-owns restarting recovery after power loss. Never infer completion from process
-spawn alone or bypass the lock to clear an unresolved result.
+## 5. Validate the product
 
-## 6. Verify application behavior
-
-Run `pnpm check` and the external process tests, then test your actual controller
-on each supported platform. Verify stop/start, one-incarnation readiness, broken
-candidate rollback, runner death between stop and start, and recovery with the
-release source unavailable. Check workload restoration and application data
-compatibility independently. If you declare OS lifecycle surfaces, read them back
-before retiring their previous manager; undeclared observations are not passes.
-
-The harness fixtures exercise internal engine mechanisms. They are not alternate
-application integration paths.
+Use the [test plan](test-plan.md), then test your real installer and controller on
+each target platform. Cover baseline setup, running-service upgrade, bad-candidate
+rollback, installer death, offline recovery, workload/data retention and service
+isolation. Observe declared OS lifecycle surfaces before retiring their previous
+manager. A green framework test is not product acceptance.
 
 ## Using Hands as the release platform
 
-Hands owns application publication and distribution policy; K owns a transaction
-on one installation. The product adapter connects them through ReleaseSource:
+Hands supplies publication, channel/platform selection and artifact metadata.
+Your adapter maps its response to a K ReleaseSource with exact version, URL,
+SHA-256 and size; K performs the local transaction. A launcher may separately
+obtain the installer from Hands. Keep installer and product identities distinct.
 
-```text
-Publisher → Hands release/channel/platform selection → product ReleaseSource
-                                                      ↓
-Launcher → K runner → verified application bytes → stage / probe / commit or rollback
-```
+K has no built-in Hands connector or result uploader. Product authentication,
+channel/cohort policy and remote reporting belong to the integration. Forward the
+actual operation id/outcome; publication or process launch is not installation
+success, and local promotion does not prove cloud reconnection.
 
-The product adapter maps a Hands-selected artifact to `{version, url, sha256,
-size}`. It supplies app identity, platform and channel/cohort policy to the release
-platform, and must refuse missing or mismatched targets. An `upgrade` request
-names an exact application version; it must not silently become a moving latest
-release. K itself has no Hands account, app slug, channel or rollout percentage.
-Access control and any authenticated manifest/download resolution belong to the
-adapter and launcher's distribution boundary.
-
-A launcher may also obtain the runner artifact from Hands. That is a separate
-artifact identity from the requested application version: verify the helper before
-executing it, then let its adapter resolve the application release. Publishing a
-release is not evidence that a machine installed it. If installation results are
-reported to a server, forward K's operation id and outcome; do not invent success
-from a download or process-start event. The current runner provides local receipts,
-not an automatic Hands status uploader.
-
-Withdrawing a Hands release changes distribution policy; rolling back in K restores
-this installation's previous stable bytes. A fleet rollback would require an
-explicit command path and local execution on each device, not merely a channel
-change. K's recovery can restore existing slot bytes while the release source is
-unavailable; this does not guarantee an online source can authorize or download
-an arbitrary historical version.
-
-This describes the integration boundary, not a bundled Hands connector or evidence
-of a deployed product integration. The runnable example uses a local release
-manifest so its tests do not depend on a live Hands service.
+Withdrawing a release affects future distribution. It does not roll back already
+installed machines. K can recover existing local slots offline; downloading an
+older release still depends on the source authorizing and serving it.

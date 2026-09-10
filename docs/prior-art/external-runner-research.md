@@ -1,84 +1,49 @@
-# External updater research — 2026-09-06
+# External installer research
 
-Question: can installation, self-update and remote upgrade share one external
-operations executor, without installing another permanently self-updating
-program? Sources below were read for this change; conclusions about K are design
-inferences, not guarantees supplied by those projects.
+The 2026-09-06 survey asked whether install, self-update and remote upgrade could
+share an external executor without introducing another permanent service.
+These are source-reading observations and K design inferences, not results from
+running those products. Moving upstream links are not a frozen comparison.
 
-## rustup: borrow the execution boundary, not an imagined lack of state
+## Rustup: a thin bootstrap and replaceable installer
 
 [rustup-init.sh](https://github.com/rust-lang/rustup/blob/main/rustup-init.sh)
-detects the platform, chooses a download URL, executes the downloaded installer,
-and removes temporary files. An explicit RUSTUP_VERSION selects an archived
-installer. The shell does not contain the Rust installation implementation.
+selects a platform download and runs the installer. The shell does not implement
+Rust installation. [Self-update](https://github.com/rust-lang/rustup/blob/main/src/cli/self_update.rs)
+also obtains an installer executable; the helper has a release version and may
+remain until a later invocation cleans it up.
 
-[self_update.rs](https://github.com/rust-lang/rustup/blob/main/src/cli/self_update.rs)
-`prepare_update` resolves a version, downloads its rustup-init executable and
-makes it executable; `update` invokes the replacement path. The helper lives in
-CARGO_HOME/bin in this path, and cleanup may happen on a subsequent invocation.
-Thus “one-shot” does **not** mean the helper has no release version or that
-cleanup always happens immediately.
+[Unix replacement](https://github.com/rust-lang/rustup/blob/main/src/cli/self_update/unix.rs)
+and [Windows replacement](https://github.com/rust-lang/rustup/blob/main/src/cli/self_update/windows.rs)
+handle different execution/deletion constraints. A different PID alone does not
+prove that an updater can survive stopping a service or replace a running Windows
+executable safely.
 
-[Unix self-update](https://github.com/rust-lang/rustup/blob/main/src/cli/self_update/unix.rs)
-`run_update` waits for `--self-replace` and rejects a failing status;
-`self_replace` calls `install_bins`. The real installer can be the new program's
-binary running in an installation mode; a separately maintained K daemon is
-not implied.
+**K decision:** share an independently runnable installer across entrypoints.
+Keep its persistent state, runtime, trust and recovery ownership explicit.
 
-[Windows implementation](https://github.com/rust-lang/rustup/blob/main/src/cli/self_update/windows.rs)
-and the cross-platform self-update comments account for executable replacement
-and deletion constraints. We cannot generalize Unix wait/cleanup into a tested
-Windows service handoff merely by using a different PID.
+## Tailscale: installation and service readiness are separate
 
-K inference: share a fresh helper across entry points. Persist operations outside
-it. Keep distribution trust, schema compatibility and recovery ownership explicit.
-
-## Tailscale: installation ownership and lifecycle are separate obligations
-
+The surveyed Linux binary path in
 [clientupdate.go](https://github.com/tailscale/tailscale/blob/main/clientupdate/clientupdate.go)
-contains platform/package-specific update paths. Its Linux binary replacement
-path separately attempts systemd/init.d restart and reports when bytes updated
-but restart failed. That is useful evidence that installation and running-state
-success are different facts; it does not establish a K-style transaction or
-prove that no other Tailscale path has rollback.
+attempts a service restart separately and reports when bytes were updated but
+restart failed. Platform/package-specific paths respect the installation owner.
+This observation does not establish whether other paths have rollback.
 
-K inference: the framework should not swallow restart failures into an exit-zero
-upgrade. Delegate package-manager-owned installations to their owner rather than
-inventing a universal file replacement routine.
+**K decision:** successful installation is insufficient for service promotion.
+Probe the live process and defer installations owned by another manager.
 
-## Datadog: existing experiments are useful, not grounds for a new control plane
+## Datadog: reuse slots, not a second control plane
 
-The previous repository survey is preserved in
-[design influences](design-influences.md). This change also
-checked the published [installer test interface](https://pkg.go.dev/github.com/DataDog/datadog-agent/test/new-e2e/tests/installer/windows): it distinguishes
-direct installation from starting/promoting/stopping experiments through the
-installer service. The current raw repository path guessed during this research
-was unavailable; we do not claim a fresh audit of its implementation internals.
+The [earlier survey](design-influences.md) informed K's stable/experiment slots.
+The published [Windows installer test interface](https://pkg.go.dev/github.com/DataDog/datadog-agent/test/new-e2e/tests/installer/windows)
+distinguishes direct install from starting, promoting and stopping experiments.
+The follow-up did not verify all current installer internals.
 
-K inference: keep the already implemented stable/experiment, journal and host
-adapter machinery. A permanent installer service is one deployment option, not
-a requirement for this library's disposable runner.
+**K decision:** retain the existing transaction, lock, journal and host adapter.
+A disposable runner can use them without a permanent installer service or a
+parallel remote-job database. Recovery and archived receipts remain local.
 
-## What actually changes in K
-
-At base `fe0ddce65af780be3342ab1e2186f1ea11415ca0`, K already has public
-`recover()`, single-operation locking, two slots, a HostAdapter and durable
-operation receipt. Therefore wrapping `upgradeTo()` is not the missing framework.
-The gaps addressed here are an independently executable distribution, a strict
-request boundary, a command-controller integration, truthful process completion,
-and receipt retention without transport ACK blocking the next operation.
-
-| Existing property | Kept | New consequence |
-|---|---|---|
-| Shared engine and journal | Yes | No second installer state machine |
-| Target version chosen by ReleaseSource | Yes | Requested version checked against returned release |
-| HostAdapter methods | Yes | External command implementation; app has zero K code in demo |
-| Same K lock | Yes | Concurrent runners cannot transact simultaneously |
-| Terminal receipts | Archive and replay | Transport delivery never blocks the next operation |
-| Recovery after interrupted service handoff | Yes | Fresh downloadable runner can own it while application is down |
-| Native per-platform delivery | Publisher responsibility | Bundled Node helper implemented; no claim of published native binaries |
-
-The design and executable acceptance cases are in
-[design.md](../design.md). The API surface intentionally remains
-small: a package dependency solver, fleet policy database, second job journal,
-and automatic data migration framework would add unrelated complexity.
+The resulting [design](../design.md) specifies a built installer, a bounded
+request protocol and an external controller. Product data compatibility,
+platform packaging and remote authorization remain product responsibilities.
