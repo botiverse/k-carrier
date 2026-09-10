@@ -106,7 +106,7 @@ controller on its target machines.
 `lifecycle/`, `artifact/`, `txn/` and `converge/` implement application control,
 verified acquisition, durable transactions and readiness checks respectively.
 
-See the [design](docs/design-v1.md), [test plan](docs/test-plan.md),
+See the [design](docs/design.md), [test plan](docs/test-plan.md),
 [harness guide](docs/harness-design.md) and [source research](docs/external-runner-research.md).
 
 Status: incubating. TypeScript. License: Apache-2.0.

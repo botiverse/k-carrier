@@ -2,7 +2,7 @@
 
 Build a disposable external runner containing K and a trusted application adapter.
 The application exposes lifecycle and health controls; it does not execute K.
-The [design](design-v1.md) defines this execution boundary and the
+The [design](design.md) defines this execution boundary and the
 [runner protocol](one-shot-runner.md) specifies requests and results.
 
 ## Publish three deliverables
