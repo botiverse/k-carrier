@@ -128,6 +128,12 @@ it restores stable; after it, it replays commit. An external supervisor or
 operator must trigger this after power loss. Never clear a lock or receipt merely
 to bypass unresolved work.
 
+Automatic transaction completion is an initial-release requirement described in
+[the design](design.md#transaction-completion). Current `launchRunner` only runs
+one worker; its return does not provide the proposed automatic recovery loop.
+Product adoption must close the [completion gate](test-plan.md#transaction-completion-release-gate)
+before claiming unattended recovery.
+
 ## 5. Validate the product
 
 Use the [test plan](test-plan.md), then test your real installer and controller on

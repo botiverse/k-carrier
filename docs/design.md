@@ -63,6 +63,42 @@ A running candidate alone does not authorize commit. Corrupt or unknown state
 and another live lock owner prevent conflicting operations. Filesystem durability
 and controller behavior determine the real platform guarantees.
 
+## Transaction completion
+
+**Required for the initial release:** every started operation has an owner that
+waits for a durable terminal result or explicitly reports unresolved recovery.
+An installer invocation must first settle unfinished work before admitting a new
+upgrade. Recovering an interrupted operation does not retry its requested upgrade.
+
+The installer uses a temporary supervisor outside the application service unit.
+It retains the verified worker artifact while the operation is active, enforces
+execution and recovery budgets, and starts a recovery worker after an abnormal
+exit. It stops supervising after completion or an explicit unresolved result.
+Recovery attempts and total elapsed time are bounded; exhaustion preserves state
+and provides a recovery command rather than reporting success.
+
+Before takeover, the supervisor must establish that the prior worker and its
+outstanding controller effects cannot still mutate the installation. An expired
+deadline or absent worker alone is insufficient. Recovery must bind to the original
+operation id under K's transaction lock: if another operation has since run, inspect
+or replay the original result without modifying the newer operation. Reuse the
+existing journal and receipts; supervision does not create another transaction log.
+
+Cleanup follows settlement: persist the outcome, release owned resources, then
+remove disposable code. Never delete slots, a live owner's lock, or recovery logs
+to make an interrupted operation appear complete. If recovery remains unresolved,
+preserve the evidence and a verified means to invoke it again. Installer startup
+handles leftover work; machine reboot still requires an OS hook or operator to
+start the installer.
+
+**Implementation status:** the engine and real-process tests support explicit
+recovery; new upgrade execution already recovers under the lock before proceeding.
+The current `launchRunner` executes one worker and cleans scratch code in `finally`.
+It does not yet provide automatic recovery supervision, worker execution deadlines
+or operation-bound recovery requests. Engine call budgets also do not cover every
+resume/rollback/recovery call. The release acceptance cases in the
+[test plan](test-plan.md#transaction-completion-release-gate) must close these gaps.
+
 ## Protocol v1
 
 One JSON request on stdin, one response on stdout, then exit. Decoded input is

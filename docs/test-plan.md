@@ -43,6 +43,29 @@ refusal, helper death between stop and start, offline recovery and receipt repla
 Generated crash cases and seeded simulation cover mechanism-level interleavings.
 Neither establishes exhaustive OS failure or physical power-cut coverage.
 
+## Transaction completion release gate
+
+These are required acceptance cases for the completion contract, **not a claim
+that the current suite implements them all**. Existing explicit-recovery tests
+are a starting point; automated supervision remains incomplete.
+
+| Scenario | Required result |
+|---|---|
+| Worker exits without a durable outcome | Supervisor invokes recovery and returns the settled result, not launch success |
+| Upgrade or recovery call hangs | Bounded execution; fence outstanding effects before any replacement worker |
+| Worker dies but a controller action survives | No takeover until the remaining writer is stopped or safely fenced |
+| Another installer starts during recovery | One state writer; original operation stays bound across retries |
+| A newer operation completes before the old supervisor resumes | Old supervisor reads/replays its own result and never recovers or mutates the newer operation |
+| Recovery repeatedly fails | Finite attempts and elapsed time; explicit unresolved result, retained state and executable recovery path |
+| Installer starts with unfinished work | Settle it before accepting new work; do not silently retry the failed target |
+| Crash during terminal reporting or cleanup | Recorded result is replayable; cleanup cannot erase required recovery state |
+| Whole machine or supervisor stops | Next installer invocation restores consistency; product OS startup trigger tested separately |
+
+Use real worker/controller processes for timeout and takeover cases, including
+late effects and competing invocations. Keep generated journal-fault tests for
+transaction ordering. Run both successful settlement and deliberately failed
+recovery so an implementation that always returns success cannot pass.
+
 ## Maintaining test quality
 
 - Pair success cases with failures that exercise the intended boundary.
