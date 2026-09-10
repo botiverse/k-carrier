@@ -43,8 +43,9 @@ that is upgrading it.
 
 The slots are **stable** and **experiment**; these are positions
 on disk, not release channels, so a product channel also called "stable" is
-unrelated. *Hands*, mentioned in the integration guide, is the release
-platform K's authors publish with; K does not depend on it.
+unrelated. [Hands](https://hands.build), mentioned in the integration guide,
+is K's sibling project for the publishing side (channels, staged rollouts,
+update metadata); K works with it or with any manifest source.
 
 ## One upgrade, start to finish
 

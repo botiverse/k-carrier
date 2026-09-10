@@ -215,21 +215,41 @@ rollback, installer death, offline recovery, workload/data retention and service
 isolation. Observe declared OS lifecycle surfaces before retiring their previous
 manager. A green framework test is not product acceptance.
 
-## Using Hands as the release platform
+## Release platforms
 
-Hands is the release-management platform K's authors use to publish installers
-and application releases. Any platform that answers "which version, at which
-URL, with which SHA-256 and size" fits the same way; nothing here is specific
-to Hands.
+K has no opinion about where releases come from. The adapter's ReleaseSource
+answers two questions, and anything that can answer them is a release
+platform as far as K is concerned:
 
-Hands supplies publication, channel/platform selection and artifact metadata.
-Your adapter maps its response to a K ReleaseSource with exact version, URL,
-SHA-256 and size; K performs the local transaction. A launcher may separately
-obtain the installer from Hands. Keep installer and product identities distinct.
+- `checkForUpdate()`: which version should this machine move to, if any?
+  Channels, cohorts, staged rollouts, pinning and version ordering all live
+  behind this call.
+- `fetchRelease(version)`: for exactly this version, what are the URL,
+  SHA-256 and size (plus optional gzip metadata)?
 
-K has no built-in Hands connector or result uploader. Product authentication,
-channel/cohort policy and remote reporting belong to the integration. Forward the
-actual operation id/outcome; publication or process launch is not installation
+A release platform and a CDN are different roles, even when one host plays
+both. The release platform is the control plane: it decides which version a
+machine should run and vouches for that version's hash and size. The CDN is
+the data plane: it stores bytes and serves whatever URL it is asked for. K
+trusts only the metadata; the bytes are verified against it, so the CDN
+needs no trust and can be anything the URL reaches, including the platform
+itself, an object store, or the `data:` URL the example uses. Authenticate the
+release platform (its TLS identity, a signature on the manifest, or an
+authenticated API); K's hash check cannot substitute for that, because it
+only proves the bytes match what the metadata claimed.
+
+Common shapes, from simplest up:
+
+| Shape | What answers the two questions | Notes |
+|---|---|---|
+| Static manifest on a CDN | `staticManifestSource({ baseUrl })` reads a JSON manifest you publish with each release | No server; rollout policy is whatever you write into the manifest |
+| Your own release API | A small adapter mapping your API's response to a `Release` | Authentication, cohort selection and reporting are yours to build |
+| [Hands](https://hands.build) | K's sibling project, the publishing side of the same loop: draft-first releases, channels and staged rollouts, share pages, in-app update metadata, feedback and crash tickets ([source](https://github.com/botiverse/hands)) | The adapter maps a Hands response to a `Release`; a launcher may obtain the installer from Hands too. Keep installer and product identities distinct |
+
+Whatever the platform, the boundary is the same. K has no built-in connector
+or result uploader for any of them. Product authentication, channel and cohort
+policy and remote reporting belong to the integration. Forward the actual
+operation id and outcome; publication or process launch is not installation
 success, and local promotion does not prove cloud reconnection.
 
 Withdrawing a release affects future distribution. It does not roll back already
