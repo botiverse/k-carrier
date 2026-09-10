@@ -42,7 +42,7 @@ End users download finished artifacts; these build choices belong to publishers.
 
 | Form | Delivered artifact | Runtime requirement |
 |---|---|---|
-| Single executable per OS/architecture | Node SEA with the runner embedded, built with `--cjs` | Supported target and any external platform tools; no Node on the machine |
+| Single executable per OS/architecture | Node SEA with the runner embedded, built with `--cjs` | No external Node for the worker; supervisor and controller dependencies are separate |
 | Cross-platform JavaScript | K and adapter bundled into one `.mjs` | Independently available Node 24 and adapter dependencies |
 
 One JS file is portable only if its adapter and dependencies support the targets.
@@ -53,12 +53,14 @@ survive stopping and replacing the application.
 ### Build a single executable
 
 Node's single-executable-application (SEA) tooling embeds the runner into a
-copy of the Node binary. The supervisor executes the result directly, with no
+copy of the Node binary. This recipe uses Node 24.15.0 and a CommonJS entry.
+The supervisor executes the result directly, with no
 `interpreter` option. This procedure was verified end to end: a SEA runner
 promoted the example service under `launchRunner`.
 
 ```sh
-# 1. CommonJS entry; SEA cannot load an ESM main script.
+# 1. CommonJS entry for this Node 24 SEA recipe.
+# This demo adapter needs the controller change described below before upgrading.
 node scripts/build-runner.mjs --cjs examples/external-service/adapter.ts dist/runner.cjs
 
 # 2. Prepare the blob.
@@ -68,17 +70,18 @@ node --experimental-sea-config dist/sea-config.json
 # 3. Inject into a Node binary for the target platform.
 cp "$(command -v node)" dist/runner
 # macOS only: codesign --remove-signature dist/runner
-npx postject dist/runner NODE_SEA_BLOB dist/sea-prep.blob \
-  --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 \
-  --macho-segment-name NODE_SEA   # macOS only
+npx postject@1.0.0-alpha.6 dist/runner NODE_SEA_BLOB dist/sea-prep.blob \
+  --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
+# macOS: add --macho-segment-name NODE_SEA to the postject command
 # macOS only: codesign --sign - dist/runner   (use your release identity)
 
 # 4. Publish dist/runner with its sha256 and size; launch it with no interpreter.
 ```
 
 Build one SEA per target OS and architecture with that platform's Node
-binary. The result is around 140 MB uncompressed; the optional gzip transport
-in release metadata exists for this.
+binary. Binary size depends on the target Node build. Installer and product
+release metadata can include optional gzip transport; both paths use the
+same verified downloader.
 
 **The SEA pitfall.** Inside a SEA, `process.execPath` is the SEA itself. An
 adapter or controller that spawns `process.execPath some-script.mjs` re-runs
@@ -87,6 +90,10 @@ controller call. Make the controller a native executable or its own SEA, or
 pass an explicit interpreter path into the adapter at build time. The example
 adapter uses `process.execPath` and therefore only works under an external
 Node.
+
+This packages the worker only. `launchRunner` is a Node API, and the demo
+controller also needs Node. To ship an installation chain that needs no
+preinstalled runtime, package the supervisor and controller dependencies too.
 
 The bootstrap selects a compatible installer, downloads and verifies it, passes
 the request, supervises settlement, then cleans temporary code. It must not contain

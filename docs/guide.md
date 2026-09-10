@@ -32,16 +32,16 @@ flowchart LR
 - The **adapter** is your trusted code, fixed at build time: where releases
   come from, whether an upgrade may proceed, and how to reach the controller.
 - The **controller** is your program that actually stops, starts and probes
-  the application. The runner talks to it through `createCommandHost`.
+  the application. The adapter can call it directly or through `createCommandHost`.
 - The **state directory** holds the lock, the journal, two **slots** and the
-  receipts. It survives every crash and is the only thing recovery needs.
+  receipts. Recovery uses this state together with a compatible runner, its
+  runtime and the product controller; it does not need release distribution.
 
 The runner and the controller live outside the application's service unit.
 That is the whole point: stopping the application must not stop the thing
 that is upgrading it.
 
-Naming notes. Older test names call the runner a *helper*; it is the same
-artifact. The slots are **stable** and **experiment**; these are positions
+The slots are **stable** and **experiment**; these are positions
 on disk, not release channels, so a product channel also called "stable" is
 unrelated. *Hands*, mentioned in the integration guide, is the release
 platform K's authors publish with; K does not depend on it.
@@ -58,14 +58,17 @@ sequenceDiagram
   B->>S: upgrade id=job-1 target=2.0.0
   S->>S: download runner, check sha256 + size
   S->>W: spawn, request on stdin
-  W->>W: take upgrade.lock, settle leftovers
-  W->>W: fetch release, verify, write experiment slot
-  Note over W: journal: staged
-  W->>C: fence, quiesce
+  W->>W: take upgrade.lock, inspect operation identity
+  W->>C: fence previous controller effects
+  W->>W: settle leftovers, begin requested operation
+  W->>W: fetch release, verify bytes
+  Note over W: journal: staged intent
+  W->>W: write experiment slot
+  Note over W: journal: handing-over intent
+  W->>C: quiesce
   C->>A: park work
   W->>C: stop stable
   C->>A: terminate, confirm exit
-  Note over W: journal: handing-over
   W->>C: start experiment
   C->>A: launch candidate
   W->>C: healthProbe
@@ -73,7 +76,7 @@ sequenceDiagram
   Note over W: journal: readback ok → promote intent
   W->>W: experiment becomes stable
   W->>C: resume
-  Note over W: journal: promoted, receipt archived
+  Note over W: persist promoted operation receipt
   W-->>S: {result: promoted}, exit 0
   S-->>B: exit 0
 ```
@@ -85,7 +88,8 @@ In words:
 2. The supervisor downloads the runner, checks its hash and size, writes it
    to scratch space and runs it with the request on stdin.
 3. The worker takes the installation lock. If an earlier operation was left
-   unfinished, it settles that first and refuses the new one.
+   unfinished, it settles that first. The same id replays its result; a new
+   id may proceed only after recovery succeeds.
 4. It asks your release source for exactly the target version, verifies the
    bytes, and writes them into the *experiment* slot. Nothing running has
    changed yet.
@@ -100,11 +104,13 @@ In words:
    the old version back; after it, the safe move is always to finish the
    promotion.
 8. Experiment becomes stable. The controller resumes parked work. The
-   receipt is archived. The worker prints its response and exits 0.
+   receipt is persisted in `operation.json`; it is archived before a later
+   operation begins. The worker prints its response and exits 0.
 
-The phases you will see in journals and receipts are, in order: `idle`,
+The transaction journal phases are, in order: `idle`,
 `staged`, `handing-over`, `running-experiment`, `readback`, and then either
-`promoted` or `rolled-back`.
+`promoted` or `rolled-back`. Operation receipts additionally track stages such as
+`downloading` and policy outcomes such as `held`.
 
 ## When something goes wrong
 
@@ -119,11 +125,13 @@ routine failure and the one K is built around.
 
 A crash, a kill, or a budget timeout. The supervisor:
 
-1. waits until it has *confirmed* the worker exited; a missing process or an
-   expired deadline is not confirmation;
-2. asks the controller to **fence**, so that any service-manager action the
-   dead worker queued cannot land later;
-3. starts a recovery worker bound to the same operation id.
+1. terminates a timed-out worker and waits for its observed exit; a deadline
+   alone does not permit takeover;
+2. starts a recovery worker bound to the same operation id;
+3. that worker takes the transaction lock, checks the operation identity,
+   and asks the controller to **fence** before replaying lifecycle effects.
+   Fencing ensures actions queued by the earlier worker cannot land later.
+   An already terminal original operation simply replays its receipt.
 
 Recovery does not need the network and does not guess. It reads the journal:
 
@@ -168,8 +176,8 @@ Inspect both. The short version:
 
 | Exit | Meaning | What to do |
 |---|---|---|
-| 0 | Promoted, already up to date, or replayed an earlier result | Nothing |
-| 1 | Rolled back, or failed before any change | Read `operation.outcome` and the reason |
+| 0 | Successful upgrade outcome; readable status or recovery with no recorded outcome | Check the action and receipt |
+| 1 | Rolled back, or failed before any change | Read `operation.operation.outcome` and the reason |
 | 2 | Held by policy, ownership or compatibility | Nothing changed; a new attempt needs a new id |
 | 3 | Unresolved | Keep the recovery file and run recovery |
 

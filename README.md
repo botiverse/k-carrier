@@ -10,8 +10,8 @@ working and nobody can log in to repair it. K combines a rustup-style external
 installer with recoverable, verified service upgrades.
 
 If a package manager, container image or fleet orchestrator already owns your
-installation, that manager owns upgrades too. K detects that and holds; you
-probably do not need it.
+installation, that manager owns upgrades too. Your adapter identifies that
+ownership so K can defer; you probably do not need it.
 
 ## Why upgrading is non-trivial
 
@@ -37,8 +37,9 @@ of the application and run even when the installed application cannot start.
 You distribute **three things**: the bootstrap script, the installer, and the
 application release. They can share a hosting location. You supply the
 release source and service lifecycle operations; K supplies the transaction
-machinery. The installer runs on Node 24, or as a Node single executable so
-that the target machine needs no Node at all.
+machinery. The runner uses Node 24, either as an external runtime or bundled
+into a Node single executable. A fully runtime-independent installer must also
+package its supervisor and controller dependencies.
 
 The installer must survive stopping the application. If a worker crashes,
 the temporary supervisor runs bounded recovery. After reboot, an operator or

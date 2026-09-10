@@ -18,7 +18,10 @@ const upgrade = (id: string, targetVersion: string): RunnerRequest => ({ protoco
   action: "upgrade", id, targetVersion, consented: true });
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 
-test("bundled helper upgrades a real service, replays, recovers and rolls back without app upgrade code", async (t) => {
+for (const format of ["esm", "cjs"]) {
+const extension = format === "esm" ? "mjs" : "cjs";
+const flags = format === "cjs" ? ["--cjs"] : [];
+test(`${format} bundled runner upgrades a real service, replays, recovers and rolls back without app upgrade code`, async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "k-external-"));
   const stateDir = path.join(dir, "k");
   const host = createCommandHost({ stateDir, command: [process.execPath, path.join(dir, "controller.mjs"), dir] });
@@ -33,8 +36,8 @@ test("bundled helper upgrades a real service, replays, recovers and rolls back w
   await bootstrapStable({ stateDir, version: "1.0.0", artifactPath: initial });
   await host.start("stable");
   const before = await host.healthProbe();
-  const helper = path.join(dir, "runner.mjs");
-  await exec(process.execPath, [path.join(root, "scripts/build-runner.mjs"),
+  const helper = path.join(dir, `runner.${extension}`);
+  await exec(process.execPath, [path.join(root, "scripts/build-runner.mjs"), ...flags,
     path.join(root, "examples/external-service/adapter.ts"), helper], { cwd: root });
   async function publish(declared: string, actual = declared) {
     const bytes = Buffer.from(template.replace("VERSION_PLACEHOLDER", actual));
@@ -85,8 +88,8 @@ test("bundled helper upgrades a real service, replays, recovers and rolls back w
   assert.equal(oldReplay.exitCode, 0);
   assert.equal((await host.healthProbe()).version, "2.0.0");
   await publish("4.0.0");
-  const crashHelper = path.join(dir, "crash-runner.mjs");
-  await exec(process.execPath, [path.join(root, "scripts/build-runner.mjs"),
+  const crashHelper = path.join(dir, `crash-runner.${extension}`);
+  await exec(process.execPath, [path.join(root, "scripts/build-runner.mjs"), ...flags,
     path.join(root, "harness/src/fixtures/externalCrashAdapter.ts"), crashHelper], { cwd: root });
   await fs.writeFile(path.join(dir, "pause"), "pause-after-stop");
   const crashed = spawn(process.execPath, [crashHelper], { env: { ...process.env, K_EXAMPLE_HOME: dir }, stdio: "pipe" });
@@ -115,3 +118,5 @@ test("bundled helper upgrades a real service, replays, recovers and rolls back w
   const replay = await run(upgrade("interrupted", "4.0.0"));
   assert.equal(replay.result, "replayed", JSON.stringify(replay));
 });
+
+}

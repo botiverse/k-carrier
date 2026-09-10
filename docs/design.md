@@ -89,10 +89,10 @@ The supervisor:
 Recovery attempts and total elapsed time are bounded. Exhaustion preserves
 state and provides a recovery command rather than reporting success.
 
-Before takeover, the supervisor must establish that the prior worker and its
-outstanding controller effects cannot still mutate the installation. An
-expired deadline or an absent worker alone is insufficient. An unconfirmed
-exit forbids takeover.
+Before starting a successor, the supervisor must observe the prior worker
+exit. The recovery worker then takes the lock and fences outstanding
+controller effects before replaying lifecycle actions. An expired deadline
+alone is insufficient; an unconfirmed exit forbids takeover.
 
 Recovery must bind to the original operation id under K's transaction lock.
 If another operation has since run, recovery inspects or replays the original
