@@ -9,6 +9,8 @@ k-carrier's design was informed by studying two mature, unrelated updaters.
 Only architectural concepts were borrowed; no source code was copied, and the
 implementation here is original.
 
+- External installer boundary and self-update execution model are informed by Rustup's rustup-init and self-update flow (rust-lang/rustup, client installer/self-update). Concept only; no source code copied.
+
 - Two-slot upgrade transaction (stable/experiment slots with promote/rollback)
   and the "the installer is itself a managed package" fleet model are inspired
   by Datadog's fleet installer (DataDog/datadog-agent, pkg/fleet). Concept only.
