@@ -25,6 +25,7 @@ export default function create() {
   options.host.resume = async () => {
     if (attempting && await fault() === "resume-once") {
       await fs.unlink(faultPath);
+      await fs.writeFile(path.join(dir, "resuming"), String(process.pid));
       return hang();
     }
     return resume();
