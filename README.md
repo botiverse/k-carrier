@@ -107,6 +107,6 @@ controller on its target machines.
 verified acquisition, durable transactions and readiness checks respectively.
 
 See the [design](docs/design.md), [test plan](docs/test-plan.md),
-[harness guide](docs/harness-design.md) and [source research](docs/external-runner-research.md).
+[harness guide](docs/harness-design.md) and [source research](docs/prior-art/external-runner-research.md).
 
 Status: incubating. TypeScript. License: Apache-2.0.
