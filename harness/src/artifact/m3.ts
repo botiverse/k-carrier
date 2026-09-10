@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import * as path from "node:path";
 import { type ToothContext } from "../teeth/registry.ts";
-import { PLAIN_DAEMON_SOURCE } from "../../../examples/service-daemon/source.ts";
+import { PLAIN_DAEMON_SOURCE } from "../fixtures/serviceSource.ts";
 import { serveRelease } from "./m1.ts";
 import { runCommand } from "../artifact-factory/run.ts";
 import { processAlive } from "../fake-host/daemon.ts";

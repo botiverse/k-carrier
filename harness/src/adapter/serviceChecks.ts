@@ -29,7 +29,7 @@ import type { ReadbackSurface } from "../../../core/src/converge/predicates.ts";
 import { slotArtifactPath } from "../../../core/src/txn/fileEffects.ts";
 import { processAlive } from "../fake-host/daemon.ts";
 import { serveRelease } from "../artifact/m1.ts";
-import { PLAIN_DAEMON_SOURCE } from "../../../examples/service-daemon/source.ts";
+import { PLAIN_DAEMON_SOURCE } from "../fixtures/serviceSource.ts";
 
 /** The adopter module's factory contract for the service tier. */
 export type ServiceAdapterFactory = (stateDir: string) => HostDriver & {

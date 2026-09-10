@@ -2,7 +2,7 @@
  * The resident role only serves probe/exit and never runs K.
  */
 export const PLAIN_DAEMON_SOURCE = `#!/usr/bin/env node
-// service-daemon — K service-profile example. Built by artifact-factory.
+// Internal service fixture built by ArtifactFactory.
 "use strict";
 const VERSION = "__K_VERSION__";
 const BEHAVIOR = "__K_BEHAVIOR__";

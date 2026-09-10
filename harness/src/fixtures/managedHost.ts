@@ -1,26 +1,12 @@
-/**
- * hosted-service — the managed-profile example (design-v1 §2.5: full stack,
- * the Raft-Computer-shaped host).
- *
- * A HostDriver implementation a real managed host would ship: five-method
- * HostAdapter plus a deterministic session ledger (a counter + rolling
- * sha256 chain persisted to `<stateDir>/session.bin`). quiesce() parks the
- * sessions durably, resume() restores them byte-for-byte — including after
- * a rollback to the stable slot. This is the decidable form of the
- * managed profile's "session preservation" claim.
- *
- * This is the demo's OWN host (a real adopter brings its own), not the
- * harness's fake — accepted by `k-harness --adapter examples/hosted-service/host.ts`
- * (contract subset: ledger equivalence ×2 + probe veracity/binding) and by
- * the registered tooth `examples.hosted-service-adapter` in the managed tier.
- *
- * Default export contract: `(stateDir: string) => HostDriver`.
+/** Internal host fixture for session ledger preservation and live probe checks.
+ * This deliberately uses the harness HostDriver contract; it is not a product
+ * integration example. See examples/external-service for application wiring.
  */
 import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import * as path from "node:path";
-import type { ProcessEvidence, Slot } from "../../core/src/lifecycle/hostAdapter.ts";
-import type { HostDriver, LedgerState } from "../../harness/src/fake-host/inproc.ts";
+import type { ProcessEvidence, Slot } from "../../../core/src/lifecycle/hostAdapter.ts";
+import type { HostDriver, LedgerState } from "../fake-host/inproc.ts";
 
 const SESSION_FILE = "session.bin";
 

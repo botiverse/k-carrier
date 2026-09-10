@@ -2,9 +2,7 @@
  * Examples acceptance checks — the run bodies of the demo teeth
  * (registered in teeth/examples.ts). Each throws on violation.
  *
- * Each demo is the credential for its profile's support claim
- * (examples/README.md: "if a profile has no green example, the claim does
- * not exist"):
+ * These fixtures exercise internal mechanisms, not application integration:
  *  - swap-tool: black-box upgrade loop (L0/L0.5/L1') — version command,
  *    self-upgrade swaps bytes, next run reports the served version;
  *  - service-daemon: process-reality L2/L3 — real spawn, startId-bound
@@ -31,12 +29,12 @@ import {
   checkProbeBindsCurrentIncarnation,
 } from "../fake-host/checks.ts";
 import type { HostDriver } from "../fake-host/inproc.ts";
-import { CLI_TOOL_SOURCE } from "../../../examples/swap-tool/source.ts";
-import { PLAIN_DAEMON_SOURCE } from "../../../examples/service-daemon/source.ts";
+import { CLI_TOOL_SOURCE } from "../fixtures/cliToolSource.ts";
+import { PLAIN_DAEMON_SOURCE } from "../fixtures/serviceSource.ts";
 
 const RELEASE_BASE_ENV = "K_RELEASE_BASE";
 
-/** The swap-tool's explicit target declaration (mirrors k.target.ts). */
+/** The swap-tool fixture's explicit black-box target declaration. */
 export const CLI_TOOL_TARGET_TS = `export default { version: ["--version"], selfUpgrade: ["self", "upgrade"] };
 `;
 
@@ -274,7 +272,7 @@ export async function checkManagedHostAdapter(
   const makeHost = async (): Promise<HostDriver> =>
     opts.hostOverride
       ? opts.hostOverride()
-      : (await import("../../../examples/hosted-service/host.ts")).createManagedHost(
+      : (await import("../fixtures/managedHost.ts")).createManagedHost(
           path.join(ctx.sandboxDir, "host"),
         );
   // the same contract subset k-harness --adapter runs (§1.7)

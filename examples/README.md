@@ -1,10 +1,7 @@
-# Examples and test fixtures
+# Examples
 
-Use [external-service](external-service/README.md) for application integration.
-It builds a separate runner and controls an application with no K dependency.
+[external-service](external-service/README.md) demonstrates the supported application
+integration: build an independent K runner and control a service with no K dependency.
+It includes setup, upgrade, recovery, observation and cleanup commands.
 
-`swap-tool`, `service-daemon` and `hosted-service` are internal engine test
-fixtures consumed by the harness. Their in-process factory calls exercise
-transaction and lifecycle mechanisms; they are not supported application
-integration paths. Run `pnpm test` for these fixtures and `pnpm test:runner`
-for the external runner protocol and real service upgrade/recovery tests.
+Internal mechanism fixtures live in [harness/src/fixtures](../harness/src/fixtures/README.md).

@@ -1,29 +1,10 @@
-/**
- * swap-tool — the swap-profile example (design-v1 §2.5: L0 + L0.5 + L1').
- *
- * A REAL tiny CLI (zero deps) with one genuine command (`greet`) plus the
- * black-box contract (§1.76): `--version` and `self upgrade` (declared
- * explicitly in `k.target.ts` — the harness never guesses commands).
- *
- * `self upgrade` runs through core's Upgrader (createRunner +
- * staticManifestSource + atomicWriteFile): gates in order (ownership ->
- * policy -> verified download -> transaction), then the app's install step
- * (swap the promoted slot's bytes over itself — L1': swap bytes = promote,
- * next run takes effect). In the swap profile the app IS the process, so
- * the host's probe verifies the experiment's bytes headlessly
- * (`--probe`) — a new version that fails to start rolls the transaction
- * back instead of being promoted.
- *
- * Dependency wiring (the example's "@k-carrier/core" stand-in):
- * `K_CORE_UPGRADER` = file URL of core/src/createRunner.ts; sibling core
- * modules are derived from it. `K_RELEASE_BASE` = releaseBase config,
- * `K_STATE_DIR` = stateDir (default: `<binDir>/state`).
- *
- * Built by the artifact-factory: `__K_VERSION__` / `__K_BEHAVIOR__` are
- * stamped into the binary's own bytes.
+/** Internal byte-replacement fixture driven by the harness.
+ * Version/behavior placeholders are stamped by ArtifactFactory. The self-upgrade
+ * command exercises core mechanisms; it is not a product integration API.
+ * K_CORE_UPGRADER supplies the file URL of core/src/createRunner.ts.
  */
 export const CLI_TOOL_SOURCE = `#!/usr/bin/env node
-// swap-tool — K swap-profile example. Built by artifact-factory (§1.77).
+// Internal swap-tool fixture built by ArtifactFactory.
 // self upgrade runs through core's Upgrader; --probe is the headless
 // start check the swap-profile host uses to verify new bytes.
 "use strict";
@@ -35,7 +16,6 @@ const { spawnSync } = require("node:child_process");
 const RELEASE_BASE = process.env.K_RELEASE_BASE;
 const STATE_DIR = process.env.K_STATE_DIR ?? path.join(path.dirname(process.argv[1]), "state");
 const CORE_UPGRADER = process.env.K_CORE_UPGRADER;
-// Trust anchor: the app compiles root public keys in; the demo (not
 const args = process.argv.slice(2);
 const startId = process.pid + "-" + process.hrtime.bigint().toString(36);
 // Synchronous writes: process.exit() can truncate buffered pipe writes,

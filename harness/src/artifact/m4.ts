@@ -17,7 +17,7 @@ import { type ToothContext } from "../teeth/registry.ts";
 import { FakeServer } from "../fake-server/server.ts";
 import { runCommand } from "../artifact-factory/run.ts";
 import { buildSwapTool, runnerFactoryUrl, readState, serveRelease } from "./m1.ts";
-import { CLI_TOOL_SOURCE } from "../../../examples/swap-tool/source.ts";
+import { CLI_TOOL_SOURCE } from "../fixtures/cliToolSource.ts";
 import { ArtifactFactory } from "../artifact-factory/factory.ts";
 import { currentPlatformKey } from "../../../core/src/artifact/staticManifestSource.ts";
 

@@ -14,7 +14,7 @@ import { currentPlatformKey } from "../../../core/src/artifact/staticManifestSou
 import { FakeServer } from "../fake-server/server.ts";
 import { ArtifactFactory } from "../artifact-factory/factory.ts";
 import { runCommand } from "../artifact-factory/run.ts";
-import { CLI_TOOL_SOURCE } from "../../../examples/swap-tool/source.ts";
+import { CLI_TOOL_SOURCE } from "../fixtures/cliToolSource.ts";
 
 /** The swap-tool demo's @botiverse/k-carrier wiring (createRunner module URL). */
 export function runnerFactoryUrl(): string {

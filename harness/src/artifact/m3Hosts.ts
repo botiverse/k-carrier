@@ -9,7 +9,7 @@ import { FakeServer } from "../fake-server/server.ts";
 import { ArtifactFactory } from "../artifact-factory/factory.ts";
 import { processAlive } from "../fake-host/daemon.ts";
 import { commandForArtifact, runCommand } from "../artifact-factory/run.ts";
-import { PLAIN_DAEMON_SOURCE } from "../../../examples/service-daemon/source.ts";
+import { PLAIN_DAEMON_SOURCE } from "../fixtures/serviceSource.ts";
 import { runnerFactoryUrl, readState } from "./m1.ts";
 
 /** External service driver; the resident never owns recovery. */

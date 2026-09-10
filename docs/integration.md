@@ -186,8 +186,8 @@ release source unavailable. Check workload restoration and application data
 compatibility independently. If you declare OS lifecycle surfaces, read them back
 before retiring their previous manager; undeclared observations are not passes.
 
-The other repository examples and harness modules exercise internal engine
-mechanisms. They are test fixtures, not alternate application integration paths.
+The harness fixtures exercise internal engine mechanisms. They are not alternate
+application integration paths.
 
 ## Using Hands as the release platform
 

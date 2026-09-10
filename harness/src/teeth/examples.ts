@@ -1,6 +1,6 @@
 /**
  * Examples teeth — each demo is the credential for its profile's support
- * claim (examples/README.md). Registration site only; check bodies live in
+ * claim (harness/src/fixtures/README.md). Registration site only; check bodies live in
  * harness/src/examples/checks.ts.
  */
 import { registerTooth } from "./registry.ts";
