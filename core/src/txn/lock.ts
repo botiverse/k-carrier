@@ -17,6 +17,7 @@
  */
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { platformOpsFor } from "../platform/index.ts";
 
 /** Bounded retries: an unclaimable lock is a typed failure, never a hang. */
@@ -53,46 +54,89 @@ export async function acquireUpgradeLock(stateDir: string, nowMs: number): Promi
   await fs.mkdir(stateDir, { recursive: true });
   const ops = platformOpsFor();
 
-  const record: LockRecord = { pid: process.pid, acquiredAtMs: nowMs };
-  let attempts = 0;
-  for (;;) {
-    try {
-      // wx: fails if the file exists — the atomic "claim it" primitive.
-      const fh = await fs.open(lockPath, "wx");
-      try {
-        await fh.writeFile(JSON.stringify(record));
-      } finally {
-        await fh.close();
-      }
-      return {
-        async release() {
-          await fs.rm(lockPath, { force: true });
-        },
-      };
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
-      attempts += 1;
-      if (attempts > MAX_ATTEMPTS) {
-        // Never spin forever: a lock we can neither claim nor clear is a
-        // typed failure, not a hang. (Hangs hide bugs; failures report them.)
-        throw new Error(
-          `[UPGRADE_LOCK_UNRESOLVABLE] could not acquire or clear ${lockPath} after ${MAX_ATTEMPTS} attempts`,
-          { cause: err },
-        );
-      }
-      const holder = await readHolder(lockPath);
-      if (holder === "vanished") continue; // gone between open and read: retry
-      // A non-positive pid is never a real holder — and must NEVER reach
-      // process.kill, where pid<=0 addresses process GROUPS or every process.
-      if (holder !== "unreadable" && holder.pid > 0 && ops.isProcessAlive(holder.pid)) {
-        throw new UpgradeLockError(holder.pid);
-      }
-      // Holder is gone: its transaction died mid-flight. Recovery (journal
-      // replay) will decide what to do with the state; clear the lock and
-      // take it. Removing a specific stale file is safe to race — whoever
-      // wins the next `wx` owns the lock.
-      await fs.rm(lockPath, { force: true });
+  // Unique contender directories are visible atomically, before inspecting the
+  // legacy lock file. Never unlink a live contender or reuse its path. This
+  // closes both the empty-file publication window and double stale-unlink race.
+  const claims = path.join(stateDir, "upgrade.lock.claims");
+  await fs.mkdir(claims, { recursive: true });
+  const name = `${process.pid}-${randomUUID()}`;
+  const claim = path.join(claims, name);
+  await fs.mkdir(claim);
+  const removeClaim = async (): Promise<void> => {
+    try { await fs.rmdir(claim); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  };
+  try {
+    for (const other of await fs.readdir(claims)) {
+      if (other === name) continue;
+      const pid = Number(other.split("-")[0]);
+      if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error("UPGRADE_LOCK_UNREADABLE");
+      if (ops.isProcessAlive(pid)) throw new UpgradeLockError(pid);
+      await fs.rmdir(path.join(claims, other)).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== "ENOENT") throw error;
+      });
     }
+  } catch (error) {
+    await removeClaim();
+    throw error;
+  }
+  let acquired = false;
+  try {
+    const record: LockRecord = { pid: process.pid, acquiredAtMs: nowMs };
+    let attempts = 0;
+    for (;;) {
+      try {
+        // wx: fails if the file exists — the atomic "claim it" primitive.
+        const fh = await fs.open(lockPath, "wx");
+        try {
+          await fh.writeFile(JSON.stringify(record));
+        } finally {
+          await fh.close();
+        }
+        acquired = true;
+        let released = false;
+        return {
+          async release() {
+            if (released) return;
+            // Quarantine can move this entire state directory. A replacement
+            // directory at the same pathname belongs to a different owner.
+            try { await fs.stat(claim); }
+            catch (error) {
+              if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+              released = true;
+              return;
+            }
+            await fs.rm(lockPath, { force: true });
+            await removeClaim();
+            released = true;
+          },
+        };
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+        attempts += 1;
+        if (attempts > MAX_ATTEMPTS) {
+          // Never spin forever: a lock we can neither claim nor clear is a
+          // typed failure, not a hang. (Hangs hide bugs; failures report them.)
+          throw new Error(
+            `[UPGRADE_LOCK_UNRESOLVABLE] could not acquire or clear ${lockPath} after ${MAX_ATTEMPTS} attempts`,
+            { cause: err },
+          );
+        }
+        const holder = await readHolder(lockPath);
+        if (holder === "vanished") continue; // gone between open and read: retry
+        // A non-positive pid is never a real holder — and must NEVER reach
+        // process.kill, where pid<=0 addresses process GROUPS or every process.
+        if (holder !== "unreadable" && holder.pid > 0 && ops.isProcessAlive(holder.pid)) {
+          throw new UpgradeLockError(holder.pid);
+        }
+        // Holder is gone: its transaction died mid-flight. Recovery (journal
+        // replay) will decide what to do with the state; clear the lock and
+        // take it. The contender guard above serializes stale-file removal.
+        await fs.rm(lockPath, { force: true });
+      }
+    }
+  } finally {
+    if (!acquired) await removeClaim();
   }
 }
 

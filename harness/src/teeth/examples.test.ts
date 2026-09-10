@@ -79,7 +79,7 @@ test("known-red: hosted-service catches a host that loses the session on resume"
   try {
     // mutation: resume cannot restore the parked ledger — a broken adopter
     // host. Delegated explicitly (spread would freeze the getters).
-    const real = (await import("../../../examples/hosted-service/host.ts")).createManagedHost(
+    const real = (await import("../fixtures/managedHost.ts")).createManagedHost(
       path.join(ctx.sandboxDir, "host"),
     );
     const broken: HostDriver = {

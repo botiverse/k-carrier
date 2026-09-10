@@ -9,25 +9,12 @@ import { FakeServer } from "../fake-server/server.ts";
 import { ArtifactFactory } from "../artifact-factory/factory.ts";
 import { processAlive } from "../fake-host/daemon.ts";
 import { commandForArtifact, runCommand } from "../artifact-factory/run.ts";
-import { PLAIN_DAEMON_SOURCE } from "../../../examples/service-daemon/source.ts";
-import { coreUpgraderUrl, readState } from "./m1.ts";
+import { PLAIN_DAEMON_SOURCE } from "../fixtures/serviceSource.ts";
+import { runnerFactoryUrl, readState } from "./m1.ts";
 
-/**
- * M3 host orchestration helpers — shared by both service-profile teeth
- * (m3.service-upgrade / m3.service-rollback), each of which runs on BOTH
- * host shapes:
- *  - spawn:   self-starting — the driver spawns the successor and finishes
- *             the transaction itself.
- *  - respawn: computer's shape — the driver DIES mid-handover (it cannot
- *             start itself; the owner respawns it from the new bytes), and
- *             the SUCCESSOR finishes the transaction via recovery, proving
- *             the handover by a fresh startId (a flag could be set by the
- *             crash path; a different incarnation is something that
- *             happened).
- */
-
-export type HostShape = "spawn" | "respawn";
-export const HOST_SHAPES: HostShape[] = ["spawn", "respawn"];
+/** External service driver; the resident never owns recovery. */
+export type HostShape = "spawn";
+export const HOST_SHAPES: HostShape[] = ["spawn"];
 
 const INCARNATION_FILE = "incarnation.json";
 
@@ -62,20 +49,19 @@ function stateDir(ctx: ToothContext): string {
 
 export function serviceEnv(
   ctx: ToothContext,
-  shape: HostShape,
+  _shape: HostShape,
   baseUrl: string,
 ): Record<string, string> {
   return {
     K_RELEASE_BASE: baseUrl,
     K_STATE_DIR: stateDir(ctx),
-    K_HOST_SHAPE: shape,
-    K_CORE_UPGRADER: coreUpgraderUrl(),
+    K_CORE_UPGRADER: runnerFactoryUrl(),
     // Every process this tooth spawns — and, via inheritance, every process
     // the driver spawns — carries the sandbox marker, so the sandbox
     // teardown's verifyProcessTreeDead is the backstop for any leak: a "red"
     // can never degrade into a hang.
     // Resolved back to the SANDBOX id: ctx here is a per-shape NESTED context,
-    // and basename() of that is "spawn"/"respawn" -- a marker no teardown scan
+    // and basename() of that is "spawn" -- a marker no teardown scan
     // matches, which turns the backstop into a scan that always finds zero.
     K_SANDBOX_MARKER: sandboxMarkerFor(ctx.sandboxDir),
   };
@@ -178,42 +164,7 @@ export async function killIncarnation(ctx: ToothContext): Promise<void> {
   }
 }
 
-/**
- * The OWNER (respawn shape): the driver exits mid-handover; the owner
- * respawns the service from the new bytes (experiment first), falling back
- * to stable when the new version cannot start, and respawning again when a
- * recovery asks for a successor by exiting. A bounded loop: the service
- * eventually stays up or the owner gives up.
- */
-export async function respawnUntilUp(
-  ctx: ToothContext,
-  env: Record<string, string>,
-): Promise<{ info: Incarnation; child: ChildProcess }> {
-  const dir = stateDir(ctx);
-  for (let attempt = 0; attempt < 6; attempt++) {
-    const slot: "experiment" | "stable" = attempt === 0 ? "experiment" : "stable";
-    const artifact = path.join(dir, "slots", slot, "artifact.bin");
-    try {
-      await fs.access(artifact);
-    } catch {
-      continue;
-    }
-    const child = spawn(process.execPath, [artifact], {
-      env: { ...process.env, ...env },
-      stdio: ["pipe", "pipe", "ignore"],
-    });
-    const info = await tryReady(child, 2000);
-    if (info !== null) return { info, child };
-    if (child.pid && processAlive(child.pid)) child.kill("SIGKILL");
-  }
-  throw new Error("owner: the service never came up");
-}
-
-/**
- * Seed the service world: spawn the v1 service (registers), then a real
- * driver upgrade to 1.0.0 lands stable v1 with a running incarnation
- * (driver-completed on spawn, successor-completed on respawn).
- */
+/** Seed stable v1 with an external driver and a live service. */
 export async function seedService(
   ctx: ToothContext,
   shape: HostShape,
@@ -228,9 +179,6 @@ export async function seedService(
 
   const up = await runCommand(binPath, ["self", "upgrade"], { env, timeoutMs: 30000 });
   assert.equal(up.code, 0, `seed upgrade must exit 0 (${up.stderr.trim()})`);
-  if (shape === "respawn") {
-    await respawnUntilUp(ctx, env); // the driver died; the owner brings the successor up
-  }
   const seeded = await readState(env);
   assert.equal(seeded.stableVersion, "1.0.0", "seed upgrade must land stable 1.0.0");
   const running = await readIncarnation(ctx);

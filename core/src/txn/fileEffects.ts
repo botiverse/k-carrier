@@ -38,6 +38,9 @@ export function fileJournalStore(stateDir: string): JournalStore {
       } finally {
         await fh.close();
       }
+      // The first append creates the file; its directory entry is only
+      // durable once the parent is fsync'd. Cheap enough to do every time.
+      await platformOpsFor().syncDirectory(stateDir);
     },
     async readAll(): Promise<JournalEntry[]> {
       let text: string;
@@ -80,6 +83,13 @@ export function fileSlotStore(stateDir: string): SlotStore {
       // bytesRef is a path to the verified bytes the caller downloaded.
       await fs.copyFile(artifact.bytesRef, path.join(staging, ARTIFACT_FILE));
       await fs.writeFile(path.join(staging, VERSION_FILE), artifact.version);
+      // Flush copied bytes, version metadata and their names before publication.
+      // Syncing only the parent after rename does not persist file contents.
+      for (const name of [ARTIFACT_FILE, VERSION_FILE]) {
+        const handle = await fs.open(path.join(staging, name), "r+");
+        try { await handle.sync(); } finally { await handle.close(); }
+      }
+      await platformOpsFor().syncDirectory(staging);
       // Publish the slot atomically: a half-written experiment must never be
       // visible as a stageable slot.
       await fs.rm(dir, { recursive: true, force: true });
@@ -95,7 +105,11 @@ export function fileSlotStore(stateDir: string): SlotStore {
       const stable = slotDir(stateDir, "stable");
       if ((await readVersion("experiment")) === null) return; // idempotent redo
       await fs.rm(`${stable}.old`, { recursive: true, force: true });
-      await platformOpsFor().renamePath(stable, `${stable}.old`).catch(() => {});
+      const stableExists = await fs.stat(stable).then(() => true, (error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return false; // replay after the first rename
+        throw error;
+      });
+      if (stableExists) await platformOpsFor().renamePath(stable, `${stable}.old`);
       await platformOpsFor().renamePath(experiment, stable);
       await fs.rm(`${stable}.old`, { recursive: true, force: true });
     },

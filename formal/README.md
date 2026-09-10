@@ -1,65 +1,78 @@
-# Formal model of the K two-slot upgrade core (Lean 4)
+# Formal model of the K two-slot upgrade transaction (Lean 4)
 
-This directory holds a **machine-checked** Lean 4 model of k-carrier's two-slot
-upgrade transaction core, with proofs of the protocol's headline invariants:
+`Protocol.lean` is a Lean 4 model of the transaction engine with
+machine-checked proofs of three properties over every reachable state:
 
-| Invariant (mirrors `core/src/invariants.ts`) | Lean theorem |
+| Property (named after `core/src/invariants.ts`) | Lean theorem |
 |---|---|
-| `k.never-bricked` — the stable slot is never emptied | `never_bricked` |
-| `k.never-dual-run` — at most one live incarnation | `never_dual_run` |
-| journal write-ahead — an entered phase was journaled first | `journal_write_ahead` |
+| `k.never-dual-run` — a stable and an experiment incarnation are never live at once | `never_dual_run` |
+| `k.never-bricked` — the stable slot always holds usable bytes | `never_bricked` |
+| journal write-ahead — a live experiment implies a durable handing-over intent; experiment bytes imply a durable staged intent | `write_ahead` |
 
 All three together: `protocol_guarantees`.
 
-The model is a **1:1 projection of the real source**: the 7 phases come from
-`core/src/txn/state.ts::TxnPhase`; the transitions come from
-`core/src/txn/transitions.ts::TRANSITIONS`; the snapshot fields mirror
-`WorldSnapshot`. Reachability is **operational** — a machine is reachable iff
-it is `runStep n` from the initial state for some `n` — so the proofs run
-directly against the transition function rather than a hand-tuned reachability
-predicate.
+## What the model is
+
+- `Phase` is the seven-phase `TxnPhase` from `core/src/txn/state.ts`.
+- Intent steps are the edges of `core/src/txn/transitions.ts::TRANSITIONS`,
+  including the rollback edge from every in-flight phase.
+- Effect steps are the host and slot calls the engine issues after each
+  journaled intent (`core/src/txn/engine.ts`): stage bytes, stop stable,
+  start experiment, promote, stop experiment, start stable, clear experiment.
+  One step per call, so a crash can fall between any two of them.
+- Crash and recovery are not special steps. A crash loses nothing durable,
+  and recovery only ever journals a rollback intent from an in-flight phase
+  or replays the effects of the last intent. Both are ordinary steps of the
+  relation, so every instant the crash matrix enumerates
+  (`harness/src/crash/enumerate.ts`: before-journal, after-journal,
+  after-action) is a reachable state the theorems cover.
+- Reachability is an inductive relation from the initial machine; the proofs
+  are by induction on it with one inductive invariant (`Safe`).
+
+`never_dual_run` is the theorem with content. It holds because every step
+that starts a process is guarded by the stop it must follow, on the handover
+path, the rollback path and the recovery replay path. Remove a guard and the
+proof fails. `never_bricked` records that no step in the relation clears the
+stable slot; promote replaces it with the verified candidate.
+
+Three `example`s at the end of the file exhibit reachable states with a live
+experiment, a completed promotion and a completed rollback. They exist so the
+guards cannot quietly make the interesting states unreachable, which would
+make the theorems vacuous.
+
+## What the model does not say
+
+- **Host honesty.** The model assumes what the HostAdapter contract demands:
+  `stop()` returning means the process is gone, `start()` starts only the
+  requested slot, the probe answers for one live incarnation. A controller
+  that returns from `stop` without stopping violates the assumption, and no
+  theorem here constrains it. The engine's own defence against a lying probe
+  (the pre-handover `startId` is journaled and a readback that repeats it is
+  refused) is below the model's granularity.
+- **Filesystem durability.** Promote is one effect step. In code it is two
+  renames; the window between them is covered by the durable promote intent
+  and idempotent replay, not by this model.
+- **Liveness.** Nothing here says an upgrade finishes; `core/src/liveness.ts`
+  and the harness judge that.
 
 ## Reproduce
 
-Requires [elan](https://github.com/leanprover/elan) (Lean's version manager).
+Requires [elan](https://github.com/leanprover/elan).
 
 ```sh
 elan run leanprover/lean4:stable lean formal/Protocol.lean
-# prints only warnings and exits 0 if the proofs hold
+# exits 0 with only linter warnings when the proofs hold
 ```
 
-The proofs also compile with a delegated Lean 4.10.0 toolchain if a later
-release is pinned for other reasons.
+The invariant is named `Safe` because `Inv` is taken by Lean's core library.
+Proofs use `theorem`, not `lemma`: `lemma` after a multi-clause `def` or
+`inductive` trips a parser quirk on some releases.
 
-### Toolchain note (why the file uses `theorem`, not `lemma`)
+## Keeping the model in step with the code
 
-A recurring parser quirk across Lean 4 releases: a **multi-clause recursive
-`def`/`inductive` block immediately followed by a `lemma` declaration** fails
-with `error: unexpected identifier; expected command` (reproducible with the
-two-line `def f : Nat → Nat | 0 => 0 | n+1 => f n` followed by any `lemma`).
-Declaring the proof with **`theorem` instead of `lemma`** avoids it. This file
-Therefore uses `theorem` for every proof, so it compiles on both the default
-`stable` toolchain (v4.33.0) and v4.10.0.
-
-## Keeping the model in step with the code (the model↔impl gap)
-
-A Lean model proves the *protocol model*, not the TypeScript implementation.
-There is no mature automatic TS↔Lean extraction, so the model stays a truthful
-projection of the source by discipline, not by construction. Recommended, in
-ascending cost:
-
-1. **Naming/shape contract.** Keep `Phase`, the transitions, and the snapshot
-   field names identical to the TS source (this file already does). Where CI
-   can, assert the shapes agree so a drift is visible instead of silent.
-2. **Property test the real engine.** Run model-based property tests against
-   the actual `createUpgrader`/`UpgradeEngine` (not a mirror), asserting the
-   same properties the Lean model proves — this binds "the properties the model
-   proves" to "what the real code actually does".
-3. **(Long-term) extraction.** Generate or hand-write the TS transition core
-   from the verified model and lock the two together by test.
-
-What the model deliberately does **not** claim (same boundary as the invariants
-in `core/src/invariants.ts`): the model abstracts away the host/IO boundary —
-real process liveness, OS surfaces (macOS login item, systemd/launchd/windows-
-task), and the `HostAdapter` assume-guarantee contract. Those stay verified by
-the existing crash-injection harness in `harness/`, not by Lean.
+There is no automatic TypeScript to Lean extraction; the model stays a
+truthful projection by discipline. When `TxnPhase`, `TRANSITIONS` or the
+engine's call order change, change `Phase`, `Step` and this README in the
+same commit. The generated crash matrix and seeded simulation in `harness/`
+test the real engine against the same properties, which is what binds "what
+the model proves" to "what the code does".

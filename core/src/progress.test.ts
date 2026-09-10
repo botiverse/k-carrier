@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createUpgrader } from "./createUpgrader.ts";
+import { createRunner } from "./createRunner.ts";
 import { staticManifestSource } from "./artifact/staticManifestSource.ts";
 import { stageForPhase, type UpgradeProgress } from "./progress.ts";
 import type { ProcessEvidence } from "./lifecycle/hostAdapter.ts";
@@ -43,11 +43,12 @@ async function serve(): Promise<{ baseUrl: string; close: () => void }> {
   return { baseUrl: `http://127.0.0.1:${port}/app`, close: () => server.close() };
 }
 
+let probes = 0; // every probe answers as a fresh incarnation
 function host() {
   return {
     async quiesce() {}, async stop() {}, async start() {}, async resume() {},
     async healthProbe(): Promise<ProcessEvidence> {
-      return { version: "2.0.0", pid: process.pid, startId: "fresh" };
+      return { version: "2.0.0", pid: process.pid, startId: `fresh-${++probes}` };
     },
   };
 }
@@ -57,7 +58,7 @@ test("an upgrade reports its stages in order, ending at a terminal one", async (
   const stateDir = await mkdtemp(path.join(tmpdir(), "k-progress-"));
   const seen: UpgradeProgress[] = [];
   try {
-    const outcome = await createUpgrader({
+    const outcome = await createRunner({
       host: host(),
       source: staticManifestSource({ baseUrl: src.baseUrl }),
       policy: "auto",
@@ -87,7 +88,7 @@ test("byte progress never goes backwards and never exceeds the total", async () 
   const stateDir = await mkdtemp(path.join(tmpdir(), "k-progress-bytes-"));
   const points: Array<{ downloaded: number; total: number }> = [];
   try {
-    await createUpgrader({
+    await createRunner({
       host: host(),
       source: staticManifestSource({ baseUrl: src.baseUrl }),
       policy: "auto",
@@ -118,7 +119,7 @@ test("THE POINT: a throwing progress sink cannot fail the upgrade", async () => 
   const src = await serve();
   const stateDir = await mkdtemp(path.join(tmpdir(), "k-progress-throw-"));
   try {
-    const outcome = await createUpgrader({
+    const outcome = await createRunner({
       host: host(),
       source: staticManifestSource({ baseUrl: src.baseUrl }),
       policy: "auto",
@@ -161,7 +162,7 @@ test("THE POINT: a RESUMED download counts from the prefix, not from zero", asyn
     await writeFile(partial, Buffer.from(BYTES.subarray(0, prefixLength)));
 
     const first: number[] = [];
-    await createUpgrader({
+    await createRunner({
       host: host(),
       source: staticManifestSource({ baseUrl: src.baseUrl }),
       policy: "auto",

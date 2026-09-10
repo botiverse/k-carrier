@@ -1,7 +1,7 @@
 /**
  * finishUpgradeOutcome — the engine outcome becomes the facade outcome:
  * report the stage, notify the sink, build the convergence report
- * (promoted only), and return. Split out of createUpgrader so that file
+ * (promoted only), and return. Split out of createRunner so that file
  * stays under the line budget; the semantics are unchanged from the inline
  * version.
  */

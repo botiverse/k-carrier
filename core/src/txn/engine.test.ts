@@ -17,6 +17,7 @@ function makeWorld(opts: {
   clock?: { nowMs: () => number; after: (ms: number, fn: () => void) => () => void };
 } = {}) {
   const trace: string[] = [];
+  let probes = 0; // every probe answers as a fresh incarnation unless a test says otherwise
   const journal: JournalEntry[] = opts.journal ? [...opts.journal] : [];
   const slots: Record<Slot, string | null> = opts.slots
     ? { ...opts.slots }
@@ -55,7 +56,7 @@ function makeWorld(opts: {
       start: async (slot) => { trace.push(`host:start:${slot}`); },
       healthProbe: opts.probe ?? (async () => {
         trace.push("host:probe");
-        return { version: "2.0.0", pid: 42, startId: "s-42" };
+        return { version: "2.0.0", pid: 42, startId: `s-${++probes}` };
       }),
       resume: async () => { trace.push("host:resume"); },
     },
@@ -71,10 +72,8 @@ test("happy path: staged->handover->readback->promoted, WAL before every action"
   const outcome = await engine.upgrade({ version: "2.0.0", bytesRef: "ref" });
   assert.deepEqual(outcome, { result: "promoted", version: "2.0.0" });
   assert.deepEqual(w.trace, [
+    "host:probe", // baseline: which incarnation is being replaced
     "journal:staged", "slots:stage",
-    // probe BEFORE the handover: records which incarnation is being replaced,
-    // so a successor can later prove the handover happened
-    "host:probe",
     "journal:handing-over", "host:quiesce", "host:stop:stable", "host:start:experiment",
     "journal:running-experiment", "host:probe",
     "journal:readback",
@@ -82,6 +81,39 @@ test("happy path: staged->handover->readback->promoted, WAL before every action"
   ]);
   assert.equal(w.slots.stable, "2.0.0");
   assert.equal(w.slots.experiment, null);
+});
+
+/** Probe answering first as the pre-upgrade incarnation, then as `after`. */
+const thenProbe = (after: () => Promise<ProcessEvidence>) => {
+  let calls = 0;
+  return async () => calls++ === 0 ? { version: "1.0.0", pid: 42, startId: "old-1" } : after();
+};
+
+test("the pre-handover startId is journaled; the SAME incarnation at readback rolls back", async () => {
+  const bound = makeWorld({ probe: thenProbe(async () => ({ version: "2.0.0", pid: 9, startId: "new-2" })) });
+  await new UpgradeEngine(bound.deps).upgrade({ version: "2.0.0", bytesRef: "ref" });
+  assert.equal(bound.journal.find((e) => e.intent === "handing-over")?.detail.priorStartId, "old-1");
+  // stop() returned but nothing was replaced: the old process now claims the
+  // target version. The version check passes; only the incarnation catches it.
+  const same = makeWorld({ probe: thenProbe(async () => ({ version: "2.0.0", pid: 42, startId: "old-1" })) });
+  const outcome = await new UpgradeEngine(same.deps).upgrade({ version: "2.0.0", bytesRef: "ref" });
+  assert.equal(outcome.result, "rolled-back");
+  assert.match((outcome as { reason: string }).reason, /pre-upgrade incarnation/);
+  assert.equal(same.slots.stable, "1.0.0");
+});
+
+test("no baseline when nothing runs before the upgrade; a wedged baseline stops before handover", async () => {
+  let calls = 0;
+  const idle = makeWorld({ probe: async () => {
+    if (calls++ === 0) throw new Error("connection refused");
+    return { version: "2.0.0", pid: 9, startId: "fresh" };
+  } });
+  assert.deepEqual(await new UpgradeEngine(idle.deps).upgrade({ version: "2.0.0", bytesRef: "ref" }), { result: "promoted", version: "2.0.0" });
+  assert.equal(idle.journal.find((e) => e.intent === "handing-over")?.detail.priorStartId, undefined);
+  const wedged = makeWorld({ probe: () => new Promise<ProcessEvidence>(() => {}),
+    clock: { nowMs: () => 1, after: (_ms, fn) => { const h = setTimeout(fn, 1); return () => clearTimeout(h); } } });
+  await assert.rejects(new UpgradeEngine({ ...wedged.deps, hostCallBudgetMs: 5 }).upgrade({ version: "2.0.0", bytesRef: "ref" }), /healthProbe/);
+  assert.deepEqual(wedged.trace.filter((x) => x.startsWith("host:")), [], "no handover effects after a wedged baseline");
 });
 
 test("predicate refusal rolls back: stable restored, experiment cleared, reason journaled", async () => {
@@ -126,7 +158,7 @@ test("THE POINT: a host that HANGS fails the upgrade instead of hanging it", asy
   // process stays ALIVE holding the lock, so stale-lock takeover never fires
   // and every later attempt queues behind it forever.
   const w = makeWorld({
-    probe: () => new Promise<ProcessEvidence>(() => {}), // never settles
+    probe: thenProbe(() => new Promise<ProcessEvidence>(() => {})), // readback probe never settles
     // The budget is virtual (5s); this fires it after a real millisecond so
     // the test does not actually wait, and only the call that never answers
     // reaches its deadline.
@@ -149,24 +181,22 @@ test("THE POINT: a host that HANGS fails the upgrade instead of hanging it", asy
   // upgrade becomes two live incarnations.
   assert.deepEqual(
     w.trace.filter((t) => t.startsWith("host:")),
-    ["host:quiesce", "host:stop:stable", "host:start:experiment"],
+    ["host:quiesce", "host:stop:stable", "host:start:experiment"], // custom probes do not trace
     "no host calls after the wedge",
   );
 });
 
-test("a handover that outlived its driver is FINISHED by the successor", async () => {
-  // The service profile's success path: the process driving the upgrade exits
-  // so its supervisor can respawn it from the new bytes. The successor sees a
-  // journal that stops at handing-over -- identical to a crash -- and must
-  // tell the two apart by evidence alone.
-  const w = makeWorld({
-    slots: { stable: "1.0.0", experiment: "2.0.0" },
-    journal: [entry(0, "staged"), entry(1, "handing-over", { version: "2.0.0", priorStartId: "old-1" })],
-    probe: async () => ({ version: "2.0.0", pid: 99, startId: "new-2" }),
-  });
+/** World where the runner died mid-handover, before promote intent. */
+const handedOver = (opts: Parameters<typeof makeWorld>[0]) => makeWorld({ slots: { stable: "1.0.0", experiment: "2.0.0" },
+  journal: [entry(0, "staged"), entry(1, "handing-over", { version: "2.0.0", priorStartId: "old-1" })], ...opts });
+
+test("a handover that outlived its driver rolls back conservatively", async () => {
+  // The runner died before promote intent. Even a healthy candidate cannot
+  // authorize commitment; recovery must restore the stable slot.
+  const w = handedOver({ probe: async () => ({ version: "2.0.0", pid: 99, startId: "new-2" }) });
   await new UpgradeEngine(w.deps).recover();
-  assert.deepEqual(w.trace, ["journal:readback", "journal:promoted", "slots:promote", "host:resume"]);
-  assert.equal(w.slots.stable, "2.0.0");
+  assert.deepEqual(w.trace, ["journal:rolled-back", "host:stop:experiment", "host:start:stable", "host:resume", "slots:clear"]);
+  assert.equal(w.slots.stable, "1.0.0");
   assert.equal(w.slots.experiment, null);
 });
 
@@ -174,44 +204,25 @@ test("THE POINT: the SAME incarnation reporting the new version is not a handove
   // Nothing was replaced -- the old process is still the live one and merely
   // claims the target version. A "restart was planned" flag could not tell
   // this apart; the incarnation identity can.
-  const w = makeWorld({
-    slots: { stable: "1.0.0", experiment: "2.0.0" },
-    journal: [entry(0, "staged"), entry(1, "handing-over", { version: "2.0.0", priorStartId: "old-1" })],
-    probe: async () => ({ version: "2.0.0", pid: 42, startId: "old-1" }),
-  });
+  const w = handedOver({ probe: async () => ({ version: "2.0.0", pid: 42, startId: "old-1" }) });
   await new UpgradeEngine(w.deps).recover();
   assert.deepEqual(w.trace, ["journal:rolled-back", "host:stop:experiment", "host:start:stable", "host:resume", "slots:clear"]);
   assert.equal(w.slots.stable, "1.0.0");
 });
 
-test("a successor running the OLD version rolls back", async () => {
-  const w = makeWorld({
-    slots: { stable: "1.0.0", experiment: "2.0.0" },
-    journal: [entry(0, "staged"), entry(1, "handing-over", { version: "2.0.0", priorStartId: "old-1" })],
-    probe: async () => ({ version: "1.0.0", pid: 99, startId: "new-2" }),
-  });
-  await new UpgradeEngine(w.deps).recover();
-  assert.equal(w.trace[0], "journal:rolled-back");
-  assert.equal(w.slots.stable, "1.0.0");
-});
-
-test("nothing alive after the handover rolls back", async () => {
-  const w = makeWorld({
-    slots: { stable: "1.0.0", experiment: "2.0.0" },
-    journal: [entry(0, "staged"), entry(1, "handing-over", { version: "2.0.0", priorStartId: "old-1" })],
-    probe: async () => { throw new Error("no socket"); },
-  });
-  await new UpgradeEngine(w.deps).recover();
-  assert.equal(w.trace[0], "journal:rolled-back");
+test("a successor running the OLD version, or nothing alive, rolls back", async () => {
+  const probes: Array<() => Promise<ProcessEvidence>> = [
+    async () => ({ version: "1.0.0", pid: 99, startId: "new-2" }), async () => { throw new Error("no socket"); }];
+  for (const probe of probes) {
+    const w = handedOver({ probe });
+    await new UpgradeEngine(w.deps).recover();
+    assert.equal(w.trace[0], "journal:rolled-back");
+    assert.equal(w.slots.stable, "1.0.0");
+  }
 });
 
 test("a successor cannot promote past the host's own predicates", async () => {
-  const w = makeWorld({
-    slots: { stable: "1.0.0", experiment: "2.0.0" },
-    journal: [entry(0, "staged"), entry(1, "handing-over", { version: "2.0.0", priorStartId: "old-1" })],
-    probe: async () => ({ version: "2.0.0", pid: 99, startId: "new-2" }),
-    predicates: async () => "sessions did not come back",
-  });
+  const w = handedOver({ probe: async () => ({ version: "2.0.0", pid: 99, startId: "new-2" }), predicates: async () => "sessions did not come back" });
   await new UpgradeEngine(w.deps).recover();
   assert.equal(w.trace.at(-1), "slots:clear");
   assert.equal(w.slots.stable, "1.0.0");
@@ -262,3 +273,28 @@ test("recover fails closed on a journal intent from a newer core", async () => {
   await assert.rejects(() => new UpgradeEngine(w.deps).recover(), /not understood by this core/);
   assert.deepEqual(w.trace, []); // refused to act
 });
+
+const never = (): Promise<never> => new Promise(() => {});
+for (const mode of ["resume", "readback", "recovery-stop", "recovery-start", "recovery-resume", "fence"] as const) {
+  test(`completion budget covers ${mode} and issues no later effects`, async () => {
+    const recovering = mode.startsWith("recovery") || mode === "fence";
+    const w = makeWorld({
+      ...(recovering ? { journal: [entry(0, "handing-over")] } : {}),
+      clock: { nowMs: () => 1, after: (_ms, fn) => {
+        const timer = setTimeout(fn, 10); return () => clearTimeout(timer);
+      } },
+    });
+    switch (mode) {
+      case "resume": case "recovery-resume": w.deps.host.resume = never; break;
+      case "readback": w.deps.evaluatePredicates = never; break;
+      case "recovery-stop": w.deps.host.stop = never; break;
+      case "recovery-start": w.deps.host.start = never; break;
+      case "fence": w.deps.host.fence = never; break;
+    }
+    const engine = new UpgradeEngine({ ...w.deps, hostCallBudgetMs: 10 });
+    await assert.rejects(recovering ? engine.recover() : engine.upgrade({ version: "2.0.0", bytesRef: "x" }), /did not return within/);
+    assert.ok(!w.trace.includes("slots:clear"), "uncertain recovery must retain its experiment/evidence");
+    if (mode === "fence") assert.deepEqual(w.trace, [], "no mutation before controller isolation");
+    if (mode === "readback") assert.ok(!w.trace.includes("slots:promote"));
+  });
+}

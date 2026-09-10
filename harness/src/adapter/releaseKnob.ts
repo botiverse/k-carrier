@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import { type ToothContext } from "../teeth/registry.ts";
 import { serveRelease } from "../artifact/m1.ts";
-import { PLAIN_DAEMON_SOURCE } from "../../../examples/service-daemon/source.ts";
+import { PLAIN_DAEMON_SOURCE } from "../fixtures/serviceSource.ts";
 import {
   makeUpgrader,
   releaseSourceFor,

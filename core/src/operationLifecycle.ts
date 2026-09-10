@@ -2,7 +2,7 @@ import type { Clock } from "./clock.ts";
 import { phaseAtRest, type TxnState } from "./txn/state.ts";
 import type { ProvenanceIdentity } from "./upgrader.ts";
 import {
-  acknowledgeOperation,
+  archiveOperation,
   loadOperation,
   persistOperation,
   type OperationDescriptor,
@@ -27,7 +27,6 @@ export interface OperationLifecycle {
   settleRecovery(): Promise<void>;
   reset(): void;
   read(): Promise<OperationRead>;
-  acknowledge(operationId: string): Promise<"acknowledged" | "not-terminal" | "not-found" | "changed">;
 }
 
 export function createOperationLifecycle(
@@ -58,9 +57,7 @@ export function createOperationLifecycle(
         if (existing.operation.outcome === null) {
           throw new Error(`OPERATION_IN_PROGRESS: ${existing.operation.id}`);
         }
-        if (existing.operation.acknowledgedAtMs === null) {
-          throw new Error(`OPERATION_RECEIPT_PENDING: ${existing.operation.id}`);
-        }
+        await archiveOperation(stateDir, existing.operation);
       }
       if (existing.kind === "observed" && existing.operation.id === descriptor.id) {
         record = existing.operation;
@@ -79,7 +76,6 @@ export function createOperationLifecycle(
         reason: null,
         provenance: descriptor.provenance ?? provenance,
         metadata: { ...descriptor.metadata },
-        acknowledgedAtMs: null,
       };
       await persistOperation(stateDir, record);
     },
@@ -108,6 +104,5 @@ export function createOperationLifecycle(
 
     read: () => loadOperation(stateDir),
 
-    acknowledge: (operationId) => acknowledgeOperation(stateDir, operationId, clock.nowMs()),
   };
 }

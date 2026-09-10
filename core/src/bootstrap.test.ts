@@ -7,7 +7,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { bootstrapStable, BootstrapError, slotArtifactPath } from "./bootstrap.ts";
-import { createUpgrader, type CreateUpgraderOptions } from "./createUpgrader.ts";
+import { createRunner, type RunnerOptions } from "./createRunner.ts";
 import type { HostAdapter, ProcessEvidence, Slot } from "./lifecycle/hostAdapter.ts";
 
 async function tempDir(): Promise<string> {
@@ -92,7 +92,7 @@ test("a failed first service upgrade restores the bootstrapped stable executable
     sha256: createHash("sha256").update(candidateBytes).digest("hex"),
     size: candidateBytes.length,
   };
-  const opts: CreateUpgraderOptions = {
+  const opts: RunnerOptions = {
     stateDir,
     host,
     source: {
@@ -103,7 +103,7 @@ test("a failed first service upgrade restores the bootstrapped stable executable
     notificationSink: async () => {},
   };
 
-  const outcome = await createUpgrader(opts).upgrade();
+  const outcome = await createRunner(opts).upgrade();
   assert.equal(outcome.result, "rolled-back");
   assert.deepEqual(starts, ["experiment", "stable"]);
   assert.equal(liveVersion, "1.0.0");

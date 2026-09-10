@@ -5,7 +5,7 @@
  * genesis; every reconcile that reaches the transaction records WHO drove
  * it, write-ahead).
  *
- * These drive createUpgrader in-process (the library plane — the journal
+ * These drive createRunner in-process (the library plane — the journal
  * is exactly the kind of internal tooth the black-box plane cannot reach).
  * Mutation journals/summaries live in m6Mutations.ts (line budget).
  */
@@ -13,7 +13,7 @@ import assert from "node:assert/strict";
 import * as path from "node:path";
 import { promises as fs } from "node:fs";
 import { type ToothContext } from "../teeth/registry.ts";
-import { createUpgrader, type CreateUpgraderOptions } from "../../../core/src/createUpgrader.ts";
+import { createRunner, type RunnerOptions } from "../../../core/src/createRunner.ts";
 import type { ReleaseSource } from "../../../core/src/artifact/source.ts";
 import { staticManifestSource } from "../../../core/src/artifact/staticManifestSource.ts";
 import {
@@ -75,16 +75,16 @@ export async function makeUpgrader(
   server: FakeServer,
   journal: ProvenanceJournal | null,
   opts: MakeUpgraderOpts = {},
-): Promise<ReturnType<typeof createUpgrader>> {
-  const base: Omit<CreateUpgraderOptions, "provenance"> = {
+): Promise<ReturnType<typeof createRunner>> {
+  const base: Omit<RunnerOptions, "provenance"> = {
     host: opts.host ?? hostReporting("2.0.0"),
     source: opts.source ?? staticManifestSource({ baseUrl: server.url }),
     policy: opts.policy ?? "auto",
-    notificationSink: (opts.notificationSink ?? (async () => {})) as CreateUpgraderOptions["notificationSink"],
+    notificationSink: (opts.notificationSink ?? (async () => {})) as RunnerOptions["notificationSink"],
     stateDir: stateDir(ctx),
     ...(opts.installOwnership === undefined ? {} : { installOwnership: opts.installOwnership }),
   };
-  return createUpgrader(journal === null ? base : { ...base, provenance: journal });
+  return createRunner(journal === null ? base : { ...base, provenance: journal });
 }
 
 // ---------------------------------------------------------------------------

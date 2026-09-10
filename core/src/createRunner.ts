@@ -1,5 +1,6 @@
+import { HostCallUncertain } from "./txn/hostCallBudget.ts";
 /**
- * createUpgrader — the one construction every entrypoint uses.
+ * createRunner — the one construction every entrypoint uses.
  *
  * Order of gates: lock -> ownership -> source -> policy -> compat ->
  * download -> engine. Everything before the engine can only produce `held`
@@ -29,8 +30,9 @@ import { driveUpgrade } from "./upgrade/drive.ts";
 import type { ArtifactTransferPolicy } from "./artifact/transferPolicy.ts";
 import { quarantineState } from "./quarantine.ts";
 
-export interface CreateUpgraderOptions extends UpgraderConfig {
+export interface RunnerOptions extends UpgraderConfig {
   clock?: Clock;
+  hostCallBudgetMs?: number;
   /** Reports who owns this install; default: we own it. */
   installOwnership?: () => "self" | "managed-elsewhere";
   /** Optional host semantic gate; a string result refuses the transition. */
@@ -68,7 +70,7 @@ export interface CreateUpgraderOptions extends UpgraderConfig {
   artifactTransferPolicy?: ArtifactTransferPolicy;
 }
 
-export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
+export function createRunner(opts: RunnerOptions): Upgrader {
   const clock = opts.clock ?? systemClock;
   const effects = fileEffects(opts.stateDir);
   const ownership = opts.installOwnership ?? ((): "self" => "self");
@@ -92,6 +94,7 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
     effects,
     host: opts.host,
     clock,
+    ...(opts.hostCallBudgetMs === undefined ? {} : { hostCallBudgetMs: opts.hostCallBudgetMs }),
     evaluatePredicates: async (evidence: ProcessEvidence, targetVersion: string) => {
       lastEvidence = evidence;
       if (evidence.version !== targetVersion) {
@@ -179,9 +182,9 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
     }, request);
 
   return {
-    recover: async () => {
+    recover: async (expected) => {
       operationLifecycle.reset();
-      await recoverUpgrade(opts.stateDir, clock, engine, operationLifecycle.settleRecovery);
+      await recoverUpgrade(opts.stateDir, clock, engine, operationLifecycle.settleRecovery, expected);
     },
 
     async check(): Promise<{ current: string; target: string | null }> {
@@ -225,6 +228,7 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
 
     async rollback(reason: string): Promise<"rolled-back" | { held: string }> {
       const lock = await acquireUpgradeLock(opts.stateDir, clock.nowMs());
+      let release = true;
       try {
         // Gate on the action's nature: settling K's own in-flight
         // transaction is ALWAYS allowed (a held mid-transaction is a
@@ -240,8 +244,11 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
         await effects.slots.clearExperiment();
         await opts.notificationSink({ kind: "rolled-back", detail: { reason } });
         return "rolled-back";
+      } catch (error) {
+        if (error instanceof HostCallUncertain) release = false;
+        throw error;
       } finally {
-        await lock.release();
+        if (release) await lock.release();
       }
     },
 
@@ -259,15 +266,6 @@ export function createUpgrader(opts: CreateUpgraderOptions): Upgrader {
     },
 
     operation: operationLifecycle.read,
-
-    async acknowledgeOperation(operationId) {
-      const lock = await acquireUpgradeLock(opts.stateDir, clock.nowMs());
-      try {
-        return await operationLifecycle.acknowledge(operationId);
-      } finally {
-        await lock.release();
-      }
-    },
 
     quarantineState: (options) => quarantineState(opts.stateDir, options),
   };

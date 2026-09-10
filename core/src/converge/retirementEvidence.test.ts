@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createUpgrader } from "../createUpgrader.ts";
+import { createRunner } from "../createRunner.ts";
 import { staticManifestSource } from "../artifact/staticManifestSource.ts";
 import type { ProcessEvidence } from "../lifecycle/hostAdapter.ts";
 
@@ -32,15 +32,16 @@ async function serve(): Promise<{ baseUrl: string; close: () => void }> {
 }
 
 test("THE POINT: declaring no lifecycle surface must not unlock retirement", async () => {
+  let incarnation = 0; // start() yields a new incarnation, per the contract
   const src = await serve();
   const stateDir = await mkdtemp(path.join(tmpdir(), "k-retire-"));
   try {
     const published = staticManifestSource({ baseUrl: src.baseUrl });
-    const upgrader = createUpgrader({
+    const upgrader = createRunner({
       host: {
-        async quiesce() {}, async stop() {}, async start() {}, async resume() {},
+        async quiesce() {}, async stop() {}, async start() { incarnation += 1; }, async resume() {},
         async healthProbe(): Promise<ProcessEvidence> {
-          return { version: "2.0.0", pid: process.pid, startId: "fresh" };
+          return { version: "2.0.0", pid: process.pid, startId: `fresh-${incarnation}` };
         },
       },
       // no lifecycleSurfaces: this app never declared an OS read-back surface

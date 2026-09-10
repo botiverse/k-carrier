@@ -1,8 +1,8 @@
 {
   "name": "@botiverse/k-carrier",
-  "version": "0.1.8",
+  "version": "0.2.0",
   "packageManager": "pnpm@11.18.0",
-  "description": "A fail-closed upgrade carrier for long-running managed services: two-slot upgrade transactions (promote/rollback), host-driven quiesce/resume handoff, and post-upgrade convergence read-back.",
+  "description": "Reliable application upgrades run by an independent installer: two-slot transactions with promote/rollback, a durable journal, live readback, and bounded crash recovery for self-distributed services.",
   "repository": {
     "type": "git",
     "url": "https://github.com/botiverse/k-carrier"
@@ -37,10 +37,12 @@
     "lint": "oxlint --deny-warnings core harness examples",
     "ratchet": "bash scripts/ratchets.sh",
     "sim": "node harness/src/cli.ts sim",
-    "check": "pnpm typecheck && pnpm lint && pnpm ratchet && pnpm test"
+    "check": "pnpm typecheck && pnpm lint && pnpm ratchet && pnpm test",
+    "test:runner": "node --test --test-timeout=60000 \"core/src/runner/*.test.ts\" \"core/src/launcher/*.test.ts\" \"core/src/protocol/*.test.ts\" \"core/src/lifecycle/commandHost.test.ts\""
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
+    "esbuild": "0.28.2",
     "oxlint": "^1.0.0",
     "oxlint-tsgolint": "^7.0.2001",
     "typescript": "^5.6.0"

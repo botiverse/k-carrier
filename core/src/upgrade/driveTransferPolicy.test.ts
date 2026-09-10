@@ -24,7 +24,6 @@ test("canonical drive derives all transfer budgets from the exact release size",
     settleRecovery: async () => {},
     reset: () => {},
     read: async () => ({ kind: "genesis" as const }),
-    acknowledge: async () => "not-found" as const,
   } satisfies OperationLifecycle;
 
   const result = await driveUpgrade({

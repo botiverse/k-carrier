@@ -1,388 +1,245 @@
-# Integrating K into your application
+# Integrating K
 
-A from-zero guide. If you already know updaters, skim §2 (concepts) and jump
-to your profile in §3.
+Build an independent installer from K and a trusted product adapter. The
+application exposes lifecycle/health controls; it does not run K's transaction
+engine. Read [how an upgrade works](guide.md) first if you have not, then
+start with the [runnable example](../examples/external-service/README.md).
+The [design](design.md) states the obligations; the [reference](reference.md)
+has protocols, exit codes and file layout.
 
-## 0. The premise (read this first)
+## Publish three deliverables
 
-**K assumes restarting your service is not expensive.** It guarantees you
-**come back up** — not that you never went down. A short interruption during a
-version change is accepted by design; what K refuses to accept is an upgrade
-that leaves you unrunnable, half-migrated, or claiming success it cannot prove.
-
-If you need strict continuous availability, **K is the wrong tool** — better
-said here than discovered from behaviour later.
-
-## 1. What problem does K solve? (plain words)
-
-Making a program update itself sounds trivial — download the new version,
-replace the file. For a simple CLI tool, it almost is. It stops being trivial
-the moment your program is a **service that keeps running**:
-
-- You must swap the binary **under a live process** and hand control to the
-  new version without dropping what it was doing.
-- If the new version is broken, you need a way **back** — and "the machine
-  crashed halfway through" must never leave the user with nothing runnable.
-- "It updated" is easy to *claim* and surprisingly hard to *prove*. A version
-  string can say `2.0` while the old process is still running, or while the
-  OS still auto-starts the old copy at boot. (This exact failure — new
-  version number, old behavior — is the production incident K grew out of.)
-- On a **person's own machine** (not a company server), you also can't just
-  change things silently: the owner decides whether upgrades are automatic,
-  confirmed, or notify-only.
-
-K packages the solutions to all of these as a library, so an app adopts them
-instead of re-discovering the failure modes one incident at a time.
-
-## 2. The concepts, in one paragraph each
-
-**Release source** — the one place K asks *your* product two questions:
-"what should this install be on?" (`checkForUpdate`) and "give me exactly
-this version" (`fetchRelease`). K holds **no versioning policy of its own** —
-what your streams are called ("stable", "nightly", "lts-2024"), which version
-counts as newest, whether you use semver or dates, and long-term pinning all
-live inside your source. A ready-made `staticManifestSource({ baseUrl })` covers
-the common case (static host, semver, no automatic downgrade) as *one policy*,
-not as a rule of the framework.
-
-**Two slots: `stable` and `experiment`** — K never overwrites your only copy.
-The running, trusted version sits in the *stable* slot. A new version is
-downloaded into the *experiment* slot and run **as a trial**. Only after it
-proves itself is it *promoted* to stable; if anything fails, K *rolls back*
-to the untouched stable copy. Think blue/green deployment, on one machine.
-
-**Journal** — before K does anything (download, stop, swap, promote), it
-writes what it is *about* to do to an append-only log, then does it. If the
-machine dies mid-upgrade, the next start replays the journal and either
-finishes the job or rolls back — decided by the log, not by guesswork. This
-is why "kill it at any moment" is a test we run, not a fear.
-
-**HostAdapter** — the small interface *you* implement so K can drive *your*
-service without knowing anything about it: pause your workloads
-(`quiesce`), stop/start the service, report health from the live process,
-resume workloads. It's the entire integration surface — K core contains
-zero concepts from any particular app.
-
-**Predicates (proof of upgrade)** — instead of trusting a version string, K
-checks two facts and calls the upgrade done only when both hold:
-`binary_at_target` ("the *live process* — same PID that answered — reports
-the new version") and `host_lifecycle_converged` ("OS-level state like
-launch-at-login was written AND read back consistent from its one true
-source"). Metadata like version fields or channel names is *banned* as
-evidence — it has been wrong in the wild.
-
-**Policy** — who decides an upgrade happens: `auto` (just do it),
-`confirm` (ask the owner first), `notify-only` (tell, don't act). On
-personal devices the owner always wins; even server-pushed upgrades pass
-this gate.
-
-**Install ownership** — if your binary was installed by something else (an
-OS package manager, or a parent service that injects its own copy), that
-manager owns upgrades. K detects this and refuses to self-upgrade a managed
-copy — returning a typed `held: managed-elsewhere` instead of silently
-creating a version mismatch.
-
-## 3. Adoption: two process models, plus capabilities you opt into
-
-A profile is a **process model**, and the model is defined by one number:
-**how many live incarnations K itself manages.**
-
-| Profile | K-managed live processes | Who hands over | Examples |
-|---|---|---|---|
-| **`swap`** | **0** | nobody — new bytes take effect on the next start | a one-shot CLI, `rustup`, **and a long-running interactive session like Claude Code** |
-| **`service`** | **1** (briefly 0 mid-handover) | K stops the old, starts the new, and proves it | a resident daemon, Raft Computer |
-
-That a quick CLI and an hours-long agent session share a profile is surprising
-at first and correct on reflection: **neither has a process K hands over.**
-Several old-version processes may keep running in the `swap` model — normal,
-and invisible to K.
-
-There is **no third model**. OS lifecycle convergence
-and fleet drive are **capabilities** you opt into on top of `service`; bundling
-them into a "profile" confused *what your app does* with *what K does*, and
-what your app does is none of K's business.
-
-```ts
-// a service that also wants its sessions preserved and its OS lifecycle proven
-createUpgrader({ host, source, policy: "auto", /* ... */ });
-// capabilities are declared by implementing the corresponding host duties:
-//   named readback surfaces        -> lifecycle-convergence
-//   attach the drive module        -> fleet-drive
-```
-
-## 3.5 Responsibility boundary: what K guarantees vs what you must
-
-K guarantees **mechanical** properties. It cannot guarantee your
-application's **semantic** compatibility across versions — and being clear
-about that line is part of the contract.
-
-| K guarantees (mechanically, with teeth) | You must guarantee (K can't see it) |
+| Deliverable | Responsibility |
 |---|---|
-| the transition itself: never two incarnations live, never an unbootable host, crash at any step recovers | that version N+1 can *read* what version N wrote (your data, DB schema, caches) |
-| the artifact is byte-complete (sha256 + size) — **authenticity is NOT checked; see §Trust** | that N+1 speaks a protocol your server still accepts (and N does too, if you may roll back) |
-| the *binary* is restorable — rollback returns the exact bytes that were running | that rolling the binary back is *meaningful* — **K restores your binary, not your data**. If N+1 migrated the user's database, rolling back to N leaves N facing N+1-shaped data |
-| proof the new version is actually live and OS lifecycle converged | what `quiesce` must park durably, and what `resume` must bring back |
-| the owner's consent policy is honored | whether this upgrade is *safe to offer* at all (feature flags, in-flight work, licence state) |
+| Bootstrap script (`install.sh`) | Select, download, verify and launch the installer |
+| Installer/runner | K plus your product adapter, published with its own version |
+| Product release | The application executable selected by the adapter's ReleaseSource |
 
-**The sharpest case is rollback**, and it is the same trap as downgrade:
-a rollback that restores the binary while leaving forward-migrated data
-behind is not a rollback, it's a new failure. K refuses to pretend
-otherwise — which is why it gives you a place to say so:
+All three can share a CDN and build repository. For example:
 
-### Declare it, and K enforces it for you
-
-Rather than leaving compatibility as a documentation promise, declare it —
-K turns your declaration into a mechanical gate:
-
-```ts
-class MyHost implements HostAdapter {
-  // Optional. Called BEFORE staging and BEFORE promote.
-  // Return a refusal string to stop the transition; null to allow.
-  async checkCompatibility(from: string, to: string): Promise<string | null> {
-    if (schemaGeneration(to) > schemaGeneration(from) && !hasDownMigration(to, from)) {
-      return `no down-migration from schema ${to} to ${from}`;
-    }
-    return null;
-  }
-}
+```text
+https://downloads.example.com/my-service/
+  install.sh
+  installers/1.4.1/linux-x64/installer
+  installers/1.4.1/manifest.json
+  releases/2.8.0/linux-x64/service
+  releases/2.8.0/manifest.json
 ```
 
-- Refusing at **stage** time means the upgrade never starts (typed
-  `held: incompatible`).
-- Refusing at **promote** time means K rolls back instead of committing.
-- Not implementing it is allowed — then compatibility is entirely your
-  out-of-band responsibility, and K says so in `status --json`
-  (`compatibility: "undeclared"`), so nobody mistakes silence for a
-  guarantee.
+These paths and manifest names are illustrative, not a K schema. The bootstrap
+verifies installer 1.4.1, then asks it to install product 2.8.0. The adapter
+resolves the product's URL, SHA-256 and size independently. Authenticate both
+sets of metadata; hashes alone do not establish publisher identity.
 
-### Invariants are shipped, not hidden
+`install.sh` and `self upgrade` use the same runner protocol and installation
+state. To ship an installer-only fix, publish a new installer and update their
+selection mechanism. Keep versioned artifacts immutable. The controller is an
+execution role, not a mandatory fourth deliverable.
 
-K's guarantees exist as an **exported invariant library** (`core/src/invariants.ts`),
-not as private test assertions. One definition, three consumers: K's own
-teeth, the deterministic simulator (checked after *every* effect, on every
-seed), and **your** tests — plus any app invariants you write in the same
-shape:
+## Distribute a built installer
 
-```ts
-import { BUILT_IN_INVARIANTS, checkInvariants, type Invariant } from "@botiverse/k-carrier";
+End users download finished artifacts; these build choices belong to publishers.
 
-const myAppInvariant: Invariant = {
-  id: "myapp.no-orphaned-jobs",
-  description: "no job is left claimed by a dead worker",
-  check: (s) => (orphanCount(s) > 0 ? `${orphanCount(s)} orphaned jobs` : null),
-};
+| Form | Delivered artifact | Runtime requirement |
+|---|---|---|
+| Single executable per OS/architecture | Node SEA with the runner embedded, built with `--cjs` | No external Node for the worker; supervisor and controller dependencies are separate |
+| Cross-platform JavaScript | K and adapter bundled into one `.mjs` | Independently available Node 24 and adapter dependencies |
 
-const violations = checkInvariants(snapshot, [...BUILT_IN_INVARIANTS, myAppInvariant]);
+One JS file is portable only if its adapter and dependencies support the targets.
+`scripts/build-runner.mjs` produces both bundle forms; SEA injection, signing
+and publication are publisher responsibilities. Whichever form you ship must
+survive stopping and replacing the application.
+
+### Build a single executable
+
+Node's single-executable-application (SEA) tooling embeds the runner into a
+copy of the Node binary. This recipe uses Node 24.15.0 and a CommonJS entry.
+The supervisor executes the result directly, with no
+`interpreter` option. This procedure was verified end to end: a SEA runner
+promoted the example service under `launchRunner`.
+
+```sh
+# 1. CommonJS entry for this Node 24 SEA recipe.
+# This demo adapter needs the controller change described below before upgrading.
+node scripts/build-runner.mjs --cjs examples/external-service/adapter.ts dist/runner.cjs
+
+# 2. Prepare the blob.
+printf '%s' '{"main":"dist/runner.cjs","output":"dist/sea-prep.blob","disableExperimentalSEAWarning":true}' > dist/sea-config.json
+node --experimental-sea-config dist/sea-config.json
+
+# 3. Inject into a Node binary for the target platform.
+cp "$(command -v node)" dist/runner
+# macOS only: codesign --remove-signature dist/runner
+npx postject@1.0.0-alpha.6 dist/runner NODE_SEA_BLOB dist/sea-prep.blob \
+  --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
+# macOS: add --macho-segment-name NODE_SEA to the postject command
+# macOS only: codesign --sign - dist/runner   (use your release identity)
+
+# 4. Publish dist/runner with its sha256 and size; launch it with no interpreter.
 ```
 
-An invariant is a pure predicate over an observable snapshot (the same
-shape `status --json` emits), so the identical check runs in-process, in
-simulation, and black-box against a real binary. Violations return a
-*reason*, so a failure explains itself even when a simulator replays it
-from a seed hours later. Your invariants ride the simulator's seeded fault
-injection for free — that is the practical answer to "who guarantees my
-semantics": **you state them, K's machinery exercises them.**
+Build one SEA per target OS and architecture with that platform's Node
+binary. Binary size depends on the target Node build. Installer and product
+release metadata can include optional gzip transport; both paths use the
+same verified downloader.
 
-Rule of thumb: **K owns the mechanics of the transition; you own the meaning
-of the versions.** Where you can express the meaning as a predicate, hand it
-to K and it becomes enforced rather than hoped for.
+**The SEA pitfall.** Inside a SEA, `process.execPath` is the SEA itself. An
+adapter or controller that spawns `process.execPath some-script.mjs` re-runs
+the embedded runner instead of the script, and the upgrade fails at the first
+controller call. Make the controller a native executable or its own SEA, or
+pass an explicit interpreter path into the adapter at build time. The example
+adapter uses `process.execPath` and therefore only works under an external
+Node.
 
-## 4. The boundary in one picture
+This packages the worker only. `launchRunner` is a Node API, and the demo
+controller also needs Node. To ship an installation chain that needs no
+preinstalled runtime, package the supervisor and controller dependencies too.
 
-```
-            YOUR APP                    |              K CORE
-                                        |
-  daemon ──┐                            |   ┌─ artifact (download/resume/verify/swap)
-  CLI `myapp self upgrade` ──┤ construct|   ├─ (no signature client — see §Trust)
-  install script ──┘    the same        |   ├─ txn (two-slot + journal + state machine)
-                        ┌────────────┐  |   ├─ lifecycle (handoff orchestration)
-                        │  Upgrader  │──┼──►├─ converge (predicates + readback)
-                        └────────────┘  |   ├─ policy (consent/notify gating)
-  your HostAdapter ◄────────────────────┼───┤
-  your notificationSink ◄───────────────┼───┤
-  your onProgress ◄─────────────────────┼───┘  (calls back into your code only)
-```
+The bootstrap selects a compatible installer, downloads and verifies it, passes
+the request, supervises settlement, then cleans temporary code. It must not contain
+another swap/rollback algorithm. K provides `launchRunner` for Node callers;
+there is not yet a complete product-ready shell bootstrap template.
 
-One rule regardless of profile: **every entrypoint constructs the same
-Upgrader.** Your daemon's auto-update loop, your CLI subcommand, your
-install script — same object, same path. This kills the bug class where one
-entrypoint upgrades correctly and another silently doesn't.
+## 1. Define the adapter and state
 
-## 4.5 Showing progress
+`createRunner` requires a HostAdapter. Supply release lookup, installation
+ownership, consent policy,
+notification handling and lifecycle operations through trusted build-time code.
+Use `checkCompatibility(from, to)` for transitions constrained by data/protocol
+compatibility. Another package manager's installation is `managed-elsewhere`.
 
-Pass `onProgress` and K reports where an upgrade is:
+The controller implements fence, quiesce, stop, start, healthProbe and resume, either
+directly or through `createCommandHost`. Stop confirms termination; start is
+idempotent; probe returns version, pid and startId from one live instance. Work
+promised by quiesce must be restorable on both the candidate and rollback slots.
+`fence` must confirm that earlier queued or detached controller actions cannot
+later mutate the installation. `createCommandHost` drains recorded controller
+processes first. Adapters with no effects surviving their worker may omit fence;
+all other adapters must supply it and test it against their real service manager.
+A command controller always receives `fence`; if it queues nothing, it
+acknowledges. A stateless service implements `quiesce` and `resume` as
+acknowledgements too. The full obligations only apply to workloads your
+product promises to preserve across an upgrade.
 
-```ts
-createUpgrader({
-  ...,
-  onProgress: (p) => {
-    // p.stage: checking | downloading | verifying | staging
-    //        | handing-over | probing | promoted | rolled-back
-    // p.downloaded / p.total: bytes, present during `downloading` only
-    render(p);
-  },
-});
-```
+Choose one persistent `stateDir` per installation for slots, journal and receipts.
+Keep application data, installer scratch code and interpreter outside the slots.
+Run the installer outside the application's service-management boundary: spawning
+a child does not escape a systemd cgroup or Windows job.
 
-Three things worth knowing before you draw a bar with it:
+## 2. Establish the initial installation
 
-- **Only `downloading` has a denominator.** Every other stage reports a
-  stage and nothing else, because K does not know how long staging or
-  probing will take and will not invent a number.
-- **`downloaded` counts bytes on disk, not bytes fetched this attempt.** A
-  resumed download starts at the size of the partial file. That is deliberate:
-  a bar that restarts from zero after a network blip reads as "it lost my
-  download".
-- **Your sink cannot fail the upgrade.** K calls it inside a `try`/`catch`
-  and discards anything it throws. An observation surface must never become
-  a failure mode — if your renderer breaks, the upgrade still completes.
+K's upgrade flow requires trusted, usable bytes in stable. For an existing
+installation, a trusted setup step calls
+`bootstrapStable({stateDir, version, artifactPath})` with its current executable.
+This seeds a fallback; it does not authenticate/download those bytes or start a
+service. It refuses conflicting state and does not overwrite initialized stable.
+Fresh installation and historical-state repair remain product setup work.
 
-Artifact transfer has three independent fail-closed budgets. Response headers
-must arrive promptly, body progress must not go silent, and the full transfer
-has a hard ceiling derived from the release source's declared byte size. The
-defaults accept a Computer-sized binary that takes longer than ten seconds
-while still bounding an unreachable server and a wedged mid-body stream. An
-adopter with stricter network requirements may provide all four policy fields:
+The controller starts the K-selected artifact via `slotArtifactPath` or the path
+provided by `createCommandHost`. Each slot contains one `artifact.bin`; package
+layouts and additional install hooks need a product contract.
 
-```ts
-createUpgrader({
-  ...,
-  artifactTransferPolicy: {
-    responseTimeoutMs: 20_000,
-    idleTimeoutMs: 30_000,
-    minimumBytesPerSecond: 128 * 1024,
-    maximumOverallTimeoutMs: 20 * 60_000,
-  },
-});
-```
+Promotion renames the slot directories. On Windows a running executable
+locks its directory against rename, so a controller there must copy or
+hard-link the artifact to a runtime path outside the slots before starting
+it, and must not execute `artifact.bin` in place. On POSIX running from the
+slot works because open files survive a rename, but copying keeps the
+runtime path stable across promotion on every platform. The example copies
+the selected artifact to `active.mjs` for both reasons (Node also needs the
+extension).
 
-The total budget is `responseTimeoutMs + size / minimumBytesPerSecond`, capped
-by `maximumOverallTimeoutMs`. Invalid, zero, or effectively unbounded policies
-are rejected before the byte request starts.
+K restores executables, not data migrations. Keep repair/cleanup limited to owned
+installation state and provide backup/restore for destructive data changes.
 
-The stages are not a parallel state machine: they are derived from the L1
-transaction phases (`stageForPhase`), so a progress display can never show a
-state the transaction does not have.
+## 3. Build and launch
 
-## 4.6 One durable operation receipt
+On the build machine, bundle your trusted adapter with K:
 
-When a host detaches the transaction driver from the service it replaces,
-pass an exact operation descriptor to `upgradeTo`. K then owns the only
-durable operation state, including the previous stable version and terminal
-outcome:
-
-```ts
-await upgrader.upgradeTo("2.0.0", {
-  consented: true,
-  operation: {
-    id: requestId,
-    startedAtMs: Date.now(),
-    metadata: { originServerId }, // non-secret host correlation only
-  },
-});
-
-const receipt = await upgrader.operation();
-if (receipt.kind === "observed" && receipt.operation.outcome !== null) {
-  await deliver(receipt.operation);
-  await upgrader.acknowledgeOperation(receipt.operation.id);
-}
-
-// Fresh-install hosts may quarantine a complete, quiesced K state atomically.
-// The destination must be an absolute path outside stateDir and the host must
-// supply its clock timestamp. Terminal receipts are moved without deletion;
-// active receipts require an in-lock host handoff proof.
-const backup = await upgrader.quarantineState({
-  destination: "/var/lib/myapp/k-quarantine/op-123-1700000000000",
-  timestampMs: 1700000000000,
-});
-// backup.quarantinePath is the durable, non-secret audit location.
+```sh
+pnpm install --frozen-lockfile
+node scripts/build-runner.mjs examples/external-service/adapter.ts /tmp/k-runner.mjs
 ```
 
-The host may project this receipt into UI or transport, but must not maintain
-a second pending/status/previous-version state machine. `recover()` settles an
-active receipt under K's upgrade lock before the host reads it again. A corrupt
-or future-version receipt is `unreadable`, never treated as genesis or success.
+Follow the [example setup](../examples/external-service/README.md) before invoking
+that example runner. After authenticating the caller and obtaining approval for
+the target, submit a request from an operator shell or independent supervisor:
 
-## 5. Publishing releases
-
-If you use the built-in `staticManifestSource`, its layout is:
-
-```
-<baseUrl>/manifest.json          version, per-target {file, sha256, size}
-<baseUrl>/<artifact>             the binaries
+```sh
+printf '%s' '{"protocolVersion":1,"action":"upgrade","id":"install-2","targetVersion":"2.0.0","consented":true}' | node /tmp/k-runner.mjs
 ```
 
-Root private keys stay offline; root public keys are compiled into your app.
-Any static file host works — there is no server-side logic.
+`consented` records approval; it is not authorization supplied by an untrusted
+network client. Requests cannot select adapter modules, commands or release URLs.
+Logs go to stderr and the response to stdout. Web entrypoints need an external
+launch facility and a way to retrieve the result after reconnection.
 
-**This layout belongs to that source, not to K.** Publishing from a private
-API, date-stamped paths, or an OCI registry means writing your own
-`ReleaseSource`; K only ever learns `{ version, url, sha256, size }` and never
-parses a manifest itself. Multiple streams are usually one base URL each
-(`.../stable`, `.../nightly`), which also keeps their blast radius separate.
+## 4. Observe and recover
 
-### Trust: what K checks, and what it does not
+Inspect both the operation outcome and exit code; the
+[walkthrough](guide.md#reading-the-result) explains the two results that
+surprise people, and the [reference](reference.md#protocol-v1) lists every
+code.
 
-**K verifies integrity, not authenticity.** It checks `sha256` + `size` on the
-assembled bytes. It does **not** verify who produced them: there is no
-signature chain and no trust root (removed 2026-08-06 — `docs/design-v1.md`
-§L0.5 has the decision).
+Retry the same id/target to replay a terminal result. Use a new id for a new
+attempt; there is no by-id status or archive-list action. Terminal receipts are
+archived without an acknowledgement gate. Active work, corrupt state and a live
+lock owner still prevent conflicting transactions. See
+[receipts and retries](reference.md#receipts-and-retries).
 
-A digest is not a signature. `sha256` proves the bytes you received are the
-bytes the manifest described — but the manifest comes from the same place the
-bytes do, so a source serving malicious bytes will serve a matching digest for
-them just as happily.
+After installer failure, run a compatible verified installer with `recover` over
+the same state. Recovery needs no release lookup: before durable promote intent
+it restores stable; after it, it replays commit. An external supervisor or
+operator must trigger this after power loss. Never clear a lock or receipt merely
+to bypass unresolved work.
 
-⚠️ **So this is yours to think about, not K's:**
+Use `launchRunner` for a supervised install, or `superviseRunner` when the caller
+needs a structured result. Both enforce execution/recovery deadlines and recover
+only the original operation. Exit 3 leaves a verified runner and `recovery.json`;
+call `resumeRunner(path)` to retry offline. Keep that directory until recovery
+settles. The [example installer](../examples/external-service/install.mjs) wires
+this flow. Directly invoking a worker does not supervise it.
 
-| Threat | Covered by K? |
-|--------|---------------|
-| corruption in transit | ✅ (and your HTTPS already covers it) |
-| a wrong artifact on your CDN — leaked publish credentials, misconfigured bucket, poisoned pipeline | ❌ **not covered** — the check passes and every client installs |
+If the whole invocation dies, start a compatible installer against the same
+state; it settles unfinished work before executing a new request. A live earlier
+worker still blocks takeover. Product OS startup hooks and service-unit isolation
+must be validated separately; K does not install a permanent watchdog. If a
+request died before its operation was recorded, bound recovery refuses rather
+than guessing which earlier operation it owns. Inspect `status` and explicitly
+run operator `recover` on the retained runner when current-state repair is needed.
 
-**OS code signing is a different guarantee, not a substitute.** Authenticode /
-codesign / notarization answer "is this program signed by a recognisable
-vendor", enforced by the OS on the install paths it controls. A distribution
-signature answers "**is this the exact artifact we published**", enforced by
-your app before the bytes reach a slot. If you ship through an app store or a
-platform installer you get some of the former for free; if you ship a plain
-binary from a CDN, as the example host does, you get neither automatically.
+## 5. Validate the product
 
-If you need authenticity today, do it in your own `ReleaseSource`: verify
-before returning the `Release`, and refuse rather than return unverified bytes.
-⚠️ And if you build it, remember the trap this project already hit: **"accept
-unsigned" may only be declared by YOUR code, never by a field in the manifest**
-— the manifest is served by the very party a signature chain exists to distrust.
+Use the [test plan](test-plan.md), then test your real installer and controller on
+each target platform. Cover baseline setup, running-service upgrade, bad-candidate
+rollback, installer death, offline recovery, workload/data retention and service
+isolation. Observe declared OS lifecycle surfaces before retiring their previous
+manager. A green framework test is not product acceptance.
 
-## 6. Testing your integration
+## Using Hands as the release platform
 
-Three beliefs shape how K is tested — knowing them explains what the harness
-will and won't do with your app (full design: `harness-design.md`):
+Hands is the release-management platform K's authors use to publish installers
+and application releases. Any platform that answers "which version, at which
+URL, with which SHA-256 and size" fits the same way; nothing here is specific
+to Hands.
 
-1. **Test like a user.** The primary tests spawn your *real binary* and drive
-   it through its *CLI commands*, asserting from outside (exit codes, files,
-   what version actually runs next). Library-level tests are the exception,
-   not the rule — a green that only exists inside an import is not proof.
-2. **The tests are the spec.** Every guarantee K claims (never dual-run,
-   never bricked, sessions survive rollback…) exists as a registered tooth
-   with a declared way to make it fail. A claim without a runnable red case
-   doesn't count — that includes profile support ("K supports CLIs" is
-   backed by a runnable example, not a sentence).
-3. **No test backdoors.** K core contains zero test-awareness — no test
-   modes, no "skip verification" flags. Everything the harness uses is a
-   product surface you also get (status command, injected clock, config).
-   So passing the harness means the *shipping* code path works, not a
-   test-shaped variant of it.
+Hands supplies publication, channel/platform selection and artifact metadata.
+Your adapter maps its response to a K ReleaseSource with exact version, URL,
+SHA-256 and size; K performs the local transaction. A launcher may separately
+obtain the installer from Hands. Keep installer and product identities distinct.
 
-Run the harness against **your** adapter, at your profile:
+K has no built-in Hands connector or result uploader. Product authentication,
+channel/cohort policy and remote reporting belong to the integration. Forward the
+actual operation id/outcome; publication or process launch is not installation
+success, and local promotion does not prove cloud reconnection.
 
-```
-k-harness --profile service --adapter ./dist/myHost.js
-```
+Withdrawing a release affects future distribution. It does not roll back already
+installed machines. K can recover existing local slots offline; downloading an
+older release still depends on the source authorizing and serving it.
 
-Same teeth K tests itself with, tiered to your profile: crash-injection per
-state-machine edge, quiesce/resume equivalence (including post-rollback),
-probe liveness, predicate readback. Green here means your integration honors
-the contract — it is the same bar the built-in examples must pass
-(`examples/`: one runnable app per profile; a profile without a green
-example has no support claim).
+### Optional gzip release transport
+
+A `Release` may include a `gzip` URL, compressed size and SHA-256. K verifies
+compressed bytes, bounds decompression, then checks the canonical size and hash.
+Missing gzip metadata uses the canonical URL. Failure of a selected gzip object
+is terminal; K does not silently switch representations. Resume offsets refer to
+the compressed object.

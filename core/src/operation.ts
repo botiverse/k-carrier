@@ -4,10 +4,11 @@
  * Hosts may project this record into their own UI or transport, but they do
  * not maintain a second upgrade state machine. The operation receipt is the
  * single durable answer to: what is running, which version was requested,
- * what stable version can be restored, and whether the terminal receipt has
- * already been acknowledged by the host transport.
+ * what stable version can be restored, and the outcome. Transport delivery
+ * tracking belongs to the caller and cannot block another transaction.
  */
 import { promises as fs } from "node:fs";
+import { createHash } from "node:crypto";
 import * as path from "node:path";
 import { platformOpsFor } from "./platform/index.ts";
 import type { ProvenanceIdentity } from "./upgrader.ts";
@@ -75,8 +76,6 @@ export interface OperationRecord {
   reason: string | null;
   provenance: ProvenanceIdentity | null;
   metadata: Record<string, string>;
-  /** Host transport receipt, not a second transaction outcome. */
-  acknowledgedAtMs: number | null;
 }
 
 export type OperationRead =
@@ -97,7 +96,7 @@ function validIdentity(value: unknown): value is ProvenanceIdentity {
   );
 }
 
-function parseOperation(text: string): OperationRecord {
+export function parseOperation(text: string): OperationRecord {
   const parsed = JSON.parse(text) as Partial<OperationRecord>;
   if (
     parsed.formatVersion !== OPERATION_FORMAT_VERSION
@@ -122,7 +121,6 @@ function parseOperation(text: string): OperationRecord {
     || parsed.metadata === null
     || Array.isArray(parsed.metadata)
     || Object.values(parsed.metadata).some((value) => typeof value !== "string")
-    || !(parsed.acknowledgedAtMs === null || typeof parsed.acknowledgedAtMs === "number")
   ) {
     throw new Error("operation record has an invalid shape");
   }
@@ -160,23 +158,47 @@ export async function loadOperation(stateDir: string): Promise<OperationRead> {
   }
 }
 
-export async function acknowledgeOperation(
-  stateDir: string,
-  operationId: string,
-  acknowledgedAtMs: number,
-): Promise<"acknowledged" | "not-terminal" | "not-found" | "changed"> {
-  const current = await loadOperation(stateDir);
-  if (current.kind === "genesis") return "not-found";
-  if (current.kind === "unreadable") throw new Error(current.reason);
-  if (current.operation.id !== operationId) return "changed";
-  if (current.operation.outcome === null) return "not-terminal";
-  // Exact replay is idempotent. The first delivery time is part of the audit
-  // receipt; a retry must not rewrite it or manufacture a later delivery.
-  if (current.operation.acknowledgedAtMs !== null) return "acknowledged";
-  await persistOperation(stateDir, {
-    ...current.operation,
-    updatedAtMs: acknowledgedAtMs,
-    acknowledgedAtMs,
-  });
-  return "acknowledged";
+/** A completed request is replayed from its durable receipt, never executed twice. */
+export class OperationReplay extends Error {
+  readonly operation: OperationRecord;
+  constructor(operation: OperationRecord) {
+    super(`OPERATION_REPLAY: ${operation.id}`);
+    this.operation = operation;
+    this.name = "OperationReplay";
+  }
+}
+
+function archivePath(stateDir: string, id: string): string {
+  return path.join(stateDir, "receipts", `${createHash("sha256").update(id).digest("hex")}.json`);
+}
+
+/** Durable history is independent of transport acknowledgement. Called under K's lock. */
+export async function archiveOperation(stateDir: string, operation: OperationRecord): Promise<void> {
+  if (operation.outcome === null) throw new Error("cannot archive an active operation");
+  const target = archivePath(stateDir, operation.id);
+  const existing = await loadArchivedOperation(stateDir, operation.id);
+  if (existing.kind === "unreadable") throw new Error(existing.reason);
+  if (existing.kind === "observed") {
+    if (existing.operation.targetVersion !== operation.targetVersion || existing.operation.outcome !== operation.outcome) {
+      throw new Error("OPERATION_ARCHIVE_CONFLICT");
+    }
+    return;
+  }
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  const tmp = `${target}.tmp`;
+  const handle = await fs.open(tmp, "w", 0o600);
+  try { await handle.writeFile(JSON.stringify(operation)); await handle.sync(); }
+  finally { await handle.close(); }
+  await platformOpsFor().renamePath(tmp, target);
+}
+
+export async function loadArchivedOperation(stateDir: string, id: string): Promise<OperationRead> {
+  try {
+    const operation = parseOperation(await fs.readFile(archivePath(stateDir, id), "utf8"));
+    if (operation.id !== id || operation.outcome === null) throw new Error("invalid archived receipt identity/outcome");
+    return { kind: "observed", operation };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { kind: "genesis" };
+    return { kind: "unreadable", reason: "cannot read archived K receipt" };
+  }
 }

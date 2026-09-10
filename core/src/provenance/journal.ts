@@ -174,7 +174,7 @@ export interface ProvenanceSummary {
 }
 
 /**
- * Record one reconcile in the journal (used by createUpgrader before the
+ * Record one reconcile in the journal (used by createRunner before the
  * transaction). The VERSION comes from the release the reconcile drove —
  * the journal records what was attempted, not the caller's claim. Identity
  * defaults to the local operator.

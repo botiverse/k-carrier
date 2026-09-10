@@ -36,6 +36,13 @@ export interface PlatformOps {
    * RUNNING image; this one is plain state.
    */
   renamePath(from: string, to: string): Promise<void>;
+  /**
+   * Make directory entries durable. A rename or file creation is only
+   * crash-safe once the PARENT directory is fsync'd; `fh.sync()` on the file
+   * alone leaves the new name in the page cache. No-op where the OS does not
+   * support fsync on a directory handle (Windows).
+   */
+  syncDirectory(dir: string): Promise<void>;
   /** Identifier used to select a manifest target, e.g. "linux-x64". */
   platformKey(): string;
 }

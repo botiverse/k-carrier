@@ -1,6 +1,6 @@
 /**
  * M1 exit checks — the swap-tool demo runs a REAL upgrade through core's
- * Upgrader (createUpgrader facade): end-to-end promotion with state
+ * Upgrader (createRunner facade): end-to-end promotion with state
  * assertions read via upgrader.state() (never internal files), and
  * automatic rollback of a version that fails to start.
  */
@@ -14,18 +14,18 @@ import { currentPlatformKey } from "../../../core/src/artifact/staticManifestSou
 import { FakeServer } from "../fake-server/server.ts";
 import { ArtifactFactory } from "../artifact-factory/factory.ts";
 import { runCommand } from "../artifact-factory/run.ts";
-import { CLI_TOOL_SOURCE } from "../../../examples/swap-tool/source.ts";
+import { CLI_TOOL_SOURCE } from "../fixtures/cliToolSource.ts";
 
-/** The swap-tool demo's @botiverse/k-carrier wiring (createUpgrader module URL). */
-export function coreUpgraderUrl(): string {
-  return pathToFileURL(path.join(import.meta.dirname, "../../../core/src/createUpgrader.ts")).href;
+/** The swap-tool demo's @botiverse/k-carrier wiring (createRunner module URL). */
+export function runnerFactoryUrl(): string {
+  return pathToFileURL(path.join(import.meta.dirname, "../../../core/src/createRunner.ts")).href;
 }
 
 export function swapToolEnv(ctx: ToothContext, baseUrl: string): Record<string, string> {
   return {
     K_RELEASE_BASE: baseUrl,
     K_STATE_DIR: path.join(ctx.sandboxDir, "state"),
-    K_CORE_UPGRADER: coreUpgraderUrl(),
+    K_CORE_UPGRADER: runnerFactoryUrl(),
   };
 }
 
@@ -62,9 +62,9 @@ export async function buildSwapTool(ctx: ToothContext): Promise<string> {
 export async function readState(env: Record<string, string>): Promise<TxnState> {
   const coreSrcUrl = new URL(".", env.K_CORE_UPGRADER).href;
   const script = [
-    `const { createUpgrader } = await import(${JSON.stringify(env.K_CORE_UPGRADER)});`,
+    `const { createRunner } = await import(${JSON.stringify(env.K_CORE_UPGRADER)});`,
     `const { staticManifestSource } = await import(${JSON.stringify(new URL("artifact/staticManifestSource.ts", coreSrcUrl).href)});`,
-    `const u = createUpgrader({`,
+    `const u = createRunner({`,
     `  host: { quiesce: async () => {}, stop: async () => {}, start: async () => {}, healthProbe: async () => ({ version: "x", pid: 0, startId: "x" }), resume: async () => {} },`,
     `  source: staticManifestSource({ baseUrl: ${JSON.stringify("http://127.0.0.1:1")} }),`,
     `  policy: "auto", notificationSink: async () => {},`,

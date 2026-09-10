@@ -86,7 +86,8 @@ test("known-red: drive-promote catches an install of a different version than ap
   try {
     await assert.rejects(
       checkM6DrivePromoteThroughPolicy(ctx, { installOtherVersion: true }),
-      /consent binds/,
+      // The canonical drive now refuses the mismatched release before installation.
+      /PINNED_VERSION_MISMATCH|consent binds/,
     );
   } finally {
     await teardown();

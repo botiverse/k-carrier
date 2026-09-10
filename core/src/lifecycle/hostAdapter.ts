@@ -10,22 +10,31 @@
  *    equivalent — including when resume() happens on the ROLLED-BACK slot.
  *  - healthProbe(): evidence must be bound to one live process (same-PID /
  *    startId), never assembled from files or caches. A probe that cannot
- *    prove which process answered is not a probe.
- *  - start(): may return BEFORE the process exists. Some hosts cannot start
- *    themselves at all -- a service that is replaced by exiting, letting its
- *    supervisor respawn it from the new bytes, is started by that supervisor,
- *    asynchronously. So start() means "the successor has been asked for",
- *    never "the successor is running": only healthProbe() can say that.
+ *    prove which process answered is not a probe. K probes once before
+ *    handover and refuses readback evidence that repeats that startId.
+ *  - start(): may return before readiness. The external controller asks
+ *    the service manager to start the selected artifact; healthProbe()
+ *    then proves that the requested incarnation is actually running.
  *
- * A consequence worth stating, because it decides who finishes an upgrade:
- * on such hosts the process driving the transaction DIES on the success path.
- * The successor finds a journal that stops mid-handover -- indistinguishable
- * from a crash -- and K resolves it by EVIDENCE (a live process reporting the
- * experiment version from a different incarnation), never by a flag saying the
- * restart was planned. A crash could set that flag just as easily.
+ * K runs outside the resident process and service unit, so stopping the
+ * application does not kill the transaction owner. A runner crash before
+ * durable promote intent restores stable; after that intent, recovery
+ * replays the commit. A live candidate alone never authorizes promotion.
  */
 export interface HostAdapter {
-  /** Park all hosted workloads durably. Idempotent. */
+  /**
+   * Drain or fence effects left by an earlier worker/controller before replay.
+   * Called under K's transaction lock. Throw if isolation cannot be proved.
+   * Required for adapters whose effects can outlive their worker; purely
+   * in-process adapters without surviving effects may omit it.
+   */
+  fence?(): Promise<void>;
+
+  /**
+   * Park all hosted workloads durably. Idempotent. A stateless service
+   * acknowledges and returns; the obligation covers only workloads the
+   * product promises to preserve across an upgrade.
+   */
   quiesce(): Promise<void>;
 
   /** Stop the resident service process tree for the given slot. */
@@ -40,7 +49,10 @@ export interface HostAdapter {
    */
   healthProbe(): Promise<ProcessEvidence>;
 
-  /** Resume workloads parked by quiesce(). Must also work after rollback. */
+  /**
+   * Resume workloads parked by quiesce(). Must also work after rollback,
+   * i.e. on the previous version. Trivial when quiesce() is trivial.
+   */
   resume(): Promise<void>;
 }
 
@@ -60,8 +72,8 @@ export interface HostAdapter {
  * reconstructed after a failure, it was never disturbed.
  *
  * ⚠️ `stable` here is a POSITION, not the name of a release channel. If your
- * product also has a channel called "stable" (ours does), they are unrelated:
- * a channel says which stream you follow, a slot says which copy on disk.
+ * product also has a channel called "stable", they are unrelated: a channel
+ * says which stream you follow, a slot says which copy on disk.
  */
 export type Slot = "stable" | "experiment";
 

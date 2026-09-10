@@ -1,6 +1,6 @@
 /**
  * retireReason — the fail-closed retirement gate (M5, extracted from
- * createUpgrader for the line budget). The legacy lifecycle manager may be
+ * createRunner for the line budget). The legacy lifecycle manager may be
  * retired ONLY after host_lifecycle_converged passed on the last promote;
  * before that, retirement is refused with a typed HOLD — removing the old
  * supervisor without a converged replacement leaves the machine with

@@ -33,7 +33,6 @@ function operation(overrides: Partial<OperationRecord> = {}): OperationRecord {
     reason: "download failed",
     provenance: null,
     metadata: {},
-    acknowledgedAtMs: null,
     ...overrides,
   };
 }

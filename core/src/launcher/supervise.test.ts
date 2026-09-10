@@ -1,0 +1,226 @@
+/** @invariant A real install settles its original operation, or retains verified offline recovery. */
+import test from "node:test";
+import assert from "node:assert/strict";
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { execFile, spawn } from "node:child_process";
+import { promisify } from "node:util";
+import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
+import { setTimeout as sleep } from "node:timers/promises";
+import { bootstrapStable } from "../bootstrap.ts";
+import { createCommandHost } from "../lifecycle/commandHost.ts";
+import { superviseRunner, resumeRunner, type RunnerLaunchResult } from "./supervise.ts";
+import { platformOpsFor } from "../platform/index.ts";
+const root = fileURLToPath(new URL("../../../", import.meta.url));
+const exec = promisify(execFile);
+const request = (id: string, targetVersion = "2.0.0") => ({ protocolVersion: 1 as const,
+  action: "upgrade" as const, id, targetVersion, consented: true });
+const releaseOf = (bytes: Buffer) => ({ version: "runner", url: `data:application/octet-stream;base64,${bytes.toString("base64")}`,
+  size: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") });
+
+async function until(check: () => Promise<boolean>) {
+  for (let i = 0; i < 300; i++) { if (await check()) return; await sleep(20); }
+  assert.fail("process boundary was never reached");
+}
+
+// One installation, one built runner, one live service: the scenarios below
+// run in order against that shared state because each leaves the journal,
+// receipts and service exactly where the next one needs them. They are
+// subtests so a failure names its scenario instead of the whole install.
+test("supervisor settles every scenario against one real install", async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "k-supervisor-"));
+  const previous = process.env.K_EXAMPLE_HOME;
+  process.env.K_EXAMPLE_HOME = dir;
+  const stateDir = path.join(dir, "k");
+  const host = createCommandHost({ stateDir, command: [process.execPath, path.join(dir, "controller.mjs"), dir] });
+  let externalStop: Promise<void> | undefined;
+  t.after(async () => {
+    await fs.writeFile(path.join(dir, "release-controller"), "cleanup").catch(() => {});
+    await externalStop?.catch(() => {});
+    await host.stop("stable").catch(() => {});
+    if (previous === undefined) delete process.env.K_EXAMPLE_HOME; else process.env.K_EXAMPLE_HOME = previous;
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+  await fs.copyFile(path.join(root, "examples/external-service/controller.mjs"), path.join(dir, "controller.mjs"));
+  const template = await fs.readFile(path.join(root, "examples/external-service/service.mjs"), "utf8");
+  const initial = path.join(dir, "initial.mjs");
+  await fs.writeFile(initial, template.replace("VERSION_PLACEHOLDER", "1.0.0"));
+  await bootstrapStable({ stateDir, version: "1.0.0", artifactPath: initial });
+  await host.start("stable");
+  const helper = path.join(dir, "helper.mjs");
+  await exec(process.execPath, [path.join(root, "scripts/build-runner.mjs"),
+    path.join(root, "harness/src/fixtures/supervisedAdapter.ts"), helper], { cwd: root });
+  const release = releaseOf(await fs.readFile(helper));
+  const common = { release, interpreter: process.execPath, scratchDir: path.join(dir, "scratch"),
+    executionTimeoutMs: 6000, recoveryTimeoutMs: 4000, totalTimeoutMs: 24000 };
+  async function publish(version: string) {
+    const artifact = releaseOf(Buffer.from(template.replace("VERSION_PLACEHOLDER", version)));
+    await fs.writeFile(path.join(dir, "release.json"), JSON.stringify({ ...artifact, version }));
+  }
+  const fault = (mode: string) => fs.writeFile(path.join(dir, "fault"), mode);
+  const clearFault = () => fs.unlink(path.join(dir, "fault"));
+  const fetches = async () => (await fs.readFile(path.join(dir, "fetches"), "utf8")).trim().split("\n");
+  const journal = () => fs.readFile(path.join(stateDir, "journal.jsonl"), "utf8");
+  await publish("2.0.0");
+
+  // Results that later scenarios build on.
+  let unresolved: RunnerLaunchResult | undefined;
+  let orphan: RunnerLaunchResult | undefined;
+
+  await t.test("worker crash or hang during stop: recovery restores stable and settles", async () => {
+    for (const mode of ["stop-crash", "stop-hang"]) {
+      await fault(mode);
+      const result = await superviseRunner({ ...common, request: request(mode) });
+      assert.equal(result.exitCode, 1, JSON.stringify(result));
+      assert.equal(result.recoveryFile, null);
+      assert.equal(result.attempts, 2);
+      assert.equal(result.response?.operation.kind, "observed");
+      assert.equal((await host.healthProbe()).version, "1.0.0");
+    }
+  });
+
+  await t.test("recovery that keeps hanging ends within budget and retains a verified runner", async () => {
+    // Both the initial worker and recovery workers hang; retries/deadline must end.
+    await fs.rm(path.join(dir, "stopped"), { force: true });
+    await fault("recovery-hang");
+    const started = Date.now();
+    unresolved = await superviseRunner({ ...common, request: request("unresolved"), recoveryTimeoutMs: 200, recoveryAttempts: 2 });
+    assert.equal(unresolved.exitCode, 3);
+    assert.equal(unresolved.attempts, 3);
+    assert.ok(Date.now() - started < 6000);
+    assert.ok(unresolved.recoveryFile);
+    const descriptor = JSON.parse(await fs.readFile(unresolved.recoveryFile, "utf8")) as { file: string };
+    const retained = await fs.readFile(descriptor.file);
+    assert.ok(retained.length > 0);
+    await fs.appendFile(descriptor.file, "corrupted");
+    await assert.rejects(resumeRunner(unresolved.recoveryFile), /RECOVERY_ARTIFACT_MISMATCH/);
+    await fs.writeFile(descriptor.file, retained);
+    const unfinished = JSON.parse(await fs.readFile(path.join(stateDir, "operation.json"), "utf8")) as { outcome: unknown };
+    assert.equal(unfinished.outcome, null);
+  });
+
+  await t.test("offline recovery settles from the journal and retained runner alone", async () => {
+    // Existing journal and runner suffice even after the release source disappears.
+    assert.ok(unresolved?.recoveryFile, "depends on the unresolved scenario");
+    await clearFault();
+    await fs.unlink(path.join(dir, "release.json"));
+    const recovered = await resumeRunner(unresolved.recoveryFile, { executionTimeoutMs: 6000 });
+    assert.equal(recovered.exitCode, 1, JSON.stringify(recovered));
+    assert.equal(recovered.recoveryFile, null);
+    assert.equal((await host.healthProbe()).version, "1.0.0");
+  });
+
+  await t.test("a fault after durable promote intent replays the commit", async () => {
+    await publish("2.0.0");
+    await fault("resume-once");
+    const commit = await superviseRunner({ ...common, request: request("commit") });
+    assert.equal(commit.exitCode, 0, JSON.stringify(commit));
+    assert.equal(commit.attempts, 2);
+    await fs.stat(path.join(dir, "resuming")); // the deadline must hit the intended post-commit fault
+    assert.equal((await host.healthProbe()).version, "2.0.0");
+  });
+
+  await t.test("a crash while reporting replays the recorded terminal receipt", async () => {
+    await publish("3.0.0");
+    await fault("report-crash");
+    const report = await superviseRunner({ ...common, request: request("report", "3.0.0") });
+    assert.equal(report.exitCode, 0, JSON.stringify(report));
+    assert.equal(report.response?.result, "replayed");
+  });
+
+  await t.test("an old supervisor replays its archive without touching the newer service", async () => {
+    const before = await host.healthProbe();
+    const journalBefore = await journal();
+    const old = await superviseRunner({ ...common, request: { protocolVersion: 1, action: "recover",
+      expected: { id: "stop-crash", targetVersion: "2.0.0" } } });
+    assert.equal(old.exitCode, 1);
+    assert.equal(old.response?.result, "replayed");
+    assert.deepEqual(await host.healthProbe(), before);
+    assert.equal(await journal(), journalBefore);
+    assert.deepEqual(await fetches(), ["2.0.0", "2.0.0", "2.0.0", "2.0.0", "3.0.0"],
+      "recovery must never fetch/retry the requested upgrade");
+  });
+
+  await t.test("a controller that outlives its worker blocks takeover until it exits", async () => {
+    // The old worker dies while a real controller is still capable of stopping
+    // the service. Launch that controller from the harness so its lifetime is
+    // independent of worker-owned OS jobs on every platform. A successor must
+    // not overlap its pending effect.
+    let controller = await fs.readFile(path.join(dir, "controller.mjs"), "utf8");
+    controller = controller.replace("case 'stop':", `case 'stop':
+    if (request.slot === 'stable') {
+      await (await import('node:fs/promises')).writeFile(join(dir, 'controller-live'), String(process.pid));
+      for (;;) { try { await readFile(join(dir, 'release-controller')); break; } catch {} await sleep(20); }
+    }`);
+    await fs.writeFile(path.join(dir, "controller.mjs"), controller);
+    await publish("4.0.0");
+    await fault("external-controller");
+    const pending = superviseRunner({ ...common, request: request("orphan", "4.0.0"), executionTimeoutMs: 6000,
+      recoveryTimeoutMs: 1000, recoveryAttempts: 1 });
+    await until(() => fs.stat(path.join(dir, "needs-controller")).then(() => true, () => false));
+    await fs.rm(path.join(dir, "fence-attempt"), { force: true });
+    externalStop = host.stop("stable");
+    void externalStop.catch(() => {});
+    await until(() => fs.stat(path.join(dir, "controller-live")).then(() => true, () => false));
+    const orphanPid = Number(await fs.readFile(path.join(dir, "controller-live"), "utf8"));
+    orphan = await pending;
+    assert.equal(orphan.exitCode, 3, JSON.stringify(orphan));
+    assert.ok(orphan.recoveryFile);
+    assert.ok(platformOpsFor().isProcessAlive(orphanPid));
+    await fs.stat(path.join(dir, "fence-attempt")); // recovery reached the production fence
+    assert.equal((await host.healthProbe()).version, "3.0.0", "recovery cannot stop/start while old controller is live");
+    await fs.writeFile(path.join(dir, "release-controller"), "go");
+    await externalStop;
+    await clearFault();
+    await until(async () => !platformOpsFor().isProcessAlive(orphanPid));
+    const drained = await resumeRunner(orphan.recoveryFile, { executionTimeoutMs: 6000 });
+    assert.equal(drained.exitCode, 1, JSON.stringify(drained));
+    assert.equal((await host.healthProbe()).version, "3.0.0");
+  });
+
+  await t.test("losing the whole invocation leaves a dirty operation for the next installer", async () => {
+    // Lose the entire invocation (supervisor and worker); the next scenario
+    // must settle that dirty transaction first and never retry its target.
+    await fs.rm(path.join(dir, "stopped"), { force: true });
+    await fault("stop-hang");
+    const supervisorSource = new URL("./supervise.ts", import.meta.url).href;
+    const supervisorEntry = path.join(dir, "supervisor.mjs");
+    await fs.writeFile(supervisorEntry, `
+      import {superviseRunner} from ${JSON.stringify(supervisorSource)};
+      await superviseRunner(${JSON.stringify({ ...common, executionTimeoutMs: 30_000, request: request("lost-owner", "4.0.0") })});
+    `);
+    const supervisor = spawn(process.execPath, [supervisorEntry], { stdio: "ignore" });
+    const ownerEnded = new Promise<void>((resolve) => { supervisor.on("close", () => resolve()); });
+    t.after(() => { supervisor.kill(); });
+    await until(() => fs.stat(path.join(dir, "stopped")).then(() => true, () => false));
+    const workerPid = Number(await fs.readFile(path.join(dir, "stopped"), "utf8"));
+    supervisor.kill("SIGKILL");
+    try { platformOpsFor().killProcess(workerPid); }
+    catch (error) { if (platformOpsFor().isProcessAlive(workerPid)) throw error; }
+    await ownerEnded;
+    await until(async () => !platformOpsFor().isProcessAlive(workerPid));
+    await clearFault();
+  });
+
+  await t.test("an archived receipt replays while a newer dirty operation is pending", async () => {
+    const dirtyJournal = await journal();
+    const archived = await superviseRunner({ ...common, request: { protocolVersion: 1, action: "recover",
+      expected: { id: "report", targetVersion: "3.0.0" } } });
+    assert.equal(archived.exitCode, 0);
+    assert.equal(await journal(), dirtyJournal);
+  });
+
+  await t.test("new work settles the dirty operation first and does not retry its target", async () => {
+    await publish("5.0.0");
+    const next = await superviseRunner({ ...common, executionTimeoutMs: 6000, request: request("next", "5.0.0") });
+    assert.equal(next.exitCode, 0, JSON.stringify(next));
+    assert.equal((await host.healthProbe()).version, "5.0.0");
+    const oldReceipt = await superviseRunner({ ...common, request: { protocolVersion: 1, action: "recover",
+      expected: { id: "lost-owner", targetVersion: "4.0.0" } } });
+    assert.equal(oldReceipt.exitCode, 1);
+    assert.equal(oldReceipt.response?.operation.kind === "observed" && oldReceipt.response.operation.operation.outcome, "rolled-back");
+    assert.deepEqual((await fetches()).slice(-3), ["4.0.0", "4.0.0", "5.0.0"]);
+  });
+});

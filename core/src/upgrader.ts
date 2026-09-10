@@ -19,11 +19,9 @@ export interface ProvenanceIdentity {
 }
 
 /**
- * Upgrader is the single facade an application calls. Every entrypoint the
- * app exposes (daemon-internal auto-update, `myapp self upgrade`, install
- * script, remote drive) constructs the SAME Upgrader — one canonical
- * executor, so there is no entrypoint that "swaps bytes but skips
- * convergence" (the class of bug this framework exists to kill).
+ * Upgrader is the transaction facade constructed by createRunner
+ * inside the disposable runner. Application entry points submit runner
+ * requests; they do not construct an in-process upgrade engine.
  */
 export interface Upgrader {
   /**
@@ -35,7 +33,7 @@ export interface Upgrader {
    * recorded by K. Hosts should run this from a coordinator that survives
    * service replacement, because recovery may stop and restart the service.
    */
-  recover(): Promise<void>;
+  recover(expected?: { id: string; targetVersion: string }): Promise<void>;
 
   /**
    * Ask the release source whether this install should move, without moving
@@ -104,9 +102,6 @@ export interface Upgrader {
 
   /** K's single durable operation receipt; hosts project it, never mirror it. */
   operation(): Promise<OperationRead>;
-
-  /** Mark one exact terminal operation delivered by the host transport. */
-  acknowledgeOperation(operationId: string): Promise<"acknowledged" | "not-terminal" | "not-found" | "changed">;
 
   /** Atomically move quiesced K state to an audit-only fresh-install backup. */
   quarantineState(options: QuarantineOptions): Promise<QuarantineResult>;

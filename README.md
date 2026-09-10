@@ -1,47 +1,84 @@
 # K (k-carrier)
 
-**Self-upgrade framework for programs that must prove they came back up.**
+**Reliable application upgrades, run by an independent installer.**
 
-CLI self-update libraries stop at replacing bytes; fleet updaters assume a machine someone else administers. K covers what neither does: **an upgrade that is a transaction and can prove it happened** — two slots with rollback, crash-safe at every step, handoff of a live process with its workloads intact, and convergence proven from the live process and named OS surfaces (a version string is never accepted as proof). Consent and notification are built in, because on a machine someone owns personally, changing behaviour silently is not acceptable — but nothing here is limited to personal machines.
+K is for applications you distribute yourself to end users' machines, across
+operating systems, outside any package manager: desktop agents, background
+services installed by `curl | sh`, CLIs that update themselves. Nobody
+operates those machines. A failed upgrade means the product silently stops
+working and nobody can log in to repair it. K combines a rustup-style external
+installer with recoverable, verified service upgrades.
 
-**Two process models, defined by how many live incarnations K manages** — `swap` (**0**: K replaces bytes and touches no process; a one-shot CLI and an hours-long agent session are the same case) and `service` (**1**: K stops the old, starts the new, and proves it). OS lifecycle convergence and fleet drive are capabilities you opt into on top, not a third model. Proof is executable: a runnable example per case, and a claim without a green example does not exist.
+If a package manager, container image or fleet orchestrator already owns your
+installation, that manager owns upgrades too. Your adapter identifies that
+ownership so K can defer; you probably do not need it.
 
-## What K owns
+## Why upgrading is non-trivial
 
-K does not replace platform packaging or artifact delivery. It wraps an
-addressable release in a transaction with rollback and convergence readback.
-Because the process driving an upgrade may die on the success path, the
-successor proves the handoff from live evidence rather than trusting a flag.
+Downloading a new executable is only the beginning. The application may still
+be running, power may fail halfway through replacement, or the new version may
+fail to start on a particular machine. Replacing the file does not prove the
+service came back healthy. The installed updater may itself be too old or
+broken to help.
 
-## Start here
+K stages verified bytes in a second slot, stops the service, starts and probes
+the candidate, then commits or restores the previous executable. A durable
+journal lets a subsequent installer recover interrupted work. An upgrade ends
+promoted, rolled back, or explicitly unresolved with the evidence preserved;
+it is never reported as a success K did not observe.
 
-- **[`docs/integration.md`](docs/integration.md)** — from-zero guide: the problem in plain words, concept primer, tiered adoption with code.
-- [`docs/design-v1.md`](docs/design-v1.md) — full design: six layers, architecture, decision record.
-- [`docs/harness-design.md`](docs/harness-design.md) — the test framework, designed first: harness as executable spec (teeth registry, real-process crash injection, adversarial self-verification).
-- [`docs/test-plan.md`](docs/test-plan.md) — executable test plan (M0–M6, must-red per cell).
-- [`docs/prior-art.md`](docs/prior-art.md) — the source-level survey this design stands on (Tailscale / Datadog), and the license-defense record behind `NOTICE`.
+## One installer, multiple entrypoints
 
-## Repo layout
+`install.sh` and your application's `self upgrade` launch the same external
+installer, built from K and your product adapter. The installer owns the
+upgrade transaction and exits when finished. It can be updated independently
+of the application and run even when the installed application cannot start.
 
-```
-core/       the framework — zero host-specific concepts (shells live in their
-            product's repo and consume core as a dependency)
-harness/    generic acceptance bed: fake-host daemon + profile-tiered teeth
-examples/   one runnable demo per profile (swap-tool / service-daemon / hosted-service)
-docs/       guides + design + test plan + prior art
-```
+You distribute **three things**: the bootstrap script, the installer, and the
+application release. They can share a hosting location. You supply the
+release source and service lifecycle operations; K supplies the transaction
+machinery. The runner uses Node 24, either as an external runtime or bundled
+into a Node single executable. A fully runtime-independent installer must also
+package its supervisor and controller dependencies.
 
-**Platform support today:** Linux and macOS gate CI. Windows platform
-operations are implemented; its acceptance harness and CI gate are still in
-progress.
+The installer must survive stopping the application. If a worker crashes,
+the temporary supervisor runs bounded recovery. After reboot, an operator or
+OS startup hook must start installation again. K rolls back executables,
+not application data; data migration compatibility remains the product's job.
+Artifact hashes check integrity; your distribution channel establishes trust.
 
-Status: incubating. TypeScript first. License: **Apache-2.0**.
+## Status
 
-### Optional gzip release transport
+| Area | State |
+|---|---|
+| Two-slot transaction, journal, lock, receipts | Done; generated crash matrix, seeded simulation, and a Lean model of all phases, rollback and crash/recovery interleavings (host honesty assumed) |
+| External runner protocol, supervisor, bounded recovery | Done; Linux/macOS process tests |
+| Command controller boundary | Done; demo controller only |
+| Verified download with resume and gzip | Done |
+| Single-executable (SEA) runner | Verified manually; build flag provided, no CI |
+| Windows | Core is platform-seamed; harness port incomplete, CI informational |
+| Product-ready `install.sh` template | Not yet |
+| Publisher signing of installer or release metadata | Not provided; hash and size only |
+| Automatic restart after machine reboot | Not provided; product OS hook |
+| Receipt archive garbage collection | Not provided |
 
-A `Release` may carry an optional `gzip` URL, compressed size, and SHA-256. K
-verifies the compressed bytes, bounded-decompresses them, then verifies the
-canonical release size and SHA-256. Missing gzip metadata uses the canonical
-URL; a selected gzip failure is terminal and does not silently bypass the
-advertised representation. Resume offsets remain offsets in the compressed
-object.
+## Documentation
+
+Guides, written to be read in order:
+
+- [How an upgrade works](docs/guide.md): the processes involved, one upgrade start to finish, what breaks, how to read the result
+- [Runnable example](examples/external-service/README.md)
+- [Integration and distribution guide](docs/integration.md)
+
+Contracts, written to be looked up:
+
+- [Design](docs/design.md): normative execution model, transaction, supervision and controller obligations
+- [Reference](docs/reference.md): protocol, exit codes, budgets, on-disk layout
+- [Test plan](docs/test-plan.md) and [harness design](docs/harness-design.md)
+- [Formal model](formal/README.md)
+
+Background:
+
+- [Prior art](docs/prior-art/design-influences.md) and [external installer research](docs/prior-art/external-runner-research.md)
+
+Incubating · TypeScript / Node 24 · Apache-2.0. Contributions welcome.

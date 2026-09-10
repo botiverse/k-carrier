@@ -15,8 +15,11 @@
  */
 export const DEFAULT_HOST_CALL_BUDGET_MS = 120_000;
 
+import { HostCallUncertain } from "./hostCallUncertain.ts";
+export { HostCallUncertain } from "./hostCallUncertain.ts";
+
 /** A host call exceeded its budget: the host is wedged, not merely failing. */
-export class HostCallTimeout extends Error {
+export class HostCallTimeout extends HostCallUncertain {
   readonly call: string;
   readonly budgetMs: number;
   constructor(call: string, budgetMs: number) {

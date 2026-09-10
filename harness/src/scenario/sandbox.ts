@@ -134,8 +134,8 @@ const SANDBOX_DIR_PREFIX = "k-harness-";
 /**
  * The marker a process must carry to be found by this sandbox's teardown.
  *
- * Teeth often derive a NESTED context (e.g. `<sandbox>/respawn` per host
- * shape). Taking basename() of that nested dir yields "respawn", which no
+ * Teeth often derive a NESTED context (e.g. `<sandbox>/service` per host
+ * shape). Taking basename() of that nested dir yields "service", which no
  * teardown scan will ever match -- so the scan returns zero, the tooth reports
  * a clean teardown, and the leaked process is still running. The zero means
  * "the query matched nothing", not "nothing leaked". (Found 08-05 by looking

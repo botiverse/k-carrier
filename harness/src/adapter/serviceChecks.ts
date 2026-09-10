@@ -6,7 +6,7 @@
  * HostAdapter responsibilities + the app-declared lifecycle surfaces — no
  * test backdoors (transparency §1.8).
  *
- * These drive createUpgrader in-process (the library plane) against the
+ * These drive createRunner in-process (the library plane) against the
  * adapter's host + a real fake-server release.
  *
  * The release is the ADOPTER'S app when they supply `releaseSource`, and the
@@ -21,7 +21,7 @@
 import assert from "node:assert/strict";
 import * as path from "node:path";
 import { type ToothContext } from "../teeth/registry.ts";
-import { createUpgrader } from "../../../core/src/createUpgrader.ts";
+import { createRunner } from "../../../core/src/createRunner.ts";
 import { staticManifestSource } from "../../../core/src/artifact/staticManifestSource.ts";
 import type { HostAdapter } from "../../../core/src/lifecycle/hostAdapter.ts";
 import type { HostDriver } from "../fake-host/inproc.ts";
@@ -29,7 +29,7 @@ import type { ReadbackSurface } from "../../../core/src/converge/predicates.ts";
 import { slotArtifactPath } from "../../../core/src/txn/fileEffects.ts";
 import { processAlive } from "../fake-host/daemon.ts";
 import { serveRelease } from "../artifact/m1.ts";
-import { PLAIN_DAEMON_SOURCE } from "../../../examples/service-daemon/source.ts";
+import { PLAIN_DAEMON_SOURCE } from "../fixtures/serviceSource.ts";
 
 /** The adopter module's factory contract for the service tier. */
 export type ServiceAdapterFactory = (stateDir: string) => HostDriver & {
@@ -59,7 +59,7 @@ export function releaseSourceFor(adapter: { releaseSource?: () => string }): str
 }
 
 export function makeUpgrader(ctx: ToothContext, adapter: HostAdapter, baseUrl: string, surfaces?: ReadbackSurface[]) {
-  const opts: import("../../../core/src/createUpgrader.ts").CreateUpgraderOptions = {
+  const opts: import("../../../core/src/createRunner.ts").RunnerOptions = {
     host: adapter,
     source: staticManifestSource({ baseUrl }),
     policy: "auto",
@@ -67,7 +67,7 @@ export function makeUpgrader(ctx: ToothContext, adapter: HostAdapter, baseUrl: s
     stateDir: stateDir(ctx),
   };
   if (surfaces !== undefined) opts.lifecycleSurfaces = surfaces;
-  return createUpgrader(opts);
+  return createRunner(opts);
 }
 
 /** The running successor's evidence, read through the adapter's probe. */

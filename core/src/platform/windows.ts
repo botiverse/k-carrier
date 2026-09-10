@@ -51,8 +51,8 @@ export const windowsOps: PlatformOps = {
     try {
       process.kill(pid, 0);
       return true;
-    } catch {
-      return false;
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code !== "ESRCH";
     }
   },
   killProcess(pid) {
@@ -62,6 +62,12 @@ export const windowsOps: PlatformOps = {
   async renamePath(from, to) {
     // Plain state moves DO work on Windows (unlike replacing a running .exe).
     await fs.rename(from, to);
+  },
+  async syncDirectory() {
+    // Node does not provide a portable directory flush here. This no-op
+    // supplies no power-loss durability guarantee; NTFS journaling alone
+    // is not an acknowledgement that these particular writes reached disk.
+    await Promise.resolve();
   },
   async makeExecutable() {
     // No executable bit on Windows; nothing to do (a real no-op).
