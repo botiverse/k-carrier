@@ -170,3 +170,11 @@ success, and local promotion does not prove cloud reconnection.
 Withdrawing a release affects future distribution. It does not roll back already
 installed machines. K can recover existing local slots offline; downloading an
 older release still depends on the source authorizing and serving it.
+
+### Optional gzip release transport
+
+A `Release` may include a `gzip` URL, compressed size and SHA-256. K verifies
+compressed bytes, bounds decompression, then checks the canonical size and hash.
+Missing gzip metadata uses the canonical URL. Failure of a selected gzip object
+is terminal; K does not silently switch representations. Resume offsets refer to
+the compressed object.

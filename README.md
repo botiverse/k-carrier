@@ -29,7 +29,7 @@ You distribute **three things**: the bootstrap script, the installer, and the
 application release. They can share a hosting location. You supply the release
 source and service lifecycle operations; K supplies the transaction machinery.
 
-The installer must survive stopping the application. After a crash or power loss,
+The installer must survive stopping the application. If a worker crashes,
 the temporary supervisor runs bounded recovery. After reboot, an operator or OS
 startup hook must start installation again. K rolls back executables,
 not application data; data migration compatibility remains the product's job.
