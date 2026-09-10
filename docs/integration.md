@@ -215,21 +215,34 @@ rollback, installer death, offline recovery, workload/data retention and service
 isolation. Observe declared OS lifecycle surfaces before retiring their previous
 manager. A green framework test is not product acceptance.
 
-## Using Hands as the release platform
+## Release platforms
 
-Hands is the release-management platform K's authors use to publish installers
-and application releases. Any platform that answers "which version, at which
-URL, with which SHA-256 and size" fits the same way; nothing here is specific
-to Hands.
+K has no opinion about where releases come from. The adapter's ReleaseSource
+answers two questions, and anything that can answer them is a release
+platform as far as K is concerned:
 
-Hands supplies publication, channel/platform selection and artifact metadata.
-Your adapter maps its response to a K ReleaseSource with exact version, URL,
-SHA-256 and size; K performs the local transaction. A launcher may separately
-obtain the installer from Hands. Keep installer and product identities distinct.
+- `checkForUpdate()`: which version should this machine move to, if any?
+  Channels, cohorts, staged rollouts, pinning and version ordering all live
+  behind this call.
+- `fetchRelease(version)`: for exactly this version, what are the URL,
+  SHA-256 and size (plus optional gzip metadata)?
 
-K has no built-in Hands connector or result uploader. Product authentication,
-channel/cohort policy and remote reporting belong to the integration. Forward the
-actual operation id/outcome; publication or process launch is not installation
+The bytes can live anywhere the URL reaches: the platform itself, a CDN, or a
+`data:` URL as in the example. K downloads, verifies and installs; it never
+decides policy.
+
+Common shapes, from simplest up:
+
+| Shape | What answers the two questions | Notes |
+|---|---|---|
+| Static manifest on a CDN | `staticManifestSource({ baseUrl })` reads a JSON manifest you publish with each release | No server; rollout policy is whatever you write into the manifest |
+| Your own release API | A small adapter mapping your API's response to a `Release` | Authentication, cohort selection and reporting are yours to build |
+| [Hands](https://hands.build) | K's sibling project, the publishing side of the same loop: draft-first releases, channels and staged rollouts, share pages, in-app update metadata, feedback and crash tickets ([source](https://github.com/botiverse/hands)) | The adapter maps a Hands response to a `Release`; a launcher may obtain the installer from Hands too. Keep installer and product identities distinct |
+
+Whatever the platform, the boundary is the same. K has no built-in connector
+or result uploader for any of them. Product authentication, channel and cohort
+policy and remote reporting belong to the integration. Forward the actual
+operation id and outcome; publication or process launch is not installation
 success, and local promotion does not prove cloud reconnection.
 
 Withdrawing a release affects future distribution. It does not roll back already

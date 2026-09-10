@@ -37,7 +37,9 @@ of the application and run even when the installed application cannot start.
 You distribute **three things**: the bootstrap script, the installer, and the
 application release. They can share a hosting location. You supply the
 release source and service lifecycle operations; K supplies the transaction
-machinery. The runner uses Node 24, either as an external runtime or bundled
+machinery. For the publishing side, channels, staged rollouts and in-app
+update metadata, K's sibling project [Hands](https://hands.build) closes the
+loop; a static manifest on any CDN works too. The runner uses Node 24, either as an external runtime or bundled
 into a Node single executable. A fully runtime-independent installer must also
 package its supervisor and controller dependencies.
 
