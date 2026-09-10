@@ -24,6 +24,9 @@ async function waitFor(check) {
 }
 let evidence;
 switch (request.action) {
+  // Controller requests have completed and do not enqueue delayed mutations.
+  // Starting a detached service is synchronous; stop/readback owns its lifetime.
+  case 'fence': break;
   case 'quiesce': case 'resume':
     if (await alive()) await probe(`/${request.action}`);
     break;

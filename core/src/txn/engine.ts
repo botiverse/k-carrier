@@ -14,7 +14,7 @@ import type { TxnEffects } from "./effects.ts";
 import type { JournalEntry, TxnPhase } from "./state.ts";
 import { STATE_FORMAT_VERSION } from "./state.ts";
 import type { Clock } from "../clock.ts";
-import { HostCallTimeout, DEFAULT_HOST_CALL_BUDGET_MS } from "./hostCallBudget.ts";
+import { HostCallTimeout, HostCallUncertain, DEFAULT_HOST_CALL_BUDGET_MS } from "./hostCallBudget.ts";
 
 
 export interface EngineDeps {
@@ -53,6 +53,8 @@ export class UpgradeEngine {
   private seq = 0;
 
   constructor(deps: EngineDeps) {
+    const budget = deps.hostCallBudgetMs ?? DEFAULT_HOST_CALL_BUDGET_MS;
+    if (!Number.isSafeInteger(budget) || budget <= 0 || budget > 2_147_483_647) throw new Error("invalid host call budget");
     this.deps = deps;
   }
 
@@ -71,6 +73,7 @@ export class UpgradeEngine {
    * Must be called before upgrade() on every process start.
    */
   async recover(): Promise<void> {
+    if (this.deps.host.fence) await this.withBudget("fence", () => this.deps.host.fence!());
     const entries = await this.deps.effects.journal.readAll();
     const last = entries.at(-1);
     this.seq = (last?.seq ?? -1) + 1;
@@ -89,16 +92,16 @@ export class UpgradeEngine {
         // resume is part of the terminal action too. A crash after promote()
         // but before resume() used to leave the service alive and its hosted
         // work permanently parked; DST found this exact effect boundary.
-        await this.deps.host.resume();
+        await this.withBudget("resume", () => this.deps.host.resume());
         return;
       case "rolled-back":
         // The terminal journal entry is WAL intent, not proof that the host
         // restore ran. Redo the whole idempotent rollback action: a crash
         // immediately after journaling `rolled-back` may still have the
         // experiment process live and workloads parked.
-        await this.deps.host.stop("experiment");
-        await this.deps.host.start("stable");
-        await this.deps.host.resume();
+        await this.withBudget("stop", () => this.deps.host.stop("experiment"));
+        await this.withBudget("start", () => this.deps.host.start("stable"));
+        await this.withBudget("resume", () => this.deps.host.resume());
         await this.deps.effects.slots.clearExperiment();
         return;
       case "staged":
@@ -148,19 +151,19 @@ export class UpgradeEngine {
       // how a stuck upgrade becomes two live incarnations. Let it out; the
       // journal keeps the in-flight phase and the next start resolves it from
       // evidence.
-      if (err instanceof HostCallTimeout) throw err;
+      if (err instanceof HostCallUncertain) throw err;
       return this.rollbackOutcome(`experiment probe failed: ${(err as Error).message}`);
     }
 
     await this.journal("readback", { version: target.version });
-    const refusal = await this.deps.evaluatePredicates(evidence, target.version);
+    const refusal = await this.withBudget("readback", () => this.deps.evaluatePredicates(evidence, target.version));
     if (refusal !== null) {
       return this.rollbackOutcome(`predicates refused: ${refusal}`);
     }
 
     await this.journal("promoted", { version: target.version });
     await this.deps.effects.slots.promoteExperiment();
-    await this.deps.host.resume();
+    await this.withBudget("resume", () => this.deps.host.resume());
     return { result: "promoted", version: target.version };
   }
 
@@ -197,9 +200,9 @@ export class UpgradeEngine {
     await this.journal("rolled-back", { reason });
     if (!opts.skipHostRestart) {
       // Stop whatever may be running (either slot), restore stable, resume.
-      await this.deps.host.stop("experiment");
-      await this.deps.host.start("stable");
-      await this.deps.host.resume();
+      await this.withBudget("stop", () => this.deps.host.stop("experiment"));
+      await this.withBudget("start", () => this.deps.host.start("stable"));
+      await this.withBudget("resume", () => this.deps.host.resume());
     }
     await this.deps.effects.slots.clearExperiment();
   }

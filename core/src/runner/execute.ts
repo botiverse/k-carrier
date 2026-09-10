@@ -30,7 +30,7 @@ export async function executeRequest(
   try {
     switch (request.action) {
       case "status": result = "observed"; break;
-      case "recover": await upgrader.recover(); result = "recovered"; break;
+      case "recover": await upgrader.recover(request.expected); result = "recovered"; break;
       case "upgrade": {
         const outcome = await upgrader.upgradeTo(request.targetVersion, {
           consented: request.consented,

@@ -1,3 +1,4 @@
+import { HostCallUncertain } from "../txn/hostCallBudget.ts";
 import * as path from "node:path";
 import type { Release } from "../artifact/source.ts";
 import { downloadVerified } from "../artifact/download.ts";
@@ -69,6 +70,7 @@ export async function driveUpgrade(
   }
 
   const lock = await acquireUpgradeLock(deps.stateDir, deps.clock.nowMs());
+  let releaseLock = true;
   try {
     deps.operation.reset();
     // Inspect under the transaction lock, before recovery or any new host action.
@@ -204,7 +206,12 @@ export async function driveUpgrade(
         break;
     }
     return finished.outcome;
+  } catch (error) {
+    // A timed-out promise may still execute. Keep ownership until this worker
+    // exits; its successor must fence external controller effects as well.
+    if (error instanceof HostCallUncertain) releaseLock = false;
+    throw error;
   } finally {
-    await lock.release();
+    if (releaseLock) await lock.release();
   }
 }

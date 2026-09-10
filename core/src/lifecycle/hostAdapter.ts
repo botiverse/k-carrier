@@ -21,6 +21,14 @@
  * replays the commit. A live candidate alone never authorizes promotion.
  */
 export interface HostAdapter {
+  /**
+   * Drain or fence effects left by an earlier worker/controller before replay.
+   * Called under K's transaction lock. Throw if isolation cannot be proved.
+   * Required for adapters whose effects can outlive their worker; purely
+   * in-process adapters without surviving effects may omit it.
+   */
+  fence?(): Promise<void>;
+
   /** Park all hosted workloads durably. Idempotent. */
   quiesce(): Promise<void>;
 

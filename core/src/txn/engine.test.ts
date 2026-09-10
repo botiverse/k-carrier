@@ -257,3 +257,28 @@ test("recover fails closed on a journal intent from a newer core", async () => {
   await assert.rejects(() => new UpgradeEngine(w.deps).recover(), /not understood by this core/);
   assert.deepEqual(w.trace, []); // refused to act
 });
+
+const never = (): Promise<never> => new Promise(() => {});
+for (const mode of ["resume", "readback", "recovery-stop", "recovery-start", "recovery-resume", "fence"] as const) {
+  test(`completion budget covers ${mode} and issues no later effects`, async () => {
+    const recovering = mode.startsWith("recovery") || mode === "fence";
+    const w = makeWorld({
+      ...(recovering ? { journal: [entry(0, "handing-over")] } : {}),
+      clock: { nowMs: () => 1, after: (_ms, fn) => {
+        const timer = setTimeout(fn, 10); return () => clearTimeout(timer);
+      } },
+    });
+    switch (mode) {
+      case "resume": case "recovery-resume": w.deps.host.resume = never; break;
+      case "readback": w.deps.evaluatePredicates = never; break;
+      case "recovery-stop": w.deps.host.stop = never; break;
+      case "recovery-start": w.deps.host.start = never; break;
+      case "fence": w.deps.host.fence = never; break;
+    }
+    const engine = new UpgradeEngine({ ...w.deps, hostCallBudgetMs: 10 });
+    await assert.rejects(recovering ? engine.recover() : engine.upgrade({ version: "2.0.0", bytesRef: "x" }), /did not return within/);
+    assert.ok(!w.trace.includes("slots:clear"), "uncertain recovery must retain its experiment/evidence");
+    if (mode === "fence") assert.deepEqual(w.trace, [], "no mutation before controller isolation");
+    if (mode === "readback") assert.ok(!w.trace.includes("slots:promote"));
+  });
+}

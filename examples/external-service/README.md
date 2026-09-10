@@ -27,6 +27,10 @@ const template = await readFile('examples/external-service/service.mjs', 'utf8')
 const initial = join(dir, 'initial.mjs');
 await writeFile(initial, template.replace('VERSION_PLACEHOLDER', '1.0.0'));
 await bootstrapStable({ stateDir, version: '1.0.0', artifactPath: initial });
+const runner = await readFile(join(dir, 'runner.mjs'));
+await writeFile(join(dir, 'runner-release.json'), JSON.stringify({ version: 'demo-runner-1',
+  url: `data:application/octet-stream;base64,${runner.toString('base64')}`,
+  sha256: createHash('sha256').update(runner).digest('hex'), size: runner.length }));
 const candidate = Buffer.from(template.replace('VERSION_PLACEHOLDER', '2.0.0'));
 await writeFile(join(dir, 'release.json'), JSON.stringify({ version: '2.0.0',
   url: `data:application/octet-stream;base64,${candidate.toString('base64')}`,
@@ -44,8 +48,8 @@ is installed and running.
 ## Upgrade, retry and observe
 
 ```sh
-printf '%s' '{"protocolVersion":1,"action":"upgrade","id":"demo-v2","targetVersion":"2.0.0","consented":true}' | node "$K_EXAMPLE_HOME/runner.mjs"
-printf '%s' '{"protocolVersion":1,"action":"upgrade","id":"demo-v2","targetVersion":"2.0.0","consented":true}' | node "$K_EXAMPLE_HOME/runner.mjs"
+node examples/external-service/install.mjs upgrade demo-v2 2.0.0
+node examples/external-service/install.mjs upgrade demo-v2 2.0.0
 printf '%s' '{"protocolVersion":1,"action":"status"}' | node "$K_EXAMPLE_HOME/runner.mjs"
 ```
 
@@ -60,11 +64,20 @@ printf '%s' '{"protocolVersion":1,"action":"probe"}' | node "$K_EXAMPLE_HOME/con
 
 The probe should report version 2.0.0 with a different pid/startId from setup.
 These are **different protocols**: upgrade/recover/status go to the runner;
-probe/start/stop/quiesce/resume go to the application controller.
+fence/probe/start/stop/quiesce/resume go to the application controller.
 
 ## Recovery and cleanup
 
-For interrupted work, start a runner against the same state directory and submit
+The installer supervises its worker and recovers automatically. If it exits 3,
+keep the reported recovery file and run:
+
+```sh
+node examples/external-service/install.mjs recover /path/from/output/recovery.json
+```
+
+This verifies the retained helper and works without release distribution access.
+It recovers the original operation only. For operator-directed recovery of current
+unfinished work, start a runner against the same state directory and submit
 `{"protocolVersion":1,"action":"recover"}`. Recovery completes persisted intent
 or restores stable; it does not initiate another upgrade. See the
 [protocol's exit-code table](../../docs/design.md#protocol-v1), including
@@ -91,7 +104,8 @@ unset K_EXAMPLE_HOME
 
 `pnpm test:runner` automates upgrade, wrong-version rollback, current/archive
 replay, concurrent lock rejection, killing the runner between stop and start,
-and recovery with the release source removed. The test owns and cleans its own
+recovery with the release source removed, bounded failed recovery, a controller
+surviving its worker, and restarting after the whole invocation is lost. The test owns and cleans its own
 home; it does not reuse the walkthrough's directory.
 
 This controller is a demo, not a production supervisor. Its service implements

@@ -33,3 +33,5 @@ export * from "./runner/execute.ts";
 export * from "./runner/cli.ts";
 export * from "./launcher/launch.ts";
 export * from "./lifecycle/commandHost.ts";
+
+export { HostCallTimeout, HostCallUncertain } from "./txn/hostCallBudget.ts";

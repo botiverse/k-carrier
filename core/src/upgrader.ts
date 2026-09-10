@@ -33,7 +33,7 @@ export interface Upgrader {
    * recorded by K. Hosts should run this from a coordinator that survives
    * service replacement, because recovery may stop and restart the service.
    */
-  recover(): Promise<void>;
+  recover(expected?: { id: string; targetVersion: string }): Promise<void>;
 
   /**
    * Ask the release source whether this install should move, without moving

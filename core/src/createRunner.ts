@@ -1,3 +1,4 @@
+import { HostCallUncertain } from "./txn/hostCallBudget.ts";
 /**
  * createRunner — the one construction every entrypoint uses.
  *
@@ -31,6 +32,7 @@ import { quarantineState } from "./quarantine.ts";
 
 export interface RunnerOptions extends UpgraderConfig {
   clock?: Clock;
+  hostCallBudgetMs?: number;
   /** Reports who owns this install; default: we own it. */
   installOwnership?: () => "self" | "managed-elsewhere";
   /** Optional host semantic gate; a string result refuses the transition. */
@@ -92,6 +94,7 @@ export function createRunner(opts: RunnerOptions): Upgrader {
     effects,
     host: opts.host,
     clock,
+    ...(opts.hostCallBudgetMs === undefined ? {} : { hostCallBudgetMs: opts.hostCallBudgetMs }),
     evaluatePredicates: async (evidence: ProcessEvidence, targetVersion: string) => {
       lastEvidence = evidence;
       if (evidence.version !== targetVersion) {
@@ -179,11 +182,9 @@ export function createRunner(opts: RunnerOptions): Upgrader {
     }, request);
 
   return {
-    recover: async () => {
+    recover: async (expected) => {
       operationLifecycle.reset();
-      const current = await operationLifecycle.read();
-      if (current.kind === "unreadable") throw new Error(current.reason);
-      await recoverUpgrade(opts.stateDir, clock, engine, operationLifecycle.settleRecovery);
+      await recoverUpgrade(opts.stateDir, clock, engine, operationLifecycle.settleRecovery, expected);
     },
 
     async check(): Promise<{ current: string; target: string | null }> {
@@ -227,6 +228,7 @@ export function createRunner(opts: RunnerOptions): Upgrader {
 
     async rollback(reason: string): Promise<"rolled-back" | { held: string }> {
       const lock = await acquireUpgradeLock(opts.stateDir, clock.nowMs());
+      let release = true;
       try {
         // Gate on the action's nature: settling K's own in-flight
         // transaction is ALWAYS allowed (a held mid-transaction is a
@@ -242,8 +244,11 @@ export function createRunner(opts: RunnerOptions): Upgrader {
         await effects.slots.clearExperiment();
         await opts.notificationSink({ kind: "rolled-back", detail: { reason } });
         return "rolled-back";
+      } catch (error) {
+        if (error instanceof HostCallUncertain) release = false;
+        throw error;
       } finally {
-        await lock.release();
+        if (release) await lock.release();
       }
     },
 

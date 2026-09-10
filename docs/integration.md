@@ -49,7 +49,7 @@ publisher responsibilities. For machines without Node, include a runtime or
 provision it explicitly. It must survive stopping/replacing the application.
 
 The bootstrap selects a compatible installer, downloads and verifies it, passes
-the request, waits for its result, then cleans temporary code. It must not contain
+the request, supervises settlement, then cleans temporary code. It must not contain
 another swap/rollback algorithm. K provides `launchRunner` for Node callers;
 there is not yet a complete product-ready shell bootstrap template.
 
@@ -61,10 +61,14 @@ notification handling and lifecycle operations through trusted build-time code.
 Use `checkCompatibility(from, to)` for transitions constrained by data/protocol
 compatibility. Another package manager's installation is `managed-elsewhere`.
 
-The controller implements quiesce, stop, start, healthProbe and resume, either
+The controller implements fence, quiesce, stop, start, healthProbe and resume, either
 directly or through `createCommandHost`. Stop confirms termination; start is
 idempotent; probe returns version, pid and startId from one live instance. Work
 promised by quiesce must be restorable on both the candidate and rollback slots.
+`fence` must confirm that earlier queued or detached controller actions cannot
+later mutate the installation. `createCommandHost` drains recorded controller
+processes first. Adapters with no effects surviving their worker may omit fence;
+all other adapters must supply it and test it against their real service manager.
 
 Choose one persistent `stateDir` per installation for slots, journal and receipts.
 Keep application data, installer scratch code and interpreter outside the slots.
@@ -128,11 +132,20 @@ it restores stable; after it, it replays commit. An external supervisor or
 operator must trigger this after power loss. Never clear a lock or receipt merely
 to bypass unresolved work.
 
-Automatic transaction completion is an initial-release requirement described in
-[the design](design.md#transaction-completion). Current `launchRunner` only runs
-one worker; its return does not provide the proposed automatic recovery loop.
-Product adoption must close the [completion gate](test-plan.md#transaction-completion-release-gate)
-before claiming unattended recovery.
+Use `launchRunner` for a supervised install, or `superviseRunner` when the caller
+needs a structured result. Both enforce execution/recovery deadlines and recover
+only the original operation. Exit 3 leaves a verified helper and `recovery.json`;
+call `resumeRunner(path)` to retry offline. Keep that directory until recovery
+settles. The [example installer](../examples/external-service/install.mjs) wires
+this flow. Directly invoking a worker does not supervise it.
+
+If the whole invocation dies, start a compatible installer against the same
+state; it settles unfinished work before executing a new request. A live earlier
+worker still blocks takeover. Product OS startup hooks and service-unit isolation
+must be validated separately; K does not install a permanent watchdog. If a
+request died before its operation was recorded, bound recovery refuses rather
+than guessing which earlier operation it owns. Inspect `status` and explicitly
+run operator `recover` on the retained helper when current-state repair is needed.
 
 ## 5. Validate the product
 

@@ -30,7 +30,8 @@ application release. They can share a hosting location. You supply the release
 source and service lifecycle operations; K supplies the transaction machinery.
 
 The installer must survive stopping the application. After a crash or power loss,
-an operator or external supervisor must run recovery. K rolls back executables,
+the temporary supervisor runs bounded recovery. After reboot, an operator or OS
+startup hook must start installation again. K rolls back executables,
 not application data; data migration compatibility remains the product's job.
 Artifact hashes check integrity; your distribution channel establishes trust.
 

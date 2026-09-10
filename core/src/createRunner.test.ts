@@ -249,3 +249,15 @@ test("upgradeTo persists one K-owned operation receipt with previous stable and 
     await download.close();
   }
 });
+
+test("an uncertain host effect retains the live worker's lock until exit", async (t) => {
+  const dir = await stateDir();
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const opts = await baseOpts(dir, "data:application/octet-stream;base64,");
+  opts.host.fence = () => new Promise<void>(() => {});
+  const runner = createRunner({ ...opts, hostCallBudgetMs: 20 });
+  await assert.rejects(runner.recover(), /fence\(\) did not return/);
+  // Timing out is not cancellation; another caller cannot reuse this worker.
+  await assert.rejects(runner.recover(), /UPGRADE_IN_PROGRESS/);
+  assert.equal((await runner.operation()).kind, "genesis");
+});

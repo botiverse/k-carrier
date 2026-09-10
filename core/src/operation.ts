@@ -96,7 +96,7 @@ function validIdentity(value: unknown): value is ProvenanceIdentity {
   );
 }
 
-function parseOperation(text: string): OperationRecord {
+export function parseOperation(text: string): OperationRecord {
   const parsed = JSON.parse(text) as Partial<OperationRecord>;
   if (
     parsed.formatVersion !== OPERATION_FORMAT_VERSION

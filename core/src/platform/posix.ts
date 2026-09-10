@@ -3,7 +3,7 @@
  * The only place in core allowed to name rename/signals.
  */
 import { execFileSync } from "node:child_process";
-import { promises as fs } from "node:fs";
+import { promises as fs, readFileSync } from "node:fs";
 import type { PlatformOps } from "./ops.ts";
 
 async function atomicReplace(filePath: string, data: Uint8Array): Promise<void> {
@@ -77,12 +77,19 @@ export function platformKeyFor(
 export const posixOps: PlatformOps = {
   swapExecutable: atomicReplace,
   isProcessAlive(pid) {
-    try {
-      process.kill(pid, 0);
-      return true;
-    } catch {
-      return false;
+    try { process.kill(pid, 0); }
+    catch (error) { return (error as NodeJS.ErrnoException).code !== "ESRCH"; }
+    if (process.platform === "linux") {
+      try {
+        const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+        // A zombie may stay in a container's process table, but cannot execute.
+        if (stat.slice(stat.lastIndexOf(")") + 2).startsWith("Z")) return false;
+      } catch (error) {
+        // Access restrictions are uncertainty, never proof of death.
+        return (error as NodeJS.ErrnoException).code !== "ENOENT";
+      }
     }
+    return true;
   },
   killProcess(pid) {
     process.kill(pid, "SIGKILL");

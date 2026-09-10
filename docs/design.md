@@ -18,8 +18,8 @@ flowchart LR
 The runner and its runtime live outside the application slots and service unit.
 Stopping the application must leave the runner alive. A child process can still
 belong to a systemd cgroup or Windows job; the publisher must arrange isolation.
-The runner's code can be cleaned after exit; its installation state persists.
-An external supervisor or operator triggers recovery after a crash or reboot.
+The temporary supervisor retains recovery code until settlement. Installation
+state persists. An OS hook or operator must restart installation after reboot.
 
 The adapter is fixed at build time. Requests select an action and target version,
 not code, commands or download URLs. The publisher authenticates distribution
@@ -41,9 +41,10 @@ Paths are relative to `core/src/`.
 
 `createRunner(options)` constructs the transaction interface. `serveRunner(factory)`
 serves it in the installer process. `launchRunner({release, request, scratchDir,
-interpreter?})` downloads under bounded transfer budgets, verifies bytes, executes
-in a private temporary child directory, waits for exit and cleans that directory.
-It forwards stdout/stderr and supplies the request on stdin.
+interpreter?})` verifies and supervises a worker, writes one final response and
+returns its exit code. `superviseRunner` returns the same result as data, including
+any retained `recoveryFile`; `resumeRunner(recoveryFile)` verifies that retained
+artifact and performs operation-bound recovery without distribution access.
 
 ## Transaction and recovery
 
@@ -91,13 +92,24 @@ preserve the evidence and a verified means to invoke it again. Installer startup
 handles leftover work; machine reboot still requires an OS hook or operator to
 start the installer.
 
-**Implementation status:** the engine and real-process tests support explicit
-recovery; new upgrade execution already recovers under the lock before proceeding.
-The current `launchRunner` executes one worker and cleans scratch code in `finally`.
-It does not yet provide automatic recovery supervision, worker execution deadlines
-or operation-bound recovery requests. Engine call budgets also do not cover every
-resume/rollback/recovery call. The release acceptance cases in the
-[test plan](test-plan.md#transaction-completion-release-gate) must close these gaps.
+The supervisor defaults to a 10-minute worker budget, two recovery attempts of
+2 minutes each, and a 14-minute total execution budget. These are configurable;
+artifact acquisition has separate transfer budgets. Termination allows one
+additional second to observe worker exit. An unconfirmed exit forbids takeover.
+Unbound operator `recover` runs once; automated retries always include the original
+id and target. No result or a malformed/mismatched receipt is unresolved, not success.
+
+All engine host calls, including fencing, readback, resume and recovery, have a
+positive budget (default 120 seconds). Uncertain effects retain the worker's lock
+until it exits. Bundled workers exit after flushing their response, so pending
+application promises cannot retain ownership indefinitely. Custom in-process
+callers must also exit on `HostCallUncertain` rather than reuse that worker.
+
+Unique process-owned contender directories serialize creation and reclamation of
+`upgrade.lock`, including its partial-write window. Only dead owners' unique
+entries are reclaimed. PID reuse conservatively refuses acquisition; age never
+proves that a live owner is dead. This filesystem protocol requires local atomic
+creation and coherent directory reads; it is not a distributed/NFS lock.
 
 ## Protocol v1
 
@@ -112,7 +124,11 @@ trimmed strings of at most 256 code units.
 ```
 
 The other requests are `{"protocolVersion":1,"action":"recover"}` and
-`{"protocolVersion":1,"action":"status"}`. `consented` records approval already
+`{"protocolVersion":1,"action":"status"}`. Automated recovery adds
+`"expected":{"id":"job-123","targetVersion":"2.0.0"}`. The binding is checked
+under the lock before any controller action. Missing/mismatched history refuses
+recovery; a completed original operation replays even when newer work is pending.
+`consented` records approval already
 obtained by an authenticated caller. Ownership and compatibility checks still apply.
 
 | Action | Effect | Exit code |
@@ -152,6 +168,7 @@ be reconstructed. Status reads the current receipt, not an arbitrary archived id
 
 | Operation | Controller obligation |
 |---|---|
+| fence | Drain or fence previous controller effects; required when effects can outlive the worker |
 | quiesce | Stop admission and durably park promised workloads; repeated calls safe |
 | stop | Stop the specified slot's service and confirm termination |
 | start | Start the selected artifact idempotently, without creating duplicate residents |
@@ -170,8 +187,14 @@ for start/stop. Successful stdout is `{protocolVersion:1,ok:true}`; `probe` adds
 timeout, default 30 seconds. The command helper's own PID is invalid service
 evidence, and reported errors exclude arbitrary stderr.
 
-A timeout means uncertain effects. Controllers must fence outstanding asynchronous
-work before recovery retries; fire-and-forget stop cannot establish termination.
+Before delivering a command, `createCommandHost` durably records the controller
+PID in a unique file under `controllers/`. Recovery waits for recorded controllers
+to exit, then calls the controller's `fence` action to settle any queued/detached
+service-manager effects. Failure or timeout prevents lifecycle replay. The PID is
+never used to kill an arbitrary old process; reuse or inaccessible identity can
+cause a conservative unresolved result. Controllers must do nothing without a
+complete request. Their `fence` acknowledgement is a product contract, not something
+K can infer from process exit. Fire-and-forget stop cannot establish termination.
 
 ## Product responsibilities
 

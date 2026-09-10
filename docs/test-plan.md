@@ -45,9 +45,11 @@ Neither establishes exhaustive OS failure or physical power-cut coverage.
 
 ## Transaction completion release gate
 
-These are required acceptance cases for the completion contract, **not a claim
-that the current suite implements them all**. Existing explicit-recovery tests
-are a starting point; automated supervision remains incomplete.
+The Linux process tests in `core/src/launcher/supervise.test.ts` exercise these
+cases with a built worker and live service. `core/src/txn/lock.test.ts` races eight
+real processes against a stale lock; engine tests cover every recovery call budget.
+Whole-invocation loss is simulated by killing supervisor and worker, not by a
+physical power cut. Product OS startup triggers remain separate acceptance.
 
 | Scenario | Required result |
 |---|---|
