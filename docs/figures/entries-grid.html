@@ -10,9 +10,9 @@
 html, body { margin: 0; height: 100%; overflow: hidden; }
 body { color-scheme: light; color: var(--ink); background: var(--paper);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
-.frame { position: relative; width: 1200px; height: 675px; overflow: hidden;
+.frame { position: relative; width: 1200px; height: 600px; overflow: hidden;
   background: radial-gradient(circle at 1px 1px, rgba(17,17,17,.045) 1px, transparent 1.5px) 0 0 / 16px 16px, var(--paper); }
-.frame svg { position: absolute; inset: 0; width: 1200px; height: 675px; }
+.frame svg { position: absolute; inset: 0; width: 1200px; height: 600px; }
 text { font-family: inherit; fill: var(--ink); }
 .h1 { font-size: 26px; font-weight: 700; }
 .sub { font-size: 17px; fill: var(--muted); }
@@ -25,9 +25,8 @@ text { font-family: inherit; fill: var(--ink); }
 </head>
 <body>
 <div class="frame" id="frame" role="img" aria-label="A grid of three entries by five worlds. install.sh can install on a fresh machine, settle an upgrading one, adopt then upgrade a pre-K installation, upgrade a managed one, and repair a broken one on explicit consent. self upgrade settles, adopts and upgrades but cannot run on a fresh or broken machine. A remote authority settles and upgrades a managed machine only. Below: attended runs may ask and may offer repair; unattended runs must carry an exact version and consent, and never ask, retry or repair.">
-<svg viewBox="0 0 1200 675">
-  <text x="40" y="44" class="h1">Who can do what, where</text>
-  <text x="40" y="70" class="sub">Three entries by five worlds. Every entry settles unfinished K work first; only the shell can install or repair.</text>
+<svg viewBox="0 0 1200 600">
+  <g transform="translate(0,-75)">
   <text x="341.0" y="122" text-anchor="middle" class="tb">Fresh</text>
   <text x="341.0" y="140" text-anchor="middle" class="d">nothing installed</text>
   <text x="523.0" y="122" text-anchor="middle" class="tb">Upgrading</text>
@@ -101,15 +100,16 @@ text { font-family: inherit; fill: var(--ink); }
   <text x="60" y="600" class="t">Says what happened, what did not change, what to do next.</text>
   <rect x="624" y="488" width="540" height="150" class="shadow"/><rect x="620" y="484" width="540" height="150" fill="#fff" class="box"/>
   <text x="640" y="518" class="tb">Unattended</text><text x="760" y="518" class="d">CI or *_NON_INTERACTIVE=1, or no tty</text>
-  <text x="640" y="548" class="t">The request must already carry an exact version and consent.</text>
-  <text x="640" y="574" class="t">Never asks, never retries on its own, never repairs.</text>
-  <text x="640" y="600" class="t">Returns the exit code and reason; the caller decides.</text>
+  <text x="640" y="548" class="t">No version named means the channel's current release.</text>
+  <text x="640" y="574" class="t">Running it is the consent; the receipt records who and what.</text>
+  <text x="640" y="600" class="t">Never asks, never retries on its own, never repairs.</text>
+  </g>
 </svg>
 </div>
 <script>
 const frame = document.getElementById('frame');
 function fitFrame() {
-  const scale = Math.min(1, window.innerWidth / 1200, window.innerHeight / 675);
+  const scale = Math.min(1, window.innerWidth / 1200, window.innerHeight / 600);
   frame.style.transform = `scale(${scale})`;
   frame.style.transformOrigin = "top left";
 }

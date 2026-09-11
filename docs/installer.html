@@ -31,13 +31,13 @@
 
 <h2 id="entrypoints">Who can do what, where</h2>
 <figure class="fig embed">
-<div class="stage"><iframe src="figures/entries-grid.html" title="Three entries by five worlds, and what attended and unattended runs may do" loading="lazy" scrolling="no"></iframe></div>
+<div class="stage" style="aspect-ratio: 1200 / 600"><iframe src="figures/entries-grid.html" title="Three entries by five worlds, and what attended and unattended runs may do" loading="lazy" scrolling="no"></iframe></div>
 <figcaption>Every cell has one answer. Grey cells are unreachable by that entry, not errors.</figcaption>
 </figure>
 
 <h2 id="run">One run, whatever the entry</h2>
 <figure class="fig embed">
-<div class="stage"><iframe src="figures/run.html" title="Seven gates every run passes in order, and what each refuses" loading="lazy" scrolling="no"></iframe></div>
+<div class="stage" style="aspect-ratio: 1200 / 600"><iframe src="figures/run.html" title="Seven gates every run passes in order, and what each refuses" loading="lazy" scrolling="no"></iframe></div>
 <figcaption>Refusals happen before anything changes. Only the last gate can say success.</figcaption>
 </figure>
 
@@ -45,7 +45,8 @@
 <p>What a person or a script sees. Names are the reference implementation's; the shape is the contract.</p>
 <pre><code>curl -fsSL https://example.com/install.sh | sh                                # attended: resolve, show, ask
 curl -fsSL https://example.com/install.sh | sh -s -- --channel alpha          # attended, another channel
-curl -fsSL https://example.com/install.sh | sh -s -- --version 2.3.0 --yes    # unattended: exact version + consent
+CI=1 curl -fsSL https://example.com/install.sh | sh                           # unattended: the channel's current release, no questions
+curl -fsSL https://example.com/install.sh | sh -s -- --version 2.3.0 --yes    # this version, no questions
 curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --yes   # attended only</code></pre>
 <div class="table-scroll wide">
 <table class="grid">
@@ -63,9 +64,9 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
 <table class="grid">
   <thead><tr><th>Option</th><th>Meaning</th></tr></thead>
   <tbody>
-    <tr><td><code>--version V</code></td><td>The exact version. Required unattended.</td></tr>
-    <tr><td><code>--channel C</code></td><td>Resolve through the release authority, then ask. Attended only; a channel is never consent.</td></tr>
-    <tr><td><code>--yes</code></td><td>Consent, recorded in the receipt. Required unattended.</td></tr>
+    <tr><td><code>--version V</code></td><td>The exact version. Default: the channel's current release, resolved through the release authority.</td></tr>
+    <tr><td><code>--channel C</code></td><td>Which channel to resolve. Attended, the resolved version is shown and asked about.</td></tr>
+    <tr><td><code>--yes</code></td><td>Skip the question when attended. Unattended runs never ask; running one is the consent. Repair always needs it, and is attended only.</td></tr>
     <tr><td><code>--approved-by WHO</code></td><td>Who consented, for the receipt. Defaults to the local user.</td></tr>
     <tr><td><code>--id ID</code></td><td>The operation id. The same id replays the first receipt.</td></tr>
     <tr><td><code>--allow-downgrade</code></td><td>Intend an older target. Without it, an older target is held.</td></tr>
@@ -76,7 +77,7 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
 <table class="grid">
   <thead><tr><th>Environment</th><th>Meaning</th></tr></thead>
   <tbody>
-    <tr><td><code>CI</code>, <code>&lt;PRODUCT&gt;_NON_INTERACTIVE=1</code></td><td>Unattended, whatever the terminal says.</td></tr>
+    <tr><td><code>CI</code>, <code>&lt;PRODUCT&gt;_NON_INTERACTIVE=1</code></td><td>Unattended, whatever the terminal says: no questions, no repair.</td></tr>
     <tr><td><code>&lt;PRODUCT&gt;_HOME</code></td><td>The product's state root. K's state lives under it.</td></tr>
     <tr><td><code>&lt;PRODUCT&gt;_INSTALL_DIR</code></td><td>Where the binary on <code>PATH</code> is published.</td></tr>
     <tr><td><code>&lt;PRODUCT&gt;_RELEASE_BASE</code></td><td>The byte store: <code>&lt;version&gt;/manifest.json</code> and the artifacts it names.</td></tr>
@@ -91,14 +92,14 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
 <h3 id="request">Request</h3>
 <ol class="steps">
   <li><div>Every entry hands the installer the same request: an <strong>id</strong>, an <strong>exact version</strong> and <strong>recorded consent</strong>. It selects nothing else: no code, no commands, no URLs.</div></li>
-  <li><div>A channel is resolved to a version by the entry, before the installer runs, and consent is to that version. Consenting to "latest" is not consent.</div></li>
+  <li><div>A channel is resolved to one version before anything changes, and the receipt records that version, never the channel. Attended, the person sees the version and answers; unattended, the channel's current release is the target and the invocation is the consent.</div></li>
   <li><div>The same id with the same target replays the first receipt and touches nothing. A different target for the same id is refused. A new attempt is a new id.</div></li>
 </ol>
 <h3 id="presence">Presence</h3>
 <ol class="steps">
   <li><div>Whether a person is present is decided once, before anything else: an explicit <code>CI</code> or <code>*_NON_INTERACTIVE=1</code> wins; otherwise a tty on stdin or <code>/dev/tty</code>.</div></li>
   <li><div>An entry may collect consent attended and then run the installer unattended. <code>self upgrade</code> does exactly this: it asks in the application, then launches the same bootstrap non-interactively with the version and the consent in the request.</div></li>
-  <li><div>Unattended, nothing prompts and nothing is assumed. A request without an exact version and consent is refused with exit 2 before anything changes. Optional side effects, such as removing another manager's copy or adding to <code>PATH</code>, default to no.</div></li>
+  <li><div>Unattended, nothing prompts. Running the installer is the consent, and the receipt records who ran it and to what version; <code>--yes</code> only matters attended, where it skips the question. Optional side effects, such as removing another manager's copy or adding to <code>PATH</code>, default to no. Repair is the one thing an unattended run never does.</div></li>
 </ol>
 <h3 id="lock-settle">Lock and settle</h3>
 <ol class="steps">
@@ -137,7 +138,7 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
   <thead><tr><th>Outcome</th><th>The line</th><th>Attended adds</th><th>Unattended adds</th></tr></thead>
   <tbody>
     <tr><td>Unfinished work found</td><td><code>Settled interrupted upgrade i_7: rolled-back.</code> then continue</td><td>Say what was settled.</td><td>Report both outcomes.</td></tr>
-    <tr><td>Channel, not a version</td><td><code>Upgrade 2.2.1 → 2.3.0? [y/n]</code></td><td>Resolve, show, ask; consent goes into the request.</td><td><span class="tag no">refuse</span> exit 2 <code>Unattended runs need an exact version and consent.</code></td></tr>
+    <tr><td>Channel, not a version</td><td><code>Upgrade 2.2.1 → 2.3.0? [y/n]</code></td><td>Resolve, show, ask; the answer goes into the receipt.</td><td>Resolve and proceed; the invocation is the consent. If the authority cannot be reached: exit 1 <code>Failed before any change: release authority unreachable.</code></td></tr>
     <tr><td>Up to date <span class="tag yes">0</span></td><td><code>2.3.0 already running. Nothing to do.</code></td><td></td><td></td></tr>
     <tr><td>Promoted <span class="tag yes">0</span></td><td><code>2.2.1 → 2.3.0 promoted. Running pid 1234. Receipt i_9f.</code></td><td>Version, pid and start id come from the readback.</td><td>Same.</td></tr>
     <tr><td>Failed before any change <span class="tag cond">1</span></td><td><code>Failed before any change: &lt;reason&gt;. 2.2.1 still running.</code></td><td></td><td>Never retry the same target on its own.</td></tr>

@@ -10,9 +10,9 @@
 html, body { margin: 0; height: 100%; overflow: hidden; }
 body { color-scheme: light; color: var(--ink); background: var(--paper);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
-.frame { position: relative; width: 1200px; height: 675px; overflow: hidden;
+.frame { position: relative; width: 1200px; height: 600px; overflow: hidden;
   background: radial-gradient(circle at 1px 1px, rgba(17,17,17,.045) 1px, transparent 1.5px) 0 0 / 16px 16px, var(--paper); }
-.frame svg { position: absolute; inset: 0; width: 1200px; height: 675px; }
+.frame svg { position: absolute; inset: 0; width: 1200px; height: 600px; }
 text { font-family: inherit; fill: var(--ink); }
 .h1 { font-size: 26px; font-weight: 700; }
 .sub { font-size: 17px; fill: var(--muted); }
@@ -27,18 +27,17 @@ text { font-family: inherit; fill: var(--ink); }
 </head>
 <body>
 <div class="frame" id="frame" role="img" aria-label="Seven gates every installer run passes in order: presence, lock, settle, read the world, resolve and verify, act, read back and report. Each gate names what it refuses and the exit code: unattended without version and consent refuses with 2, another live lock owner is held with 2, unsettleable work is unresolved with 3, a broken machine with nobody to consent stops with 2, any verification mismatch fails before any change with 1, a candidate failing the probe is rolled back with 1, and only a live readback is promoted with 0.">
-<svg viewBox="0 0 1200 675">
+<svg viewBox="0 0 1200 600">
+  <g transform="translate(0,-75)">
   <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#111"/></marker></defs>
-  <text x="40" y="44" class="h1">One run, whatever the entry</text>
-  <text x="40" y="70" class="sub">Seven gates in order. A refusal prints one line and exits before anything changes.</text>
   <text x="700" y="100" class="d">if not</text>
   <rect x="44" y="122" width="600" height="62" class="shadow"/><rect x="40" y="118" width="600" height="62" fill="#fff" class="box"/>
   <text x="58" y="146" class="tb">1. Presence</text>
-  <text x="58" y="168" class="d">decide once: CI or *_NON_INTERACTIVE=1, else a tty</text>
+  <text x="58" y="168" class="d">decide once: CI or *_NON_INTERACTIVE=1, else a tty. Unattended never asks</text>
   <path d="M640 149 L690 149" class="line"/>
-  <rect x="700" y="126" width="460" height="46" fill="#ffe66b" stroke="rgba(17,17,17,.6)" stroke-width="1.5"/>
-  <text x="714" y="148" class="t">unattended without exact version + consent</text>
-  <text x="1148" y="148" text-anchor="end" class="lbl">refuse · 2</text>
+  <rect x="700" y="126" width="460" height="46" fill="#ffb7b7" stroke="rgba(17,17,17,.6)" stroke-width="1.5"/>
+  <text x="714" y="148" class="t">no version named and the authority cannot be reached</text>
+  <text x="1148" y="148" text-anchor="end" class="lbl">failed before any change · 1</text>
   <path d="M340 180 L340 194" class="line" marker-end="url(#a)"/>
   <rect x="44" y="198" width="600" height="62" class="shadow"/><rect x="40" y="194" width="600" height="62" fill="#fff" class="box"/>
   <text x="58" y="222" class="tb">2. Lock</text>
@@ -87,12 +86,13 @@ text { font-family: inherit; fill: var(--ink); }
   <rect x="700" y="582" width="460" height="46" fill="#f0efe9" stroke="rgba(17,17,17,.6)" stroke-width="1.5"/>
   <text x="714" y="604" class="t">acceptance is never success</text>
   <text x="1148" y="604" text-anchor="end" class="lbl">promoted · 0</text>
+  </g>
 </svg>
 </div>
 <script>
 const frame = document.getElementById('frame');
 function fitFrame() {
-  const scale = Math.min(1, window.innerWidth / 1200, window.innerHeight / 675);
+  const scale = Math.min(1, window.innerWidth / 1200, window.innerHeight / 600);
   frame.style.transform = `scale(${scale})`;
   frame.style.transformOrigin = "top left";
 }
