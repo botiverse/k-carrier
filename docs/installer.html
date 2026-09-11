@@ -59,9 +59,7 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
   <thead><tr><th>Command</th><th>Meaning</th></tr></thead>
   <tbody>
     <tr><td><code>install</code>, <code>upgrade</code> (default)</td><td>Bring this machine to one exact version. What that means is decided by the world: install, adopt then upgrade, or upgrade. Broken is refused, or offered repair when attended.</td></tr>
-    <tr><td><code>rollback</code></td><td>Upgrade to the previous stable version as an explicit, intended target.</td></tr>
     <tr><td><code>repair</code></td><td>Ask for repair explicitly. Held unless the machine is broken.</td></tr>
-    <tr><td><code>recover &lt;file&gt;</code></td><td>Retry an unresolved recovery offline, from the file the unresolved run printed.</td></tr>
     <tr><td><code>status</code></td><td>The world and the live service. The last receipt is not a live observation.</td></tr>
   </tbody>
 </table>
@@ -75,7 +73,7 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
     <tr><td><code>--yes</code></td><td>Skip the question when attended. Unattended runs never ask; running one is the consent.</td></tr>
     <tr><td><code>--approved-by WHO</code></td><td>Who consented, for the receipt. Defaults to the local user.</td></tr>
     <tr><td><code>--id ID</code></td><td>The operation id. The same id replays the first receipt.</td></tr>
-    <tr><td><code>--allow-downgrade</code></td><td>Intend an older target. Without it, an older target is held.</td></tr>
+    <tr><td><code>--allow-downgrade</code></td><td>Intend an older target. Without it, an older target is held. This is also how a bad release is left: name the version that worked.</td></tr>
   </tbody>
 </table>
 </div>
@@ -110,7 +108,7 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
 <h3 id="lock-settle">Lock and settle</h3>
 <ol class="steps">
   <li><div>One installer per state directory, under K's lock. Another live owner is held, exit 2. Liveness is decided by the lock protocol, never by age.</div></li>
-  <li><div>Every run finishes unfinished K work first, whatever was asked, and reports what it settled alongside its own outcome. This is recovery, not repair; it needs no network and no consent. Recovery that cannot settle is unresolved, exit 3, and no new work is admitted until it is.</div></li>
+  <li><div>Every run finishes unfinished K work first, whatever was asked, and reports what it settled alongside its own outcome. This is recovery, not repair; it needs no network and no consent. Recovery that cannot settle is unresolved, exit 3, and no new work is admitted until it is: running the installer again is the retry, so there is no separate recovery command and nothing for the user to keep.</div></li>
 </ol>
 <h3 id="worlds">Worlds</h3>
 <ol class="steps">
@@ -162,13 +160,13 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
     <tr><td>Failed before any change <span class="tag cond">1</span></td><td><code>Could not upgrade: &lt;reason&gt;. Nothing changed; 2.2.1 is still running.</code></td><td></td><td>Never retry the same target on its own.</td></tr>
     <tr><td>Rolled back <span class="tag cond">1</span></td><td><code>2.3.0 did not start correctly, so 2.2.1 was put back and is running.</code> Where nothing was running: <code>2.3.0 did not check out correctly, so 2.2.1 was put back.</code></td><td></td><td>Never retry the same target on its own.</td></tr>
     <tr><td>Held <span class="tag cond">2</span></td><td><code>Not done: &lt;reason&gt;. Nothing changed.</code> plus what to do, when there is something</td><td>Reasons in the user's words: installed by another manager, older than what is installed, declined, another installer running.</td><td>The caller decides. No retry.</td></tr>
-    <tr><td>Unresolved <span class="tag cond">3</span></td><td><code>Could not finish safely. Nothing was lost. To try again, run: install.sh recover &lt;file&gt;</code></td><td></td><td>Keep the file; no new work until it is settled.</td></tr>
+    <tr><td>Unresolved <span class="tag cond">3</span></td><td><code>Could not finish safely. Nothing was lost. Run the installer again to retry.</code></td><td></td><td>No new work until it is settled.</td></tr>
     <tr><td>Broken</td><td><code>Reinstalled 2.3.0. The previous installation was kept at &lt;path&gt;.</code> then as Installed</td><td>Ask first: <code>The current installation cannot be recovered (&lt;reason&gt;). Reinstall 2.3.0 fresh? The old installation is kept aside, but this cannot be undone. [y/N]</code></td><td>Reinstall, and say where the old installation went.</td></tr>
     <tr><td>Same id again</td><td><code>Upgraded 2.2.1 → 2.3.0 earlier. It is running.</code></td><td>No lifecycle effects.</td><td>Same.</td></tr>
   </tbody>
 </table>
 </div>
-<p>The line is in the user's words. Slots, journals, receipts, operation ids and quarantines are how the installer works, not what it says; they live in the receipt file. A path is fine when the user may need it, such as where an old installation was kept or which file retries a recovery.</p>
+<p>The line is in the user's words. Slots, journals, receipts, operation ids and quarantines are how the installer works, not what it says; they live in the receipt file. A path is fine when the user may need it, such as where an old installation was kept.</p>
 
 <footer class="page-foot"><a href="guide.html">Back: How an upgrade works</a><a href="example.html">Next: Runnable example</a></footer>
 </main>
