@@ -83,7 +83,23 @@
 </dl>
 
 <h2 id="entry-obligations">Entry obligations</h2>
-<p>K returns an outcome, an exit code and a receipt. The entry that launched the installer, whether a bootstrap script, an application command or a remote control path, owes these in return. The <a href="guide.html#next">guide</a> tabulates them by interaction mode.</p>
+<p>K returns an outcome, an exit code and a receipt. The entry that launched the installer, whether a bootstrap script, an application command or a remote control path, owes these in return. <em>Interactive</em> means a person at the shell who can be asked and can see the result; <em>non-interactive</em> means a remote request or a script, where nothing may prompt and nothing may be assumed. The <a href="guide.html#next">guide</a> draws the same matrix.</p>
+<div class="table-scroll wide">
+<table class="grid">
+  <thead><tr><th>Event or outcome</th><th>Interactive</th><th>Non-interactive</th></tr></thead>
+  <tbody>
+    <tr><td>The request names a channel, not a version</td><td>Resolve it, show the version, ask. The consent goes into the request.</td><td><span class="tag no">refuse</span> An exact version must be named. Nothing changes.</td></tr>
+    <tr><td>An earlier operation is unfinished</td><td>Settle it first, say what was settled, then continue.</td><td>Same, without prompting. Report the earlier outcome alongside this one.</td></tr>
+    <tr><td>Held <span class="tag cond">exit 2</span>: owned elsewhere, incompatible, not consented</td><td>Explain the reason. Nothing changed; a new attempt needs a new id.</td><td>Return the code and reason. The caller decides. No retry.</td></tr>
+    <tr><td>Rolled back <span class="tag cond">exit 1</span></td><td>Say why the candidate failed. The old version is running.</td><td>Report rolled-back. Never retry the same target on its own.</td></tr>
+    <tr><td>Unresolved <span class="tag cond">exit 3</span></td><td>Print the recovery file and how to run recovery again.</td><td>Keep the recovery file. The next invocation settles it; no new work is admitted until then.</td></tr>
+    <tr><td>Broken: recovery cannot settle the machine</td><td>Offer a repair. Require explicit consent for this machine. Report what was quarantined.</td><td><span class="tag no">stop</span> Report broken. A repair is never started non-interactively.</td></tr>
+    <tr><td>The same id is sent again</td><td>Replay the receipt; no lifecycle effects.</td><td>Same.</td></tr>
+    <tr><td>Promoted <span class="tag yes">exit 0</span></td><td>Report the live version, pid and start id from the readback.</td><td>Same. Acceptance of the request was never success.</td></tr>
+  </tbody>
+</table>
+</div>
+
 <ul>
   <li>A channel is never consent. A non-interactive entry names an exact target version; an interactive one resolves the channel, shows the version and asks.</li>
   <li>A failed target is never retried by the entry on its own. A new attempt is a new id and a new decision by whoever may consent.</li>
