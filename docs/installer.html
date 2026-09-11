@@ -86,7 +86,7 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
   </tbody>
 </table>
 </div>
-<p>Every run prints one line on stdout and exits 0, 1, 2 or 3. What was settled first, if anything, goes to stderr. <code>--json</code> prints the outcome as an object instead of the line.</p>
+<p>Every run prints one line on stdout and exits 0, 1, 2 or 3. What was settled first, if anything, goes to stderr. Details go to the receipt file, not the terminal.</p>
 
 <h2 id="rules">The rules</h2>
 <h3 id="request">Request</h3>
@@ -128,7 +128,7 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
 <h3 id="report">Report</h3>
 <ol class="steps">
   <li><div>Success is claimed only after a live probe reports the requested version, a pid and a new start id. An accepted request, a finished download, a replaced file, a started process: none of these is success.</div></li>
-  <li><div>Every run ends in one printed line and one exit code: 0 promoted or up to date, 1 failed or rolled back, 2 held, 3 unresolved. The line says what happened, what did not change, and what to do next.</div></li>
+  <li><div>Every run ends in one printed line and one exit code: 0 upgraded, installed or up to date, 1 failed or rolled back, 2 not done, 3 unresolved. The line says what happened, what did not change, and what to do next, in the user's words.</div></li>
   <li><div>Attended, the line explains and may point at a next command. Unattended, it is the same line plus the code, and the caller decides; the installer never retries the same target on its own.</div></li>
 </ol>
 
@@ -137,19 +137,20 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
 <table class="grid">
   <thead><tr><th>Outcome</th><th>The line</th><th>Attended adds</th><th>Unattended adds</th></tr></thead>
   <tbody>
-    <tr><td>Unfinished work found</td><td><code>Settled interrupted upgrade i_7: rolled-back.</code> then continue</td><td>Say what was settled.</td><td>Report both outcomes.</td></tr>
-    <tr><td>Channel, not a version</td><td><code>Upgrade 2.2.1 → 2.3.0? [y/n]</code></td><td>Resolve, show, ask; the answer goes into the receipt.</td><td>Resolve and proceed; the invocation is the consent. If the authority cannot be reached: exit 1 <code>Failed before any change: release authority unreachable.</code></td></tr>
-    <tr><td>Up to date <span class="tag yes">0</span></td><td><code>2.3.0 already running. Nothing to do.</code></td><td></td><td></td></tr>
-    <tr><td>Promoted <span class="tag yes">0</span></td><td><code>2.2.1 → 2.3.0 promoted. Running pid 1234. Receipt i_9f.</code></td><td>Version, pid and start id come from the readback.</td><td>Same.</td></tr>
-    <tr><td>Failed before any change <span class="tag cond">1</span></td><td><code>Failed before any change: &lt;reason&gt;. 2.2.1 still running.</code></td><td></td><td>Never retry the same target on its own.</td></tr>
-    <tr><td>Rolled back <span class="tag cond">1</span></td><td><code>Candidate 2.3.0 failed probe. Rolled back; 2.2.1 running.</code></td><td>Say why the candidate failed.</td><td>Never retry the same target on its own.</td></tr>
-    <tr><td>Held <span class="tag cond">2</span></td><td><code>Held: &lt;reason&gt;. Nothing changed. Retry with a new id.</code></td><td>Explain: owned elsewhere, older target, declined, another installer running.</td><td>The caller decides. No retry.</td></tr>
-    <tr><td>Unresolved <span class="tag cond">3</span></td><td><code>Cannot settle. Recover with: install.sh recover &lt;path&gt;.</code></td><td>Print the recovery file.</td><td>Keep the file; no new work until it is settled.</td></tr>
-    <tr><td>Broken</td><td><code>Repaired: quarantined &lt;path&gt;; 2.3.0 installed and running (pid 1234).</code></td><td>Ask first: <code>Stable 2.2.1 won't settle. Repair = quarantine + fresh 2.3.0. No rollback. Proceed? [y/N]</code></td><td>Repair, and say what was quarantined.</td></tr>
-    <tr><td>Same id again</td><td>The archived receipt</td><td>No lifecycle effects.</td><td>Same.</td></tr>
+    <tr><td>Unfinished work found</td><td><code>An earlier upgrade was interrupted; the previous version was put back.</code> then continue</td><td></td><td>Both lines are printed.</td></tr>
+    <tr><td>Channel, not a version</td><td><code>Upgrade 2.2.1 → 2.3.0? [y/N]</code></td><td>Resolve, show, ask; the answer goes into the receipt.</td><td>Resolve and proceed. If the authority cannot be reached: exit 1 <code>Could not upgrade: the release server could not be reached. Nothing changed.</code></td></tr>
+    <tr><td>Up to date <span class="tag yes">0</span></td><td><code>2.3.0 is already installed and running. Nothing to do.</code></td><td></td><td></td></tr>
+    <tr><td>Promoted <span class="tag yes">0</span></td><td><code>Upgraded 2.2.1 → 2.3.0. It is running.</code></td><td>Only after the live readback.</td><td>Same.</td></tr>
+    <tr><td>Failed before any change <span class="tag cond">1</span></td><td><code>Could not upgrade: &lt;reason&gt;. Nothing changed; 2.2.1 is still running.</code></td><td></td><td>Never retry the same target on its own.</td></tr>
+    <tr><td>Rolled back <span class="tag cond">1</span></td><td><code>2.3.0 did not start correctly, so 2.2.1 was put back and is running.</code></td><td></td><td>Never retry the same target on its own.</td></tr>
+    <tr><td>Held <span class="tag cond">2</span></td><td><code>Not done: &lt;reason&gt;. Nothing changed.</code> plus what to do, when there is something</td><td>Reasons in the user's words: installed by another manager, older than what is installed, declined, another installer running.</td><td>The caller decides. No retry.</td></tr>
+    <tr><td>Unresolved <span class="tag cond">3</span></td><td><code>Could not finish safely. Nothing was lost. To try again, run: install.sh recover &lt;file&gt;</code></td><td></td><td>Keep the file; no new work until it is settled.</td></tr>
+    <tr><td>Broken</td><td><code>Reinstalled 2.3.0. It is running. The previous installation was kept at &lt;path&gt;.</code></td><td>Ask first: <code>The current installation cannot be recovered (&lt;reason&gt;). Reinstall 2.3.0 fresh? The old installation is kept aside, but this cannot be undone. [y/N]</code></td><td>Reinstall, and say where the old installation went.</td></tr>
+    <tr><td>Same id again</td><td><code>Upgraded 2.2.1 → 2.3.0 earlier. It is running.</code></td><td>No lifecycle effects.</td><td>Same.</td></tr>
   </tbody>
 </table>
 </div>
+<p>The line is in the user's words. Slots, journals, receipts, operation ids and quarantines are how the installer works, not what it says; they live in the receipt file. A path is fine when the user may need it, such as where an old installation was kept or which file retries a recovery.</p>
 
 <footer class="page-foot"><a href="guide.html">Back: How an upgrade works</a><a href="example.html">Next: Runnable example</a></footer>
 </main>
