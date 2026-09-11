@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Where the crash lands decides what recovery does</title>
+<style>
+:root {
+  --ink: #111; --paper: #fffdf7; --soft: #f7f7f3; --muted: rgba(17,17,17,.52);
+  --yellow: #ffe66b; --pink: #ff7aa2; --blue: #7bc8ff; --green: #98e59b;
+  --orange: #ffb25f; --purple: #b7a1ff; --red: #ff7b73;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body { color-scheme: light; color: var(--ink); background: var(--paper);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 18px; }
+.mono { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; }
+.frame { position: relative; width: 1200px; height: 675px; overflow: hidden;
+  background: radial-gradient(circle at 1px 1px, rgba(17,17,17,.045) 1px, transparent 1.5px) 0 0 / 16px 16px, var(--paper); }
+.frame > * { position: absolute; }
+h1 { left: 40px; top: 28px; margin: 0; font-size: 26px; font-weight: 700; }
+.caption { left: 40px; top: 66px; width: 1120px; font-size: 20px; color: var(--muted); min-height: 28px; }
+.caption b { color: var(--ink); }
+.phase { top: 250px; height: 64px; line-height: 60px; text-align: center; border: 2px solid var(--ink); background: var(--paper); box-shadow: 5px 5px 0 var(--ink); font-size: 18px; }
+.phase.hot { background: var(--yellow); }
+.phase.out { top: 250px; }
+.phase.ok { background: var(--green); } .phase.bad { background: var(--red); }
+.phase.dim { opacity: .35; }
+.arrow { top: 280px; height: 0; border-top: 2px solid var(--ink); }
+.arrow::after { content: ""; position: absolute; right: -2px; top: -6px; border: 5px solid transparent; border-left: 8px solid var(--ink); }
+.bar { left: 907px; top: 200px; width: 10px; height: 170px; background: var(--yellow); border: 2px solid var(--ink); }
+.barlabel { left: 790px; top: 380px; width: 140px; text-align: center; font-weight: 700; font-size: 17px; }
+.barsub { left: 770px; top: 404px; width: 180px; text-align: center; color: var(--muted); font-size: 15px; }
+.crash { top: 172px; width: 64px; height: 64px; margin-left: -32px; transition: left .5s cubic-bezier(.4,0,.2,1); }
+.crash svg { width: 64px; height: 64px; }
+.rule { top: 470px; height: 120px; border: 2px solid var(--ink); background: var(--soft); padding: 18px 22px; box-shadow: 6px 6px 0 var(--ink); opacity: .35; transition: opacity .3s, background .3s; }
+.rule.on { opacity: 1; background: var(--yellow); }
+.rule b { display: block; font-size: 20px; margin-bottom: 8px; }
+.rule span { font-size: 16px; color: var(--muted); }
+.rule.on span { color: var(--ink); }
+.dots { top: 600px; left: 40px; font-size: 14px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="frame" id="frame" role="img" aria-label="The journal phases staged, handing-over, running-experiment, readback and then promoted or rolled-back. A crash marker moves along the phases. Before the promote intent, recovery restores stable; after it, recovery replays the commit.">
+  <h1>Where the crash lands decides what recovery does</h1>
+  <div class="caption" id="cap"></div>
+
+  <div class="phase mono" style="left:40px;width:90px" data-i="0">idle</div>
+  <div class="arrow" style="left:130px;width:30px"></div>
+  <div class="phase mono" style="left:160px;width:110px" data-i="1">staged</div>
+  <div class="arrow" style="left:270px;width:30px"></div>
+  <div class="phase mono" style="left:300px;width:160px" data-i="2">handing-over</div>
+  <div class="arrow" style="left:460px;width:30px"></div>
+  <div class="phase mono" style="left:490px;width:210px" data-i="3">running-experiment</div>
+  <div class="arrow" style="left:700px;width:30px"></div>
+  <div class="phase mono" style="left:730px;width:130px" data-i="4">readback</div>
+  <div class="arrow" style="left:860px;width:40px"></div>
+  <div class="bar"></div>
+  <div class="barlabel">promote intent</div>
+  <div class="barsub">the point of no return</div>
+  <div class="arrow" style="left:920px;width:40px"></div>
+  <div class="phase mono" style="left:960px;width:170px" data-i="5">promoted</div>
+  <div class="phase mono bad dim" style="left:960px;width:170px;top:380px" id="rb">rolled-back</div>
+
+  <div class="crash" id="crash"><svg viewBox="0 0 64 64"><path d="M36 2 L14 36 L30 36 L22 62 L52 24 L36 24 L46 2 Z" fill="#ffe66b" stroke="#111" stroke-width="3" stroke-linejoin="round"/></svg></div>
+
+  <div class="rule" id="before" style="left:40px;width:540px"><b>Before promote intent: restore stable</b><span>Stop any candidate, start stable again, resume parked work, record rolled-back. Exit 1, and the stable bytes were never touched.</span></div>
+  <div class="rule" id="after" style="left:620px;width:540px"><b>After promote intent: replay the commit</b><span>Finish the rename of experiment to stable, resume work, record promoted. Idempotent, so a crash during recovery is handled the same way next time.</span></div>
+  <div class="dots">Recovery never starts a new upgrade. It takes the same lock, checks the operation id, fences the previous controller, then follows the journal.</div>
+</div>
+<script>
+const frame = document.getElementById('frame');
+function fitFrame() {
+  const scale = Math.min(1, window.innerWidth / 1200, window.innerHeight / 675);
+  frame.style.transform = `scale(${scale})`;
+  frame.style.transformOrigin = "top left";
+}
+fitFrame();
+window.addEventListener("resize", fitFrame);
+
+// Crash positions: x on the artboard, which rule applies, and the caption.
+const SPOTS = [
+  { x: 215, side: 'before', cap: 'Crash after <b>staged</b>: verified bytes sit in the experiment slot, nothing was stopped. Recovery clears the experiment; stable keeps running.' },
+  { x: 380, side: 'before', cap: 'Crash during <b>handing-over</b>: the old service may be stopped. Recovery fences the controller, starts stable again, rolls back.' },
+  { x: 595, side: 'before', cap: 'Crash with the <b>experiment running</b>: recovery stops the candidate, restarts stable, records rolled-back.' },
+  { x: 795, side: 'before', cap: 'Crash during <b>readback</b>: a live candidate alone does not authorize commit. Recovery restores stable.' },
+  { x: 1045, side: 'after', cap: 'Crash after <b>promote intent</b>: the decision is durable. Recovery replays the rename and records promoted.' },
+];
+const CYCLE_MS = 12500;
+const $ = (id) => document.getElementById(id);
+function render(i) {
+  const s = SPOTS[i];
+  $('crash').style.left = s.x + 'px';
+  $('cap').innerHTML = s.cap;
+  $('before').classList.toggle('on', s.side === 'before');
+  $('after').classList.toggle('on', s.side === 'after');
+  $('rb').classList.toggle('dim', s.side !== 'before');
+  document.querySelectorAll('.phase[data-i]').forEach((p) => {
+    const k = Number(p.dataset.i);
+    p.classList.toggle('hot', k === i + 1 && k <= 4);
+    p.classList.toggle('ok', k === 5 && s.side === 'after');
+    p.classList.toggle('dim', k === 5 && s.side !== 'after');
+  });
+}
+const fixed = new URLSearchParams(location.search).get('i');
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (fixed !== null) render(Math.min(SPOTS.length - 1, Math.max(0, Number(fixed))));
+else if (reduced) render(3);
+else {
+  const start = performance.now();
+  (function loop(now) {
+    render(Math.floor(((now - start) % CYCLE_MS) / (CYCLE_MS / SPOTS.length)));
+    requestAnimationFrame(loop);
+  })(start);
+}
+</script>
+</body>
+</html>

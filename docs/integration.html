@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en" data-theme="brutal">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Integration and distribution · K</title>
+<meta name="description" content="Build, launch, observe, recover, package and distribute an independent installer built from K and your product adapter.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;700&family=Geist+Mono:wght@400;700&display=swap">
+<link rel="stylesheet" href="assets/rui.css">
+<link rel="stylesheet" href="assets/site.css">
+<script defer src="assets/site.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="mark">K</span>k-carrier <small>docs</small></a>
+  <button class="menu-btn" type="button" aria-controls="nav" aria-expanded="false">Menu</button>
+</header>
+<nav id="nav" class="sidebar" aria-label="Documentation"></nav>
+
+<main id="main" class="page">
+<header class="page-head">
+  <h1>Integrating K</h1>
+  <p class="lede">Build an independent installer from K and a trusted product adapter. The application exposes lifecycle and health controls; it does not run K's transaction engine. Read <a href="guide.html">how an upgrade works</a> first, then start with the <a href="example.html">runnable example</a>. The <a href="design.html">design</a> states the obligations; the <a href="reference.html">reference</a> has protocols, exit codes and file layout.</p>
+</header>
+
+<h2 id="publish-three-deliverables">Publish three deliverables</h2>
+<figure class="fig">
+<svg viewBox="0 0 960 330" role="img" aria-labelledby="figd">
+  <title id="figd">Three deliverables on one CDN: the bootstrap verifies installer 1.4.1, which installs product 2.8.0</title>
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--line-strong)"/></marker></defs>
+  <!-- CDN tree -->
+  <rect x="24" y="24" width="356" height="280" class="k-shadow"/>
+  <rect x="20" y="20" width="356" height="280" class="k-inset"/>
+  <text x="36" y="48" class="k-title">One CDN, three artifacts</text>
+  <text x="36" y="78" class="k-mono">https://downloads.example.com/my-service/</text>
+  <text x="52" y="104" class="k-mono">install.sh</text>
+  <text x="52" y="134" class="k-mono">installers/1.4.1/linux-x64/installer</text>
+  <text x="52" y="152" class="k-mono">installers/1.4.1/manifest.json</text>
+  <text x="52" y="182" class="k-mono">releases/2.8.0/linux-x64/service</text>
+  <text x="52" y="200" class="k-mono">releases/2.8.0/manifest.json</text>
+  <text x="36" y="240" class="k-muted">Illustrative paths, not a K schema.</text>
+  <text x="36" y="258" class="k-muted">Versioned artifacts stay immutable.</text>
+  <!-- deliverables -->
+  <g transform="translate(430,40)"><rect x="4" y="4" width="230" height="64" class="k-shadow"/><rect width="230" height="64" class="k-box"/><text x="115" y="27" text-anchor="middle" class="k-bold">Bootstrap</text><text x="115" y="49" text-anchor="middle" class="k-mono">install.sh, install.ps1</text></g>
+  <g transform="translate(430,140)"><rect x="4" y="4" width="230" height="64" class="k-shadow"/><rect width="230" height="64" class="k-hi"/><text x="115" y="27" text-anchor="middle" class="k-bold">Installer 1.4.1</text><text x="115" y="49" text-anchor="middle" class="k-mono">K + adapter, own version</text></g>
+  <g transform="translate(430,240)"><rect x="4" y="4" width="230" height="64" class="k-shadow"/><rect width="230" height="64" class="k-box"/><text x="115" y="27" text-anchor="middle" class="k-bold">Product 2.8.0</text><text x="115" y="49" text-anchor="middle" class="k-mono">version = targetVersion</text></g>
+  <line x1="545" y1="108" x2="545" y2="138" class="k-line" marker-end="url(#ah)"/>
+  <text x="557" y="128" class="k-muted">verifies hash and size, launches</text>
+  <line x1="545" y1="208" x2="545" y2="238" class="k-line" marker-end="url(#ah)"/>
+  <text x="557" y="228" class="k-muted">resolves URL, SHA-256, size itself</text>
+  <!-- right notes -->
+  <text x="700" y="66" class="k-text">Consults no product release</text>
+  <text x="700" y="84" class="k-text">authority. Pins one installer.</text>
+  <text x="700" y="166" class="k-text">Not the application version.</text>
+  <text x="700" y="184" class="k-text">Not in K's request or receipt.</text>
+  <text x="700" y="266" class="k-text">Success only after the local</text>
+  <text x="700" y="284" class="k-text">receipt and live readback.</text>
+</svg>
+<figcaption>The bootstrap verifies installer 1.4.1, then asks it to install product 2.8.0. Authenticate both sets of metadata; hashes alone do not establish publisher identity.</figcaption>
+</figure>
+<table class="grid">
+  <thead><tr><th>Deliverable</th><th>Responsibility</th></tr></thead>
+  <tbody>
+    <tr><td>Bootstrap (<code>install.sh</code>, <code>install.ps1</code>)</td><td>Identify the platform; select, download, verify and launch a compatible installer; pass the request; supervise settlement; clean temporary code</td></tr>
+    <tr><td>Installer</td><td>K plus your product adapter, released with its own version, platform artifacts, hashes and signatures where available</td></tr>
+    <tr><td>Product</td><td>The application executable that the adapter's ReleaseSource selects; its version is the adapter's <code>Release.version</code> and the request's <code>targetVersion</code></td></tr>
+  </tbody>
+</table>
+<ul>
+  <li>The bootstrap must not contain another swap/rollback algorithm. K provides <code>launchRunner</code> for Node callers; there is not yet a product-ready shell bootstrap template.</li>
+  <li><code>install.sh</code> and <code>self upgrade</code> use the same runner protocol and installation state. To ship an installer-only fix, publish a new installer and update the bootstrap's selection mechanism. Keep versioned artifacts immutable.</li>
+  <li>The controller is an execution role, not a fourth deliverable.</li>
+  <li>K records protocol version, operation id, target version and artifact hash. The installer version is not part of K's request or receipt; record it in the operation's <code>metadata</code> or in your own reporting. Installer publication only proves the installer is distributable; a machine upgrade succeeds only after its local receipt and live version/pid/start-id readback confirm it.</li>
+</ul>
+
+<h2 id="1-define-the-adapter-and-state">1. Define the adapter and state</h2>
+<p><code>createRunner</code> requires a HostAdapter. Supply release lookup, installation ownership, consent policy, notification handling and lifecycle operations through trusted build-time code. Use <code>checkCompatibility(from, to)</code> for transitions constrained by data or protocol compatibility. Another package manager's installation is <code>managed-elsewhere</code>.</p>
+<p>The controller implements the six operations of the <a href="design.html#host-control-contract">host control contract</a>: fence, quiesce, stop, start, healthProbe and resume, either directly or through <code>createCommandHost</code>. Test <code>fence</code> against your real service manager. The obligations apply only to workloads your product promises to preserve across an upgrade; a stateless service acknowledges quiesce and resume.</p>
+<div class="note"><p>Choose one persistent <code>stateDir</code> per installation for slots, journal and receipts. Keep application data, installer scratch code and interpreter outside the slots. Run the installer outside the application's service-management boundary: spawning a child does not escape a systemd cgroup or Windows job.</p></div>
+
+<h2 id="2-establish-the-initial-installation">2. Establish the initial installation</h2>
+<p>K's upgrade flow requires trusted, usable bytes in stable. For an existing installation, a trusted setup step calls <code>bootstrapStable({stateDir, version, artifactPath})</code> with its current executable. This seeds a fallback; it does not authenticate or download those bytes or start a service. It refuses conflicting state and does not overwrite initialized stable. Fresh installation, adoption of an existing installation and repair of state K cannot settle are installer work; see <a href="#repair-beyond-k">repair beyond K</a>.</p>
+<p>The controller starts the K-selected artifact via <code>slotArtifactPath</code> or the <code>artifactPath</code> that <code>createCommandHost</code> passes to it. Each slot contains one <code>artifact.bin</code>; package layouts and additional install hooks need a product contract.</p>
+<p>Promotion renames the slot directories, so a Windows controller must copy or hard-link the artifact to a runtime path outside the slots before starting it. Copying is a good default on every platform: it keeps the runtime path stable across promotion. The example copies the selected artifact to <code>active.mjs</code> (Node also needs the extension).</p>
+<p>K restores executables, not data migrations. Keep repair and cleanup limited to owned installation state and provide backup and restore for destructive data changes.</p>
+
+<h2 id="3-build-and-launch">3. Build and launch</h2>
+<p>On the build machine, bundle your trusted adapter with K:</p>
+<pre><code>pnpm install --frozen-lockfile
+node scripts/build-runner.mjs examples/external-service/adapter.ts /tmp/k-runner.mjs</code></pre>
+<p>Follow the <a href="example.html">example setup</a> before invoking that example runner. After authenticating the caller and obtaining approval for the target, submit a request from an operator shell or independent supervisor:</p>
+<pre><code>printf '%s' '{"protocolVersion":1,"action":"upgrade","id":"install-2","targetVersion":"2.0.0","consented":true}' | node /tmp/k-runner.mjs</code></pre>
+<p><code>consented</code> records approval; it is not authorization supplied by an untrusted network client. Requests cannot select adapter modules, commands or release URLs. Logs go to stderr and the response to stdout. Web entrypoints need an external launch facility and a way to retrieve the result after reconnection.</p>
+<div class="note stop"><p>Directly invoking a worker does not supervise it. Use <code>launchRunner</code> for a supervised install, or <code>superviseRunner</code> when the caller needs a structured result. Both enforce execution and recovery deadlines and recover only the original operation. The <a href="https://github.com/botiverse/k-carrier/blob/main/examples/external-service/install.mjs">example installer</a> wires this flow; see <a href="#package-the-installer">packaging</a> for shipping the runner as a single executable.</p></div>
+
+<h2 id="4-observe-and-recover">4. Observe and recover</h2>
+<p>Inspect both the operation outcome and exit code; the <a href="guide.html#result">walkthrough</a> explains the two results that surprise people, and the <a href="reference.html#protocol-v1">reference</a> lists every code.</p>
+<p>Retry the same id and target to replay a terminal result. Use a new id for a new attempt; there is no by-id status or archive-list action. Terminal receipts are archived without an acknowledgement gate. Active work, corrupt state and a live lock owner still prevent conflicting transactions. See <a href="reference.html#receipts-and-retries">receipts and retries</a>.</p>
+<p>Recovery is described in the walkthrough under <a href="guide.html#failures">when something goes wrong</a>. What the integration has to provide:</p>
+<ul>
+  <li>Exit 3 from the supervisor leaves a verified runner and <code>recovery.json</code>. Keep that directory and call <code>resumeRunner(path)</code> to retry offline.</li>
+  <li>If the whole invocation dies, something must run a compatible installer against the same state again: your product's OS startup hook or an operator. K does not install a watchdog. That installer settles unfinished work before accepting a new request; a live earlier worker still blocks takeover.</li>
+  <li>If a request died before its operation was recorded, recovery refuses rather than guessing which earlier operation it owns. Inspect <code>status</code> and explicitly run <code>recover</code> on the retained runner.</li>
+  <li>Never clear a lock or receipt merely to bypass unresolved work.</li>
+</ul>
+
+<h3 id="repair-beyond-k">Repair beyond K</h3>
+<p>Of the <a href="guide.html#worlds">four worlds</a>, K's transaction owns only the managed one. Fresh and adopted are <code>bootstrapStable</code>, start and probe, as in <a href="#2-establish-the-initial-installation">step 2</a>. Broken needs repair. The <a href="design.html#repair-boundary">design</a> states its obligations; building it:</p>
+<ul>
+  <li>Give repair its own entrypoint and request shape, so a request that only names a version cannot reach it, and run <code>recover</code> first.</li>
+  <li>Quarantine by renaming the whole state directory under the installer's own state in one atomic move. Keep it until an operator removes it.</li>
+  <li>Stop an unresponsive service only by an identity you recorded, such as executable path and start time, never by a bare pid.</li>
+  <li>Acquire and verify the release exactly as an upgrade would, install to the runtime path, start, probe, then <code>bootstrapStable</code>.</li>
+  <li>Write a receipt naming the quarantine path, the installed version and the approver.</li>
+</ul>
+
+<h2 id="5-validate-the-product">5. Validate the product</h2>
+<p>Use the <a href="test-plan.html">test plan</a>, then test your real installer and controller on each target platform. Cover baseline setup, running-service upgrade, bad-candidate rollback, installer death, offline recovery, workload and data retention, and service isolation. Observe declared OS lifecycle surfaces before retiring their previous manager. A green framework test is not product acceptance.</p>
+
+<h2 id="package-the-installer">Package the installer</h2>
+<p>End users download finished artifacts; these build choices belong to publishers. <a href="https://github.com/botiverse/k-carrier/blob/main/scripts/build-runner.mjs"><code>scripts/build-runner.mjs</code></a> produces both bundle forms; SEA injection, signing and publication are publisher responsibilities. Whichever form you ship must survive stopping and replacing the application.</p>
+<table class="grid">
+  <thead><tr><th>Form</th><th>Delivered artifact</th><th>Runtime requirement</th></tr></thead>
+  <tbody>
+    <tr><td>Single executable per OS and architecture</td><td>Node SEA with the runner embedded, built with <code>--cjs</code></td><td>No external Node for the worker; supervisor and controller dependencies are separate</td></tr>
+    <tr><td>Cross-platform JavaScript</td><td>K and adapter bundled into one <code>.mjs</code></td><td>Independently available Node 24 and adapter dependencies</td></tr>
+  </tbody>
+</table>
+<p>One JS file is portable only if its adapter and dependencies support the targets.</p>
+
+<h3 id="build-a-single-executable">Build a single executable</h3>
+<p>Node's single-executable-application (SEA) tooling embeds the runner into a copy of the Node binary. This recipe uses Node 24 and a CommonJS entry. The supervisor executes the result directly, with no <code>interpreter</code> option.</p>
+<figure class="fig">
+<svg viewBox="0 0 960 246" role="img" aria-labelledby="figs">
+  <title id="figs">The SEA pitfall: inside a single executable, process.execPath is the runner itself, so spawning a script re-runs the runner</title>
+  <defs><marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--line-strong)"/></marker></defs>
+  <text x="20" y="36" class="k-title">Under external Node</text>
+  <g transform="translate(20,56)"><rect x="4" y="4" width="180" height="56" class="k-shadow"/><rect width="180" height="56" class="k-box"/><text x="90" y="24" text-anchor="middle" class="k-bold">Worker</text><text x="90" y="44" text-anchor="middle" class="k-mono">node runner.mjs</text></g>
+  <line x1="204" y1="84" x2="258" y2="84" class="k-line" marker-end="url(#ah3)"/>
+  <g transform="translate(260,56)"><rect x="4" y="4" width="180" height="56" class="k-shadow"/><rect width="180" height="56" class="k-ok"/><text x="90" y="24" text-anchor="middle" class="k-bold">Controller</text><text x="90" y="44" text-anchor="middle" class="k-mono">node controller.mjs</text></g>
+  <text x="20" y="150" class="k-mono">process.execPath = /usr/bin/node</text>
+  <text x="20" y="170" class="k-muted">spawning execPath + a script runs the script</text>
+
+  <text x="520" y="36" class="k-title">Inside a SEA</text>
+  <g transform="translate(520,56)"><rect x="4" y="4" width="180" height="56" class="k-shadow"/><rect width="180" height="56" class="k-hi"/><text x="90" y="24" text-anchor="middle" class="k-bold">Worker</text><text x="90" y="44" text-anchor="middle" class="k-mono">./runner (SEA)</text></g>
+  <path d="M704 84 L740 84 L740 30 L610 30 L610 54" class="k-dash" marker-end="url(#ah3)"/>
+  <g transform="translate(760,56)"><rect x="4" y="4" width="180" height="56" class="k-shadow"/><rect width="180" height="56" class="k-danger"/><text x="90" y="24" text-anchor="middle" class="k-bold">Controller</text><text x="90" y="44" text-anchor="middle" class="k-mono">never reached</text></g>
+  <text x="520" y="150" class="k-mono">process.execPath = ./runner</text>
+  <text x="520" y="170" class="k-muted">spawning execPath + a script re-runs the runner;</text>
+  <text x="520" y="188" class="k-muted">the upgrade fails at the first controller call</text>
+  <text x="520" y="212" class="k-text">Fix: a native or SEA controller, or an explicit</text>
+  <text x="520" y="230" class="k-text">interpreter path baked in at build time.</text>
+</svg>
+</figure>
+<div class="note stop"><p><strong>The SEA pitfall.</strong> Inside a SEA, <code>process.execPath</code> is the SEA itself. An adapter or controller that spawns <code>process.execPath some-script.mjs</code> re-runs the embedded runner instead of the script, and the upgrade fails at the first controller call. Make the controller a native executable or its own SEA, or pass an explicit interpreter path into the adapter at build time. The example adapter spawns its controller with <code>process.execPath</code>, so as published it only works under an external Node; the recipe below was verified end to end (a SEA runner promoted the example service under <code>launchRunner</code>) with the adapter's controller command changed to an explicit Node path.</p></div>
+<pre><code># 1. CommonJS entry. Point the adapter's controller command at an explicit
+#    Node path first (see the SEA pitfall above).
+node scripts/build-runner.mjs --cjs examples/external-service/adapter.ts dist/runner.cjs
+
+# 2. Prepare the blob.
+printf '%s' '{"main":"dist/runner.cjs","output":"dist/sea-prep.blob","disableExperimentalSEAWarning":true}' &gt; dist/sea-config.json
+node --experimental-sea-config dist/sea-config.json
+
+# 3. Inject into a Node binary for the target platform.
+cp "$(command -v node)" dist/runner
+# macOS only: codesign --remove-signature dist/runner
+npx postject@1.0.0-alpha.6 dist/runner NODE_SEA_BLOB dist/sea-prep.blob \
+  --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
+# macOS: add --macho-segment-name NODE_SEA to the postject command
+# macOS only: codesign --sign - dist/runner   (use your release identity)
+
+# 4. Publish dist/runner with its sha256 and size; launch it with no interpreter.</code></pre>
+<p>Build one SEA per target OS and architecture with that platform's Node binary. Binary size depends on the target Node build. Installer and product release metadata can include optional gzip transport; both paths use the same verified downloader.</p>
+<p>This packages the worker only. <code>launchRunner</code> is a Node API, and the demo controller also needs Node. To ship an installation chain that needs no preinstalled runtime, package the supervisor and controller dependencies too.</p>
+
+<h2 id="release-platforms">Release platforms</h2>
+<p>K has no opinion about where releases come from. The adapter's ReleaseSource answers two questions, and anything that can answer them is a release platform as far as K is concerned:</p>
+<dl class="defs">
+  <div><dt><code>checkForUpdate()</code></dt><dd>Which version should this machine move to, if any? Channels, cohorts, staged rollouts, pinning and version ordering all live behind this call.</dd></div>
+  <div><dt><code>fetchRelease(version)</code></dt><dd>For exactly this version, what are the URL, SHA-256 and size (plus optional gzip metadata)?</dd></div>
+</dl>
+<figure class="fig">
+<svg viewBox="0 0 960 220" role="img" aria-labelledby="figr">
+  <title id="figr">Control plane and data plane: the release platform is trusted for metadata, the CDN only serves bytes that K verifies</title>
+  <defs><marker id="ah4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--line-strong)"/></marker></defs>
+  <g transform="translate(20,60)"><rect x="4" y="4" width="200" height="76" class="k-shadow"/><rect width="200" height="76" class="k-hi"/><text x="100" y="26" text-anchor="middle" class="k-bold">Adapter's ReleaseSource</text><text x="100" y="48" text-anchor="middle" class="k-mono">checkForUpdate()</text><text x="100" y="66" text-anchor="middle" class="k-mono">fetchRelease(version)</text></g>
+  <g transform="translate(380,20)"><rect x="4" y="4" width="220" height="76" class="k-shadow"/><rect width="220" height="76" class="k-box"/><text x="110" y="26" text-anchor="middle" class="k-bold">Release platform</text><text x="110" y="46" text-anchor="middle" class="k-muted">control plane, authenticated</text><text x="110" y="66" text-anchor="middle" class="k-mono">version, url, sha256, size</text></g>
+  <g transform="translate(380,124)"><rect x="4" y="4" width="220" height="76" class="k-shadow"/><rect width="220" height="76" class="k-inset"/><text x="110" y="26" text-anchor="middle" class="k-bold">CDN</text><text x="110" y="46" text-anchor="middle" class="k-muted">data plane, needs no trust</text><text x="110" y="66" text-anchor="middle" class="k-mono">bytes at whatever URL</text></g>
+  <path d="M224 90 L300 90 L300 58 L378 58" class="k-line" marker-end="url(#ah4)"/>
+  <text x="300" y="44" text-anchor="middle" class="k-muted">trusts metadata</text>
+  <path d="M224 106 L300 106 L300 162 L378 162" class="k-line" marker-end="url(#ah4)"/>
+  <text x="300" y="186" text-anchor="middle" class="k-muted">verifies bytes</text>
+  <text x="650" y="50" class="k-text">Can be one host playing both roles,</text>
+  <text x="650" y="70" class="k-text">an object store, or a data: URL.</text>
+  <text x="650" y="150" class="k-text">Authenticate the platform: TLS identity,</text>
+  <text x="650" y="170" class="k-text">a manifest signature, or an authenticated</text>
+  <text x="650" y="190" class="k-text">API. K's hash check proves only that the</text>
+  <text x="650" y="210" class="k-text">bytes match what the metadata claimed.</text>
+</svg>
+</figure>
+<p>A release platform and a CDN are different roles, even when one host plays both. The release platform is the control plane: it decides which version a machine should run and vouches for that version's hash and size. The CDN is the data plane: it stores bytes and serves whatever URL it is asked for. K trusts only the metadata; the bytes are verified against it.</p>
+<p>Common shapes, from simplest up:</p>
+<div class="table-scroll wide">
+<table class="grid">
+  <thead><tr><th>Shape</th><th>What answers the two questions</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td>Static manifest on a CDN</td><td><code>staticManifestSource({ baseUrl })</code> reads a JSON manifest you publish with each release</td><td>No server; rollout policy is whatever you write into the manifest</td></tr>
+    <tr><td>Your own release API</td><td>A small adapter mapping your API's response to a <code>Release</code></td><td>Authentication, cohort selection and reporting are yours to build</td></tr>
+    <tr><td><a href="https://hands.build">Hands</a></td><td>K's sibling project, the publishing side of the same loop: draft-first releases, channels and staged rollouts, share pages, in-app update metadata, feedback and crash tickets (<a href="https://github.com/botiverse/hands">source</a>)</td><td>The adapter maps a Hands response to a <code>Release</code>; a launcher may obtain the installer from Hands too. Hands is a product-release control plane, not a requirement for publishing or bootstrapping the installer</td></tr>
+  </tbody>
+</table>
+</div>
+<p>Whatever the platform, the boundary is the same. K has no built-in connector or result uploader for any of them. Product authentication, channel and cohort policy and remote reporting belong to the integration. Forward the actual operation id and outcome; publication or process launch is not installation success, and local promotion does not prove cloud reconnection.</p>
+<p>Withdrawing a release affects future distribution. It does not roll back already installed machines. K can recover existing local slots offline; downloading an older release still depends on the source authorizing and serving it.</p>
+
+<h3 id="optional-gzip-release-transport">Optional gzip release transport</h3>
+<p>A <code>Release</code> may include a <code>gzip</code> URL, compressed size and SHA-256. K verifies compressed bytes, bounds decompression, then checks the canonical size and hash. Missing gzip metadata uses the canonical URL. Failure of a selected gzip object is terminal; K does not silently switch representations. Resume offsets refer to the compressed object.</p>
+
+<footer class="page-foot"><a href="example.html">Back: Runnable example</a><a href="design.html">Next: Design</a></footer>
+</main>
+</body>
+</html>

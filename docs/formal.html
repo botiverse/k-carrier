@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en" data-theme="brutal">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Formal model · K</title>
+<meta name="description" content="A Lean 4 model of K's two-slot upgrade transaction with machine-checked proofs of never-dual-run, never-bricked and journal write-ahead.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;700&family=Geist+Mono:wght@400;700&display=swap">
+<link rel="stylesheet" href="assets/rui.css">
+<link rel="stylesheet" href="assets/site.css">
+<script defer src="assets/site.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="mark">K</span>k-carrier <small>docs</small></a>
+  <button class="menu-btn" type="button" aria-controls="nav" aria-expanded="false">Menu</button>
+</header>
+<nav id="nav" class="sidebar" aria-label="Documentation"></nav>
+
+<main id="main" class="page">
+<header class="page-head">
+  <h1>Formal model</h1>
+  <p class="lede"><a href="https://github.com/botiverse/k-carrier/blob/main/formal/Protocol.lean"><code>Protocol.lean</code></a> is a Lean 4 model of the transaction engine with machine-checked proofs of three properties over every reachable state.</p>
+</header>
+
+<figure class="fig">
+<svg viewBox="0 0 960 330" role="img" aria-labelledby="figthm">
+  <title id="figthm">Three theorems over every reachable state combine into protocol_guarantees; the reachable states come from the Phase and Step model</title>
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--line-strong)"/></marker></defs>
+  <!-- model -->
+  <g transform="translate(20,30)"><rect x="4" y="4" width="240" height="270" class="k-shadow"/><rect width="240" height="270" class="k-inset"/>
+    <text x="16" y="30" class="k-title">The model</text>
+    <text x="16" y="60" class="k-mono">Phase</text><text x="16" y="78" class="k-text">the seven TxnPhase values</text>
+    <text x="16" y="108" class="k-mono">Step: intent</text><text x="16" y="126" class="k-text">edges of TRANSITIONS, plus a</text><text x="16" y="144" class="k-text">rollback from each in-flight phase</text>
+    <text x="16" y="174" class="k-mono">Step: effect</text><text x="16" y="192" class="k-text">one host or slot call each, so</text><text x="16" y="210" class="k-text">a crash fits between any two</text>
+    <text x="16" y="240" class="k-mono">Reachable</text><text x="16" y="258" class="k-text">inductive relation from the initial</text>
+  </g>
+  <line x1="264" y1="165" x2="343" y2="165" class="k-line" marker-end="url(#ah)"/>
+  <text x="304" y="150" text-anchor="middle" class="k-muted">induction</text>
+  <text x="304" y="184" text-anchor="middle" class="k-mono">Safe</text>
+  <!-- three theorems -->
+  <g transform="translate(350,30)"><rect x="4" y="4" width="310" height="76" class="k-shadow"/><rect width="310" height="76" class="k-box"/>
+    <text x="16" y="28" class="k-mono">never_dual_run</text>
+    <text x="16" y="50" class="k-text">a stable and an experiment incarnation</text>
+    <text x="16" y="68" class="k-text">are never live at once</text>
+  </g>
+  <g transform="translate(350,127)"><rect x="4" y="4" width="310" height="76" class="k-shadow"/><rect width="310" height="76" class="k-box"/>
+    <text x="16" y="28" class="k-mono">never_bricked</text>
+    <text x="16" y="50" class="k-text">the stable slot always holds</text>
+    <text x="16" y="68" class="k-text">usable bytes</text>
+  </g>
+  <g transform="translate(350,224)"><rect x="4" y="4" width="310" height="76" class="k-shadow"/><rect width="310" height="76" class="k-box"/>
+    <text x="16" y="28" class="k-mono">write_ahead</text>
+    <text x="16" y="50" class="k-text">a live experiment implies a durable</text>
+    <text x="16" y="68" class="k-text">intent; bytes imply a staged intent</text>
+  </g>
+  <!-- combine -->
+  <path d="M664 68 L700 68 L700 165 L738 165" class="k-line" marker-end="url(#ah)"/>
+  <path d="M664 165 L700 165" class="k-line"/>
+  <path d="M664 262 L700 262 L700 165" class="k-line"/>
+  <g transform="translate(740,127)"><rect x="4" y="4" width="200" height="76" class="k-shadow"/><rect width="200" height="76" class="k-hi"/>
+    <text x="100" y="34" text-anchor="middle" class="k-mono">protocol_guarantees</text>
+    <text x="100" y="58" text-anchor="middle" class="k-text">all three together</text>
+  </g>
+  <text x="840" y="240" text-anchor="middle" class="k-muted">over every reachable state,</text>
+  <text x="840" y="258" text-anchor="middle" class="k-muted">crash and recovery included</text>
+</svg>
+<figcaption>Crash and recovery are ordinary steps of the relation, so every instant the crash matrix enumerates is a reachable state the theorems cover.</figcaption>
+</figure>
+
+<div class="table-scroll wide">
+<table class="grid">
+  <thead><tr><th>Property (named after <a href="https://github.com/botiverse/k-carrier/blob/main/core/src/invariants.ts"><code>core/src/invariants.ts</code></a>)</th><th>Lean theorem</th></tr></thead>
+  <tbody>
+    <tr><td><code>k.never-dual-run</code>: a stable and an experiment incarnation are never live at once</td><td><code>never_dual_run</code></td></tr>
+    <tr><td><code>k.never-bricked</code>: the stable slot always holds usable bytes</td><td><code>never_bricked</code></td></tr>
+    <tr><td>journal write-ahead: a live experiment implies a durable handing-over intent; experiment bytes imply a durable staged intent</td><td><code>write_ahead</code></td></tr>
+    <tr><td>All three together</td><td><code>protocol_guarantees</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="what-the-model-is">What the model is</h2>
+<dl class="defs">
+  <div><dt><code>Phase</code></dt><dd>The seven-phase <code>TxnPhase</code> from <a href="https://github.com/botiverse/k-carrier/blob/main/core/src/txn/state.ts"><code>core/src/txn/state.ts</code></a>.</dd></div>
+  <div><dt>Intent steps</dt><dd>The edges of <a href="https://github.com/botiverse/k-carrier/blob/main/core/src/txn/transitions.ts"><code>core/src/txn/transitions.ts::TRANSITIONS</code></a>, including the rollback edge from every in-flight phase.</dd></div>
+  <div><dt>Effect steps</dt><dd>The host and slot calls the engine issues after each journaled intent (<a href="https://github.com/botiverse/k-carrier/blob/main/core/src/txn/engine.ts"><code>core/src/txn/engine.ts</code></a>): stage bytes, stop stable, start experiment, promote, stop experiment, start stable, clear experiment. One step per call, so a crash can fall between any two of them.</dd></div>
+  <div><dt>Crash and recovery</dt><dd>Not special steps. A crash loses nothing durable, and recovery only ever journals a rollback intent from an in-flight phase or replays the effects of the last intent. Both are ordinary steps of the relation, so every instant the crash matrix enumerates (<a href="https://github.com/botiverse/k-carrier/blob/main/harness/src/crash/enumerate.ts"><code>harness/src/crash/enumerate.ts</code></a>: before-journal, after-journal, after-action) is a reachable state the theorems cover.</dd></div>
+  <div><dt>Reachability</dt><dd>An inductive relation from the initial machine; the proofs are by induction on it with one inductive invariant (<code>Safe</code>).</dd></div>
+</dl>
+<p><code>never_dual_run</code> is the theorem with content. It holds because every step that starts a process is guarded by the stop it must follow, on the handover path, the rollback path and the recovery replay path. Remove a guard and the proof fails. <code>never_bricked</code> records that no step in the relation clears the stable slot; promote replaces it with the verified candidate.</p>
+<p>Three <code>example</code>s at the end of the file exhibit reachable states with a live experiment, a completed promotion and a completed rollback. They exist so the guards cannot quietly make the interesting states unreachable, which would make the theorems vacuous.</p>
+
+<h2 id="what-the-model-does-not-say">What the model does not say</h2>
+<div class="cards">
+  <div class="card"><h3>Host honesty</h3><p>The model assumes what the HostAdapter contract demands: <code>stop()</code> returning means the process is gone, <code>start()</code> starts only the requested slot, the probe answers for one live incarnation. A controller that returns from <code>stop</code> without stopping violates the assumption, and no theorem here constrains it. The engine's own defence against a lying probe (the pre-handover <code>startId</code> is journaled and a readback that repeats it is refused) is below the model's granularity.</p></div>
+  <div class="card"><h3>Filesystem durability</h3><p>Promote is one effect step. In code it is two renames; the window between them is covered by the durable promote intent and idempotent replay, not by this model.</p></div>
+  <div class="card"><h3>Liveness</h3><p>Nothing here says an upgrade finishes; <a href="https://github.com/botiverse/k-carrier/blob/main/core/src/liveness.ts"><code>core/src/liveness.ts</code></a> and the harness judge that.</p></div>
+</div>
+
+<h2 id="reproduce">Reproduce</h2>
+<p>Requires <a href="https://github.com/leanprover/elan">elan</a>.</p>
+<pre><code>elan run leanprover/lean4:stable lean formal/Protocol.lean
+# exits 0 with only linter warnings when the proofs hold</code></pre>
+<p>The invariant is named <code>Safe</code> because <code>Inv</code> is taken by Lean's core library. Proofs use <code>theorem</code>, not <code>lemma</code>: <code>lemma</code> after a multi-clause <code>def</code> or <code>inductive</code> trips a parser quirk on some releases.</p>
+
+<h2 id="keeping-the-model-in-step">Keeping the model in step with the code</h2>
+<div class="note"><p>There is no automatic TypeScript to Lean extraction; the model stays a truthful projection by discipline. When <code>TxnPhase</code>, <code>TRANSITIONS</code> or the engine's call order change, change <code>Phase</code>, <code>Step</code> and this page in the same commit.</p></div>
+<p>The generated crash matrix and seeded simulation in <a href="https://github.com/botiverse/k-carrier/tree/main/harness"><code>harness/</code></a> test the real engine against the same properties, which is what binds "what the model proves" to "what the code does".</p>
+
+<footer class="page-foot"><a href="harness-design.html">Back: Harness design</a><a href="prior-art.html">Next: Prior art and research</a></footer>
+</main>
+</body>
+</html>

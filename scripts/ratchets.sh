@@ -77,33 +77,37 @@ then
   say "tooth is registered but no known-green TOOTH_IDS names it"
 fi
 
-# 7) docs/test-plan.md may not cite a tooth that does not exist.
+# 7) docs/test-plan.html may not cite a tooth that does not exist.
 #    A document naming a tooth nobody registered is worse than an omission: it
 #    is more credible and equally false, and it is exactly how a test plan
 #    becomes a convincing inventory of guarantees we do not have.
+#    The docs are HTML (served by GitHub Pages from docs/); a citation is a
+#    <code>…</code> element.
 if ! node --experimental-strip-types -e '
 import { readFileSync } from "node:fs";
-const doc = readFileSync("docs/test-plan.md", "utf8");
+const doc = readFileSync("docs/test-plan.html", "utf8");
 const { allTeeth } = await import("./harness/src/teeth/registry.ts");
 await import("./harness/src/teeth/index.ts");
 const registered = new Set(allTeeth().map((t) => t.id));
-const cited = [...doc.matchAll(/`([a-z0-9]+(?:\.[a-z0-9-]+)+)`/g)].map((m) => m[1]);
+const cited = [...doc.matchAll(/<code>([a-z0-9]+(?:\.[a-z0-9-]+)+)<\/code>/g)].map((m) => m[1]);
 const prefixes = /^(artifact|m0|m1|m2|m3|m4|m5|m6|fake-server|fake-host|scenario|harness|examples|blackbox|artifact-factory|converge|txn)\./;
 const ghosts = [...new Set(cited.filter((c) => prefixes.test(c)))].filter((c) => !registered.has(c));
-if (ghosts.length) { console.log("ghost tooth ids in docs/test-plan.md: " + ghosts.join(", ")); process.exit(1); }
+if (ghosts.length) { console.log("ghost tooth ids in docs/test-plan.html: " + ghosts.join(", ")); process.exit(1); }
 ' 2>/dev/null
 then
-  say "docs/test-plan.md cites a tooth that is not registered"
+  say "docs/test-plan.html cites a tooth that is not registered"
 fi
 
 # 8) Docs may not cite a source file that does not exist.
 #    Same failure as 7 one level down: ratchet 7 found ghost TEETH while
-#    docs/test-plan.md was citing core/src/artifact/{manifest,channel}.test.ts,
+#    the test plan was citing core/src/artifact/{manifest,channel}.test.ts,
 #    neither of which was ever written. A named file reads as harder evidence
 #    than a named tooth -- a reviewer checks a tooth list, but takes a file
 #    path on faith.
-#    Brace expansion in prose (a/{b,c}.test.ts) is expanded before checking,
-#    or the citation form that actually appears in the docs would be skipped.
+#    Citations are <code>path</code> elements in docs/*.html, backticks in
+#    README.md, and links to https://github.com/botiverse/k-carrier/blob/main/<path>
+#    in either. Brace expansion in prose (a/{b,c}.test.ts) is expanded before
+#    checking, or the citation form that actually appears would be skipped.
 #    A path that is DELIBERATELY gone (documenting a removal) must say so on
 #    the same line: "removed" / "deleted" / "删除" / "移除". The marker is the
 #    exemption, so the reader sees the same thing the checker does -- an
@@ -115,12 +119,17 @@ fi
 if ! node --input-type=module -e '
 import { readFileSync, existsSync } from "node:fs";
 import { readdirSync } from "node:fs";
-const docs = readdirSync("docs").filter((f) => f.endsWith(".md")).map((f) => "docs/" + f);
+const docs = readdirSync("docs").filter((f) => f.endsWith(".html")).map((f) => "docs/" + f);
 const missing = [];
+const forms = [
+  /`((?:core|harness|examples|scripts|formal)\/[^`\s]+)`/g,
+  /<code>((?:core|harness|examples|scripts|formal)\/[^<\s]+)<\/code>/g,
+  /github\.com\/botiverse\/k-carrier\/(?:blob|tree)\/main\/((?:core|harness|examples|scripts|formal|\.github)\/[^"#\s)]+)/g,
+];
 for (const doc of [...docs, "README.md"]) {
   const text = readFileSync(doc, "utf8");
-  for (const m of text.matchAll(/`((?:core|harness|examples|scripts)\/[^`\s]+)`/g)) {
-    const cited = m[1];
+  for (const re of forms) for (const m of text.matchAll(re)) {
+    const cited = m[1].split("::")[0]; // `path::Symbol` cites a symbol in that file
     const brace = /^(.*)\{([^}]+)\}(.*)$/.exec(cited);
     const paths = brace ? brace[2].split(",").map((x) => brace[1] + x.trim() + brace[3]) : [cited];
     const line = text.slice(0, m.index).split("\n").length - 1;

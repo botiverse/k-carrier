@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en" data-theme="brutal">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>K · Reliable application upgrades</title>
+<meta name="description" content="K is an upgrade transaction engine for applications you distribute yourself, run by an independent installer.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;700&family=Geist+Mono:wght@400;700&display=swap">
+<link rel="stylesheet" href="assets/rui.css">
+<link rel="stylesheet" href="assets/site.css">
+<script defer src="assets/site.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="mark">K</span>k-carrier <small>docs</small></a>
+  <button class="menu-btn" type="button" aria-controls="nav" aria-expanded="false">Menu</button>
+</header>
+<nav id="nav" class="sidebar" aria-label="Documentation"></nav>
+
+<main id="main" class="page">
+<header class="page-head">
+  <h1>Reliable application upgrades, run by an independent installer.</h1>
+  <p class="lede">K is for software you distribute yourself to machines nobody operates: desktop agents, background services installed by <code>curl | sh</code>, CLIs that update themselves. A failed upgrade there means the product silently stops and nobody can log in to fix it.</p>
+</header>
+
+<figure class="fig embed">
+<div class="stage"><iframe src="figures/pieces.html" title="The pieces of a K upgrade: bootstrap, supervisor, worker, state directory, controller, application" loading="lazy" scrolling="no"></iframe></div>
+<figcaption>One request, one transaction, one receipt. The thing doing the upgrading never lives inside the thing being upgraded.</figcaption>
+</figure>
+
+<p>If a package manager, container image or fleet orchestrator already owns your installation, that manager owns upgrades too. Your adapter identifies that ownership so K can defer; you probably do not need K.</p>
+
+<h2 id="why">Why upgrading is non-trivial</h2>
+<p>Downloading a new executable is only the beginning. The application may still be running. Power may fail halfway through replacement. The new version may fail to start on one particular machine. Replacing the file proves nothing about whether the service came back. And the installed updater may itself be too old or broken to help.</p>
+
+<h2 id="promise">What K promises</h2>
+<p>K stages verified bytes in a second slot, stops the service, starts and probes the candidate, then commits or restores the previous executable. A durable journal lets a later installer recover interrupted work. An upgrade ends in exactly one of three states:</p>
+<div class="cards">
+  <div class="card"><h3><span class="dot" style="background:var(--success)"></span>Promoted</h3><p>The candidate answered the probe with the right version, a new pid and a new start id. Experiment became stable.</p></div>
+  <div class="card"><h3><span class="dot" style="background:var(--warning)"></span>Rolled back</h3><p>The candidate failed before the point of no return. Stable was never touched and is running again.</p></div>
+  <div class="card"><h3><span class="dot" style="background:var(--danger)"></span>Unresolved</h3><p>Bounded recovery could not settle it. Evidence and a verified way to retry are preserved; nothing is reported as success.</p></div>
+</div>
+<div class="note stop"><p><strong>K refuses to guess.</strong> It never clears a live owner's lock, overwrites an incomplete stable slot, terminates a process by a recorded pid, or reconstructs missing history. It rolls back executables, not application data. Hashes check integrity; your distribution channel establishes trust.</p></div>
+
+<h2 id="installer">What the installer adds</h2>
+<p><code>install.sh</code> and your application's <code>self upgrade</code> launch the same external installer, built from K and your product adapter. It owns the transaction, outlives the application it replaces, runs when the application cannot start, and ships on its own schedule. If a worker crashes, its temporary supervisor runs bounded recovery. After a reboot, an operator or OS startup hook has to start it again.</p>
+<p>K's transaction covers one of the <a href="guide.html#worlds">four worlds</a> an installer meets: a machine K already manages. The installer decides what happens on a fresh machine, on an installation that predates K, and on one K cannot settle. For that last world it may, on explicit consent, do what an operator with a shell would: quarantine K's state, reinstall from a trusted release, and hand the result back to K.</p>
+<div class="note"><p>K's refusals forbid silent bypass, not people. The <a href="design.html#repair-boundary">repair boundary</a> says what such a repair must keep. Whether to offer one is a product choice.</p></div>
+
+<h2 id="ship">What you ship</h2>
+<figure class="fig embed">
+<div class="stage"><iframe src="figures/deliverables.html" title="Three independently versioned deliverables that can share one CDN" loading="lazy" scrolling="no"></iframe></div>
+<figcaption>The bootstrap verifies the installer; the installer verifies the product. Paths are illustrative, not a K schema.</figcaption>
+</figure>
+<p>You supply the release source and the service lifecycle operations; K supplies the transaction machinery. For channels, staged rollouts and in-app update metadata, K's sibling project <a href="https://hands.build">Hands</a> closes the loop; a static manifest on any CDN works too. The runner uses Node 24, either as an external runtime or bundled into a Node single executable. A fully runtime-independent installer must also package its supervisor and controller dependencies.</p>
+
+<h2 id="status">Status</h2>
+<div class="status">
+  <div class="done"><b>Two-slot transaction, journal, lock, receipts</b>Done. Generated crash matrix, seeded simulation, Lean model of every phase and crash interleaving (host honesty assumed).</div>
+  <div class="done"><b>External runner, supervisor, bounded recovery</b>Done. Linux and macOS process tests.</div>
+  <div class="done"><b>Verified download, resume, gzip</b>Done.</div>
+  <div class="part"><b>Command controller boundary</b>Done; demo controller only.</div>
+  <div class="part"><b>Single-executable runner</b>Verified by hand; build flag provided, no CI.</div>
+  <div class="part"><b>Windows</b>Core is platform-seamed; harness port incomplete, CI informational.</div>
+  <div class="part"><b>Repair beyond K's transaction</b>Boundary documented; implementation belongs to the product installer.</div>
+  <div class="none"><b>Product-ready install.sh template</b>Not yet.</div>
+  <div class="none"><b>Publisher signing</b>Not provided; hash and size only.</div>
+  <div class="none"><b>Restart after reboot</b>Not provided; product OS hook.</div>
+  <div class="none"><b>Receipt garbage collection</b>Not provided.</div>
+</div>
+
+<h2 id="docs">Documentation</h2>
+<dl class="defs">
+  <div><dt><a href="guide.html">How an upgrade works</a></dt><dd>The processes involved, one upgrade start to finish, what breaks, how to read the result. Read this first.</dd></div>
+  <div><dt><a href="example.html">Runnable example</a></dt><dd>A service, a controller and a runner you can drive from a terminal.</dd></div>
+  <div><dt><a href="integration.html">Integration</a></dt><dd>Build, launch, observe, recover, package and distribute your own installer.</dd></div>
+  <div><dt><a href="design.html">Design</a></dt><dd>The normative contract: execution model, transaction, supervision, controller obligations, repair boundary.</dd></div>
+  <div><dt><a href="reference.html">Reference</a></dt><dd>Protocol, exit codes, budgets, on-disk layout.</dd></div>
+  <div><dt><a href="test-plan.html">Test plan</a>, <a href="harness-design.html">harness</a>, <a href="formal.html">formal model</a></dt><dd>What is tested, how, and what the Lean proofs cover.</dd></div>
+  <div><dt><a href="prior-art.html">Prior art</a></dt><dd>Rustup, Tailscale and Datadog, and what K took from each.</dd></div>
+</dl>
+<p>Incubating. TypeScript on Node 24. Apache-2.0. Contributions welcome.</p>
+
+<footer class="page-foot"><span></span><a href="guide.html">Next: How an upgrade works</a></footer>
+</main>
+</body>
+</html>

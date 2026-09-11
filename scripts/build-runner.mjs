@@ -8,7 +8,7 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
  *
  * `format: "esm"` (default) produces `runner.mjs`, executed by an external
  * Node 24 interpreter. `format: "cjs"` produces the CommonJS entry used by the
- * Node 24 single-executable-application (SEA) recipe; see docs/integration.md.
+ * Node 24 single-executable-application (SEA) recipe; see https://botiverse.github.io/k-carrier/integration.html#build-a-single-executable
  */
 export async function buildRunner(adapter, outfile, { format = 'esm' } = {}) {
   const cli = fileURLToPath(new URL('../core/src/runner/cli.ts', import.meta.url));

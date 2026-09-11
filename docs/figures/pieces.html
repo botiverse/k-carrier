@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The pieces of a K upgrade</title>
+<style>
+:root {
+  --ink: #111; --paper: #fffdf7; --soft: #f7f7f3; --muted: rgba(17,17,17,.52);
+  --yellow: #ffe66b; --pink: #ff7aa2; --blue: #7bc8ff; --green: #98e59b;
+  --orange: #ffb25f; --purple: #b7a1ff; --red: #ff7b73;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body { color-scheme: light; color: var(--ink); background: var(--paper);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+.label { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; }
+.frame { position: relative; width: 1200px; height: 675px; overflow: hidden;
+  background: radial-gradient(circle at 1px 1px, rgba(17,17,17,.045) 1px, transparent 1.5px) 0 0 / 16px 16px, var(--paper); }
+.frame svg { position: absolute; inset: 0; width: 1200px; height: 675px; }
+.box { stroke: var(--ink); stroke-width: 2.5; }
+.shadow { fill: var(--ink); }
+.line { stroke: var(--ink); stroke-width: 2.5; fill: none; }
+.dash { stroke: var(--ink); stroke-width: 2; fill: none; stroke-dasharray: 8 7; }
+text { font-family: inherit; fill: var(--ink); }
+.t { font-size: 24px; font-weight: 700; }
+.m { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 15px; }
+.mu { font-size: 18px; fill: var(--muted); }
+.mm { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 15px; fill: var(--muted); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="frame" id="frame" role="img" aria-label="A bootstrap sends a request to a supervisor, which verifies and spawns a worker made of K plus your adapter. The worker keeps a state directory and drives your controller, which stops, starts and probes the application. Everything except the application runs outside the application's service unit.">
+<svg viewBox="0 0 1200 675">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#111"/></marker></defs>
+
+  <rect x="250" y="60" width="660" height="560" class="dash"/>
+  <text x="268" y="98" class="mu">runs outside the application's service unit</text>
+  <rect x="940" y="60" width="230" height="560" class="dash"/>
+  <text x="958" y="98" class="mu">service unit</text>
+
+  <!-- Bootstrap -->
+  <g transform="translate(40,230)"><rect x="6" y="6" width="180" height="120" class="shadow"/><rect width="180" height="120" class="box" fill="var(--soft)"/><text x="90" y="46" text-anchor="middle" class="t">Bootstrap</text><text x="90" y="78" text-anchor="middle" class="m">install.sh</text><text x="90" y="102" text-anchor="middle" class="m">self upgrade</text></g>
+  <!-- Supervisor -->
+  <g transform="translate(280,230)"><rect x="6" y="6" width="180" height="120" class="shadow"/><rect width="180" height="120" class="box" fill="var(--blue)"/><text x="90" y="46" text-anchor="middle" class="t">Supervisor</text><text x="90" y="84" text-anchor="middle" class="m">launchRunner</text></g>
+  <!-- Worker -->
+  <g transform="translate(520,230)"><rect x="6" y="6" width="180" height="120" class="shadow"/><rect width="180" height="120" class="box" fill="var(--yellow)"/><text x="90" y="46" text-anchor="middle" class="t">Worker</text><text x="90" y="84" text-anchor="middle" class="m">K + your adapter</text></g>
+  <!-- Controller -->
+  <g transform="translate(760,230)"><rect x="6" y="6" width="130" height="120" class="shadow"/><rect width="130" height="120" class="box" fill="var(--purple)"/><text x="65" y="46" text-anchor="middle" class="t">Controller</text><text x="65" y="84" text-anchor="middle" class="m">your program</text></g>
+  <!-- Application -->
+  <g transform="translate(965,230)"><rect x="6" y="6" width="180" height="120" class="shadow"/><rect width="180" height="120" class="box" fill="var(--green)"/><text x="90" y="46" text-anchor="middle" class="t">Application</text><text x="90" y="84" text-anchor="middle" class="m">stop, start, probe</text></g>
+  <!-- State directory -->
+  <g transform="translate(485,470)"><rect x="6" y="6" width="250" height="120" class="shadow"/><rect width="250" height="120" class="box" fill="var(--soft)"/><text x="125" y="40" text-anchor="middle" class="t">State directory</text><text x="125" y="72" text-anchor="middle" class="m">lock, journal, receipts</text><text x="125" y="98" text-anchor="middle" class="m">slots: stable, experiment</text></g>
+
+  <!-- arrows -->
+  <line x1="222" y1="290" x2="276" y2="290" class="line" marker-end="url(#a)"/>
+  <text x="249" y="214" text-anchor="middle" class="mu">request</text>
+  <line x1="462" y1="290" x2="516" y2="290" class="line" marker-end="url(#a)"/>
+  <text x="489" y="192" text-anchor="middle" class="mu">verify,</text><text x="489" y="214" text-anchor="middle" class="mu">spawn</text>
+  <line x1="702" y1="290" x2="756" y2="290" class="line" marker-end="url(#a)"/>
+  <text x="800" y="392" text-anchor="middle" class="mm">fence, quiesce, stop,</text>
+  <text x="800" y="416" text-anchor="middle" class="mm">start, probe, resume</text>
+  <line x1="892" y1="290" x2="961" y2="290" class="line" marker-end="url(#a)"/>
+  <line x1="610" y1="356" x2="610" y2="466" class="line" marker-end="url(#a)" marker-start="url(#a)"/>
+  <text x="590" y="418" text-anchor="end" class="mu">survives every crash</text>
+</svg>
+</div>
+<script>
+const frame = document.getElementById('frame');
+function fitFrame() {
+  const scale = Math.min(1, window.innerWidth / 1200, window.innerHeight / 675);
+  frame.style.transform = `scale(${scale})`;
+  frame.style.transformOrigin = "top left";
+}
+fitFrame();
+window.addEventListener("resize", fitFrame);
+</script>
+</body>
+</html>
