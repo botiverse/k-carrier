@@ -71,7 +71,6 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
     <tr><td><code>--version V</code></td><td>The exact version. Default: the channel's current release, resolved through the release authority.</td></tr>
     <tr><td><code>--channel C</code></td><td>Which channel to resolve. Attended, the resolved version is shown and asked about.</td></tr>
     <tr><td><code>--yes</code></td><td>Skip the question when attended. Unattended runs never ask; running one is the consent.</td></tr>
-    <tr><td><code>--approved-by WHO</code></td><td>Who consented, for the receipt. Defaults to the local user.</td></tr>
     <tr><td><code>--id ID</code></td><td>The operation id. The same id replays the first receipt.</td></tr>
     <tr><td><code>--allow-downgrade</code></td><td>Intend an older target. Without it, an older target is held. This is also how a bad release is left: name the version that worked.</td></tr>
   </tbody>
