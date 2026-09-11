@@ -41,6 +41,52 @@
 <figcaption>Refusals happen before anything changes. Only the last gate can say success.</figcaption>
 </figure>
 
+<h2 id="interface">The interface</h2>
+<p>What a person or a script sees. Names are the reference implementation's; the shape is the contract.</p>
+<pre><code>curl -fsSL https://example.com/install.sh | sh                                # attended: resolve, show, ask
+curl -fsSL https://example.com/install.sh | sh -s -- --channel alpha          # attended, another channel
+curl -fsSL https://example.com/install.sh | sh -s -- --version 2.3.0 --yes    # unattended: exact version + consent
+curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --yes   # attended only</code></pre>
+<div class="table-scroll wide">
+<table class="grid">
+  <thead><tr><th>Command</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>install</code>, <code>upgrade</code> (default)</td><td>Bring this machine to one exact version. What that means is decided by the world: install, adopt then upgrade, or upgrade. Broken is refused, or offered repair when attended.</td></tr>
+    <tr><td><code>rollback</code></td><td>Upgrade to the previous stable version as an explicit, intended target.</td></tr>
+    <tr><td><code>repair</code></td><td>Its own request and consent. Attended only.</td></tr>
+    <tr><td><code>recover &lt;file&gt;</code></td><td>Retry an unresolved recovery offline, from the file the unresolved run printed.</td></tr>
+    <tr><td><code>status</code></td><td>The world and the live service. The last receipt is not a live observation.</td></tr>
+  </tbody>
+</table>
+</div>
+<div class="table-scroll wide">
+<table class="grid">
+  <thead><tr><th>Option</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>--version V</code></td><td>The exact version. Required unattended.</td></tr>
+    <tr><td><code>--channel C</code></td><td>Resolve through the release authority, then ask. Attended only; a channel is never consent.</td></tr>
+    <tr><td><code>--yes</code></td><td>Consent, recorded in the receipt. Required unattended.</td></tr>
+    <tr><td><code>--approved-by WHO</code></td><td>Who consented, for the receipt. Defaults to the local user.</td></tr>
+    <tr><td><code>--id ID</code></td><td>The operation id. The same id replays the first receipt.</td></tr>
+    <tr><td><code>--allow-downgrade</code></td><td>Intend an older target. Without it, an older target is held.</td></tr>
+  </tbody>
+</table>
+</div>
+<div class="table-scroll wide">
+<table class="grid">
+  <thead><tr><th>Environment</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>CI</code>, <code>&lt;PRODUCT&gt;_NON_INTERACTIVE=1</code></td><td>Unattended, whatever the terminal says.</td></tr>
+    <tr><td><code>&lt;PRODUCT&gt;_HOME</code></td><td>The product's state root. K's state lives under it.</td></tr>
+    <tr><td><code>&lt;PRODUCT&gt;_INSTALL_DIR</code></td><td>Where the binary on <code>PATH</code> is published.</td></tr>
+    <tr><td><code>&lt;PRODUCT&gt;_RELEASE_BASE</code></td><td>The byte store: <code>&lt;version&gt;/manifest.json</code> and the artifacts it names.</td></tr>
+    <tr><td><code>&lt;PRODUCT&gt;_HANDS_ORIGIN</code></td><td>The release authority a channel is resolved through.</td></tr>
+    <tr><td><code>&lt;PRODUCT&gt;_INSTALLER_VERSION</code>, <code>&lt;PRODUCT&gt;_INSTALLER_RELEASE_BASE</code></td><td>Which installer the bootstrap fetches, and from where. The bootstrap pins one; it never resolves "latest".</td></tr>
+  </tbody>
+</table>
+</div>
+<p>Every run prints one line on stdout and exits 0, 1, 2 or 3. What was settled first, if anything, goes to stderr. <code>--json</code> prints the outcome as an object instead of the line.</p>
+
 <h2 id="rules">The rules</h2>
 <h3 id="request">Request</h3>
 <ol class="steps">
