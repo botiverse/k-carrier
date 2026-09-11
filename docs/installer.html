@@ -124,6 +124,7 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
   <li><div><strong>Is a service running?</strong> Read before anything is stopped, and remembered for recovery. A running service is stopped and must come back as a live service. A service that was not running is not started by an upgrade; the candidate is run for its version instead. The user's choice to have it stopped is kept.</div></li>
   <li><div><strong>Is the product set up?</strong> Logged in, configured, licensed: whatever it needs before it can run. Not set up and attended, a fresh install runs first setup and then starts. Not set up and unattended, nothing is started and the line names the next step. An upgrade never runs first setup; it repeats the next step if the product still names one.</div></li>
   <li><div>Neither answer changes what is verified: bytes, platform, self-reported version, then a process of the new bytes. They change only which process answers, and what the line says.</div></li>
+  <li><div>The product's own commands are asked first, and the installer decides for itself when they are not enough. A service that does not answer but whose process exists counts as running. A stop that returns while the process lives is finished by the installer: terminate, wait, then kill. The rule is identity, not pid: a process is touched only when its executable is provably the installed binary, never by a bare pid or a name, and the receipt says it was done.</div></li>
 </ol>
 
 <h3 id="verify">Verify</h3>
@@ -135,7 +136,7 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
 <h3 id="repair">Repair</h3>
 <ol class="steps">
   <li><div>Repair is what a broken machine gets, and only a broken machine: a failed upgrade never escalates to it, and on a machine that can be upgraded a repair request is held. Attended, it is asked about once like any other action, naming what will be quarantined. Unattended, running the installer is the consent, as for everything else.</div></li>
-  <li><div>Settle first. Never under a live lock. Quarantine K's state by one atomic rename; delete nothing; never touch data outside the slots. Stop an unresponsive service only by an identity you recorded, never a bare pid.</div></li>
+  <li><div>Settle first. Never under a live lock. Quarantine K's state by one atomic rename; delete nothing; never touch data outside the slots. An unresponsive service is stopped the same way as anywhere else: by the product's command, then by the installer, by identity.</div></li>
   <li><div>Install and probe exactly as an upgrade would, then <code>bootstrapStable</code>, so the next upgrade is a normal transaction. No rollback; the receipt says <em>repaired</em>, never <em>promoted</em>, and names the quarantine, the version and the approver. What repair must keep is the normative <a href="design.html#repair-boundary">repair boundary</a>.</div></li>
 </ol>
 <h3 id="report">Report</h3>
