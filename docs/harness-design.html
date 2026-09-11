@@ -100,11 +100,9 @@
   <text x="656" y="60" text-anchor="middle" class="k-muted">after journal write</text>
   <g transform="translate(830,140)"><rect x="-8" y="-8" width="16" height="16" class="k-danger" transform="rotate(45)"/></g>
   <text x="830" y="168" text-anchor="middle" class="k-muted">after the action</text>
-  <text x="40" y="190" class="k-muted">Crossed with every transition in the table. Injected effects and simulated crashes; not OS kills or power loss.</text>
+  <text x="40" y="190" class="k-muted">Crossed with every transition. Injected effects and simulated crashes; not OS kills or power loss.</text>
 </svg>
-<figcaption>Three crash points per transition. Directed real-process tests separately kill a worker between stop and start.</figcaption>
 </figure>
-<p>The matrix uses injected effects and simulated crashes. It is not a claim that every point was tested with OS kills or physical power loss.</p>
 <p>Seeded simulation explores additional effect interleavings. Its receipts preserve the seed and transcript hash; failing seeds are saved for replay. Regressions should become fixed cases. Simulation does not establish filesystem durability, service-manager isolation or platform-specific executable replacement.</p>
 <p>See the <a href="test-plan.html">test plan</a> for commands and acceptance criteria, and the <a href="design.html">design</a> for the transaction and wire contracts.</p>
 

@@ -66,16 +66,15 @@
   <text x="840" y="240" text-anchor="middle" class="k-muted">over every reachable state,</text>
   <text x="840" y="258" text-anchor="middle" class="k-muted">crash and recovery included</text>
 </svg>
-<figcaption>Crash and recovery are ordinary steps of the relation, so every instant the crash matrix enumerates is a reachable state the theorems cover.</figcaption>
 </figure>
 
 <div class="table-scroll wide">
 <table class="grid">
   <thead><tr><th>Property (named after <a href="https://github.com/botiverse/k-carrier/blob/main/core/src/invariants.ts"><code>core/src/invariants.ts</code></a>)</th><th>Lean theorem</th></tr></thead>
   <tbody>
-    <tr><td><code>k.never-dual-run</code>: a stable and an experiment incarnation are never live at once</td><td><code>never_dual_run</code></td></tr>
-    <tr><td><code>k.never-bricked</code>: the stable slot always holds usable bytes</td><td><code>never_bricked</code></td></tr>
-    <tr><td>journal write-ahead: a live experiment implies a durable handing-over intent; experiment bytes imply a durable staged intent</td><td><code>write_ahead</code></td></tr>
+    <tr><td><code>k.never-dual-run</code></td><td><code>never_dual_run</code></td></tr>
+    <tr><td><code>k.never-bricked</code></td><td><code>never_bricked</code></td></tr>
+    <tr><td>journal write-ahead</td><td><code>write_ahead</code></td></tr>
     <tr><td>All three together</td><td><code>protocol_guarantees</code></td></tr>
   </tbody>
 </table>

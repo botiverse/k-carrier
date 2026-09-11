@@ -57,7 +57,7 @@
   <text x="700" y="266" class="k-text">Success only after the local</text>
   <text x="700" y="284" class="k-text">receipt and live readback.</text>
 </svg>
-<figcaption>The bootstrap verifies installer 1.4.1, then asks it to install product 2.8.0. Authenticate both sets of metadata; hashes alone do not establish publisher identity.</figcaption>
+<figcaption>Authenticate both sets of metadata; hashes alone do not establish publisher identity.</figcaption>
 </figure>
 <table class="grid">
   <thead><tr><th>Deliverable</th><th>Responsibility</th></tr></thead>
@@ -69,9 +69,8 @@
 </table>
 <ul>
   <li>The bootstrap must not contain another swap/rollback algorithm. K provides <code>launchRunner</code> for Node callers; there is not yet a product-ready shell bootstrap template.</li>
-  <li><code>install.sh</code> and <code>self upgrade</code> use the same runner protocol and installation state. To ship an installer-only fix, publish a new installer and update the bootstrap's selection mechanism. Keep versioned artifacts immutable.</li>
+  <li><code>install.sh</code> and <code>self upgrade</code> use the same runner protocol and installation state. Keep versioned artifacts immutable.</li>
   <li>The controller is an execution role, not a fourth deliverable.</li>
-  <li>K records protocol version, operation id, target version and artifact hash. The installer version is not part of K's request or receipt; record it in the operation's <code>metadata</code> or in your own reporting. Installer publication only proves the installer is distributable; a machine upgrade succeeds only after its local receipt and live version/pid/start-id readback confirm it.</li>
 </ul>
 
 <h2 id="1-define-the-adapter-and-state">1. Define the adapter and state</h2>
@@ -199,7 +198,6 @@ npx postject@1.0.0-alpha.6 dist/runner NODE_SEA_BLOB dist/sea-prep.blob \
   <text x="650" y="210" class="k-text">bytes match what the metadata claimed.</text>
 </svg>
 </figure>
-<p>A release platform and a CDN are different roles, even when one host plays both. The release platform is the control plane: it decides which version a machine should run and vouches for that version's hash and size. The CDN is the data plane: it stores bytes and serves whatever URL it is asked for. K trusts only the metadata; the bytes are verified against it.</p>
 <p>Common shapes, from simplest up:</p>
 <div class="table-scroll wide">
 <table class="grid">
