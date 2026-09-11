@@ -21,13 +21,25 @@
 <main id="main" class="page">
 <header class="page-head">
   <h1>Installer contract</h1>
-  <p class="lede">What an installer built on K does for every way a request can arrive, every machine it can land on, and every way it can end. K's transaction is code and is fixed. This contract wraps it, and is advisory.</p>
+  <p class="lede">What an installer built on K does for every way a request can arrive, every machine it can land on, and every way it can end. It reads three things, presence, the world and the product's answer, and everything else follows from them. K's transaction is code and is fixed. This contract wraps it, and is advisory.</p>
 </header>
 
 <div class="note"><p>Still settling. K ships the transaction, <code>bootstrapStable</code>, the lock and the receipts; the rest is the installer's. The reference implementation is <a href="https://github.com/botiverse/raft-computer-installer">raft-computer-installer</a>. Two shipped installers, Codex's and the current Raft one, are what this page was checked against; see <a href="prior-art.html#installers">prior art</a>.</p></div>
 
 <h2 id="problem">The problem</h2>
 <p>A request comes from the shell, from the application, or from a remote authority. Someone is there to answer a question, or nobody is. The machine has nothing installed, or an installation K manages, or one mid-upgrade, or one that predates K, or one that cannot start. Only the shell can reach a machine whose application is down, and a repair, unlike an upgrade, cannot be rolled back. Most installers answer the common cells of that space and improvise the rest, and the improvised cells are where machines get stuck.</p>
+
+<h2 id="reads">Three things the installer reads</h2>
+<p>Every run starts by reading three things, in this order, and acts only on what it read. Nothing else is guessed.</p>
+<ol class="steps">
+  <li><div><strong>Presence</strong>, from the environment and the terminal. <em>Attended</em> means a person can be asked and can see the result. Decided once, before anything else: an explicit <code>CI</code> or <code>*_NON_INTERACTIVE=1</code> means unattended; otherwise a terminal on stdin or <code>/dev/tty</code> means attended. It decides who consents and whether anything is asked.</div></li>
+  <li><div><strong>The world</strong>, from the installation on disk. Five of them: <em>fresh</em>, nothing installed; <em>adopted</em>, a binary installed before K; <em>managed</em>, a stable slot K keeps; <em>upgrading</em>, unfinished K work in the journal; <em>broken</em>, state K refuses to settle. Read after unfinished work is settled, so upgrading is never mistaken for anything else. It decides which action runs: install, adopt and upgrade, upgrade, or repair.</div></li>
+  <li><div><strong>The product's answer</strong>, from the product itself, to two questions. <em>Is a service running?</em> Yes when a live process of the installed binary answers the probe, or at least exists. <em>What must the user still do?</em> A step such as "run app login", or nothing; <em>set up</em> means nothing. Asked after the world is read and before anything is stopped, and remembered on disk so recovery answers the same way. Running decides how the readback is taken; the next step decides what happens after an install and what the line says.</div></li>
+</ol>
+<figure class="fig embed">
+<div class="stage" style="aspect-ratio: 1200 / 460"><iframe src="figures/product-state.html" title="Running or not, set up or not: what install and upgrade do in each case" loading="lazy" scrolling="no"></iframe></div>
+<figcaption>The product's two answers, and what install and upgrade do in each case. What was running comes back; what was not is not started.</figcaption>
+</figure>
 
 <h2 id="entrypoints">Who can do what, where</h2>
 <figure class="fig embed">
@@ -97,7 +109,7 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
 </ol>
 <h3 id="presence">Presence</h3>
 <ol class="steps">
-  <li><div>Whether a person is present is decided once, before anything else: an explicit <code>CI</code> or <code>*_NON_INTERACTIVE=1</code> wins; otherwise a tty on stdin or <code>/dev/tty</code>.</div></li>
+  <li><div>Presence is decided once, before anything else, as defined above. Nothing later re-decides it: a run that started attended may ask at any point, a run that started unattended never does.</div></li>
   <li><div>An entry may collect consent attended and then run the installer unattended. <code>self upgrade</code> does exactly this: it asks in the application, then launches the same bootstrap non-interactively with the version and the consent in the request.</div></li>
   <li><div>Unattended, nothing prompts. Running the installer is the consent to whatever the machine needs, repair included, and the receipt records who ran it and what was done; <code>--yes</code> only matters attended, where it skips the question. Putting the install directory on <code>PATH</code> is part of installing and happens either way; the line says so. Another manager's copy is never removed.</div></li>
 </ol>
@@ -109,20 +121,15 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
 <h3 id="worlds">Worlds</h3>
 <ol class="steps">
   <li><div>After settling, the installer reads the machine once: a readable stable slot is <strong>managed</strong>; a service installed before K is <strong>adopted</strong> by seeding stable from its running executable; unresolved recovery, a corrupt slot or a dead lock owner is <strong>broken</strong>; nothing is <strong>fresh</strong>.</div></li>
-  <li><div>Managed and adopted are K's transaction, with rollback. Fresh is verify, seed stable, publish, self-check, then <strong>first setup</strong>: no transaction, no rollback, nothing to restore. Broken is repaired the same way, and the run says so.</div></li>
-  <li><div>First setup is whatever the product needs before it can run: logging in, for instance. It is the product's step and the installer only runs it. Attended, it runs on the terminal and a successful setup is followed by start and a live readback. Unattended, there is nobody to set it up, so the installation is left usable and the line says what to do next. A declined or failed setup leaves a usable installation, not a failed one.</div></li>
+  <li><div>Managed and adopted are K's transaction, with rollback. Fresh is verify, seed stable, publish, self-check, then the product's <strong>first setup</strong> when attended: no transaction, no rollback, nothing to restore. Broken is repaired the same way, and the run says so.</div></li>
   <li><div>An installation owned by another manager, such as a package manager, is held, exit 2. The line says where it is and how to remove it. The installer never removes it.</div></li>
   <li><div>A target older than what is installed is held, exit 2, unless the request says the downgrade is intended. Refusing to downgrade is not success.</div></li>
 </ol>
-<h3 id="product">What the product reports</h3>
-<p>Worlds describe the installation. Two more things describe the product, and only the product can answer them. The installer asks after reading the world and before stopping anything.</p>
-<figure class="fig embed">
-<div class="stage" style="aspect-ratio: 1200 / 460"><iframe src="figures/product-state.html" title="Running or not, set up or not: what install and upgrade do in each case" loading="lazy" scrolling="no"></iframe></div>
-<figcaption>Running decides how the readback is taken. Set up decides what happens after install and what the line says next.</figcaption>
-</figure>
+<h3 id="product">The product's answer</h3>
 <ol class="steps">
-  <li><div><strong>Is a service running?</strong> Read before anything is stopped, and remembered for recovery. A running service is stopped and must come back as a live service. A service that was not running is not started by an upgrade; the candidate is run for its version instead. The user's choice to have it stopped is kept.</div></li>
-  <li><div><strong>Is the product set up?</strong> Logged in, configured, licensed: whatever it needs before it can run. Not set up and attended, a fresh install runs first setup and then starts. Not set up and unattended, nothing is started and the line names the next step. An upgrade never runs first setup; it repeats the next step if the product still names one.</div></li>
+  <li><div>Running is read before anything is stopped, and remembered for recovery. A running service is stopped and must come back as a live service. A service that was not running is not started by an upgrade; the candidate is run for its version instead. The user's choice to have it stopped is kept.</div></li>
+  <li><div>The next step is read from the product without a running service, so it works on a machine nobody has logged into. Not set up and attended, a fresh install runs first setup and then starts. Not set up and unattended, nothing is started and the line names the step. An upgrade never runs first setup; it repeats the step if the product still names one.</div></li>
+  <li><div>First setup runs on the terminal, not on stdin: under <code>curl | sh</code> the shell has consumed the script by the time the installer runs, so stdin is at its end, and the product is given the terminal to ask on. A setup that is declined or fails leaves a usable installation, not a failed one.</div></li>
   <li><div>Neither answer changes what is verified: bytes, platform, self-reported version, then a process of the new bytes. They change only which process answers, and what the line says.</div></li>
   <li><div>The product's own commands are asked first, and the installer decides for itself when they are not enough. A service that does not answer but whose process exists counts as running. A stop that returns while the process lives is finished by the installer: terminate, wait, then kill. The rule is identity, not pid: a process is touched only when its executable is provably the installed binary, never by a bare pid or a name, and the receipt says it was done.</div></li>
 </ol>
