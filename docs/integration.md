@@ -217,6 +217,31 @@ manager. A green framework test is not product acceptance.
 
 ## Release platforms
 
+### Keep the three release identities separate
+
+An external installation chain publishes three independently versioned
+artifacts:
+
+1. **Bootstrap** (`install.sh`/`install.ps1`) identifies the platform, obtains
+   and verifies an installer, then starts it. It does not need to consult the
+   product release authority.
+2. **Installer** is its own release with its own version, platform artifacts,
+   hashes and signatures where available. `installerVersion` identifies this
+   release; it is not the application version.
+3. **Product** is the application release. `productVersion` (or the adapter's
+   `Release.version`) identifies the exact application bytes K stages and
+   promotes.
+
+The installer may use Hands to resolve a product channel or fetch a pinned
+product manifest directly. In both cases it verifies the product artifact's
+size and SHA-256 before handing it to K. Hands is a product-release control
+plane, not a requirement for publishing or bootstrapping the installer.
+
+Keep the identities in every request and receipt: protocol version, installer
+version, product version, operation id, and artifact hash. Installer publication
+only proves that the installer is distributable; a machine upgrade succeeds
+only after its local receipt and live version/pid/start-id readback confirm it.
+
 K has no opinion about where releases come from. The adapter's ReleaseSource
 answers two questions, and anything that can answer them is a release
 platform as far as K is concerned:
