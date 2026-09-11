@@ -32,7 +32,7 @@
 <h2 id="reads">Three things the installer reads</h2>
 <p>Every run starts by reading three things, in this order, and acts only on what it read. Nothing else is guessed.</p>
 <ol class="steps">
-  <li><div><strong>Presence</strong>, from the environment and the terminal. <em>Attended</em> means a person can be asked and can see the result. Decided once, before anything else: an explicit <code>CI</code> or <code>*_NON_INTERACTIVE=1</code> means unattended; otherwise a terminal on stdin or <code>/dev/tty</code> means attended. It decides who consents and whether anything is asked.</div></li>
+  <li><div><strong>Presence</strong>, from the environment and the terminal. <em>Attended</em> means a person can be asked and can see the result. Decided once, before anything else: an explicit <code>CI</code> or <code>*_NON_INTERACTIVE=1</code> means unattended; otherwise a terminal means attended: stdin or <code>/dev/tty</code>, the console on Windows. It decides who consents and whether anything is asked.</div></li>
   <li><div><strong>The world</strong>, from the installation on disk. Five of them: <em>fresh</em>, nothing installed; <em>adopted</em>, a binary installed before K; <em>managed</em>, a stable slot K keeps; <em>upgrading</em>, unfinished K work in the journal; <em>broken</em>, state K refuses to settle. Read after unfinished work is settled, so upgrading is never mistaken for anything else. It decides which action runs: install, adopt and upgrade, upgrade, or repair.</div></li>
   <li><div><strong>The product's answer</strong>, from the product itself, to two questions. <em>Is a service running?</em> Yes when a live process of the installed binary answers the probe, or at least exists. <em>What must the user still do?</em> A step such as "run app login", or nothing; <em>set up</em> means nothing. Asked after the world is read and before anything is stopped, and remembered on disk so recovery answers the same way. Running decides how the readback is taken; the next step decides what happens after an install and what the line says.</div></li>
 </ol>
@@ -53,7 +53,8 @@
 curl -fsSL https://example.com/install.sh | sh -s -- --channel alpha          # attended, another channel
 CI=1 curl -fsSL https://example.com/install.sh | sh                           # unattended: the channel's current release, no questions
 curl -fsSL https://example.com/install.sh | sh -s -- --version 2.3.0 --yes    # this version, no questions
-curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --yes   # only a broken machine accepts this</code></pre>
+curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --yes   # only a broken machine accepts this
+irm https://example.com/install.ps1 | iex                                     # Windows: the same, from PowerShell</code></pre>
 <div class="table-scroll wide">
 <table class="grid">
   <thead><tr><th>Command</th><th>Meaning</th></tr></thead>
