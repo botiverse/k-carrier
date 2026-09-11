@@ -21,6 +21,9 @@ export * from "./quarantine.ts";
 // provenance journal they wire into createRunner.
 export * from "./artifact/source.ts";
 export * from "./artifact/transferPolicy.ts";
+// The verified downloader, so an installer's own paths (fresh install,
+// sidecars, repair) fetch bytes with the same budgets and checks as K.
+export { downloadVerified } from "./artifact/download.ts";
 export * from "./provenance/journal.ts";
 
 // The host boundary an adopter implements: HostAdapter, Slot, ProcessEvidence.
