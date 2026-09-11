@@ -32,11 +32,11 @@ text { font-family: inherit; fill: var(--ink); }
 </style>
 </head>
 <body>
-<div class="frame" id="frame" role="img" aria-label="A flowchart of what the installer does when it arrives at a machine. First, unfinished K work is recovered. Then: if a readable stable slot exists, the machine is managed and K runs its transaction. If not, an executable and service installed before K are adopted by seeding stable from them. If recovery ended unresolved or the state is corrupt, the machine is broken and is repaired only on explicit consent by quarantining the state and starting fresh. Otherwise the machine is fresh: download, verify, seed stable, start, probe. Every path ends in the managed world.">
+<div class="frame" id="frame" role="img" aria-label="A flowchart of what the installer does when it arrives at a machine. First, a machine still upgrading, with unfinished K work in the journal, has that work finished by K. Then: if a readable stable slot exists, the machine is managed and K runs its transaction. If not, an executable and service installed before K are adopted by seeding stable from them. If recovery ended unresolved or the state is corrupt, the machine is broken and is repaired only on explicit consent by quarantining the state and starting fresh. Otherwise the machine is fresh: download, verify, seed stable, start, probe. Every path ends in the managed world.">
 <svg viewBox="0 0 1200 675">
   <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#111"/></marker></defs>
   <text x="40" y="44" class="h1">What the installer does when it arrives</text>
-  <text x="40" y="70" class="sub">Four starting worlds, one destination: a machine K manages.</text>
+  <text x="40" y="70" class="sub">Five starting worlds, one destination: a machine K manages.</text>
 
   <!-- column 1: questions -->
   <g transform="translate(40,92)"><rect x="4" y="4" width="260" height="40" class="shadow"/><rect width="260" height="40" class="box" fill="var(--soft)"/><text x="130" y="26" text-anchor="middle" class="tb">The installer arrives</text></g>
@@ -60,9 +60,9 @@ text { font-family: inherit; fill: var(--ink); }
   <line x1="170" y1="554" x2="170" y2="588" class="line" marker-end="url(#a)"/><text x="180" y="576" class="lbl">no: nothing is there</text>
 
   <!-- column 2: actions -->
-  <g transform="translate(370,160)"><rect x="4" y="4" width="265" height="60" class="shadow"/><rect width="265" height="60" class="box" fill="var(--soft)"/><text x="12" y="24" class="tb">K recovers it first</text><text x="12" y="44" class="t">restore stable, or replay the commit</text></g>
+  <g transform="translate(370,160)"><rect x="4" y="4" width="265" height="60" class="shadow"/><rect width="265" height="60" class="box" fill="var(--soft)"/><text x="12" y="24" class="tb">Upgrading</text><text x="12" y="44" class="t">K finishes it first: restore or replay</text></g>
   <line x1="304" y1="190" x2="368" y2="190" class="line" marker-end="url(#a)"/><text x="336" y="182" text-anchor="middle" class="lbl">yes</text>
-  <path d="M502 224 L502 246 L170 246" class="line"/><text x="330" y="240" text-anchor="middle" class="d">then continue</text>
+  <path d="M502 224 L502 246 L170 246" class="line"/><text x="330" y="240" text-anchor="middle" class="d">then continue, with a settled journal</text>
 
   <g transform="translate(370,380)"><rect x="4" y="4" width="265" height="60" class="shadow"/><rect width="265" height="60" class="box" fill="var(--blue)"/><text x="12" y="24" class="tb">Adopted</text><text x="12" y="44" class="t">bootstrapStable from the executable</text></g>
   <line x1="304" y1="410" x2="368" y2="410" class="line" marker-end="url(#a)"/><text x="336" y="402" text-anchor="middle" class="lbl">yes</text>

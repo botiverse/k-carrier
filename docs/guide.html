@@ -62,12 +62,12 @@
 <p>The normative form of these rules is the <a href="design.html#entry-obligations">entry obligations</a> in the design.</p>
 
 <h2 id="worlds">What is already on the machine</h2>
-<p>The second constraint: the same request means something different depending on what is already there. There are four starting worlds. K's transaction covers one; the installer decides the rest.</p>
+<p>The second constraint: the same request means something different depending on what is already there. There are five starting worlds. K's transaction covers two, the managed machine and the one still upgrading; the installer decides the rest.</p>
 <figure class="fig embed">
-<div class="stage"><iframe src="figures/worlds.html" title="What the installer does when it arrives: four starting worlds, one destination" loading="lazy" scrolling="no"></iframe></div>
+<div class="stage"><iframe src="figures/worlds.html" title="What the installer does when it arrives: five starting worlds, one destination" loading="lazy" scrolling="no"></iframe></div>
 <figcaption>Every path ends in the managed world. K owns that world; the installer owns the way in, and the broken way in only on consent.</figcaption>
 </figure>
-<div class="note"><p>Every invocation first settles unfinished K work; that recovery is mandatory and is not repair. Only the managed world has rollback. Fresh and adopted have verification and a probe; broken has consent and a receipt.</p></div>
+<div class="note"><p>An upgrading machine, one with an unfinished operation in its journal, is finished first, whatever was asked; that recovery is mandatory and is not repair. Only the managed and upgrading worlds have rollback. Fresh and adopted have verification and a probe; broken has consent and a receipt.</p></div>
 
 
 <h2 id="pieces">K's answer: the pieces</h2>

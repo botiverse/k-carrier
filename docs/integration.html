@@ -106,7 +106,7 @@ node scripts/build-runner.mjs examples/external-service/adapter.ts /tmp/k-runner
 </ul>
 
 <h3 id="repair-beyond-k">Repair beyond K</h3>
-<p>Of the <a href="guide.html#worlds">four worlds</a>, K's transaction owns only the managed one. Fresh and adopted are <code>bootstrapStable</code>, start and probe, as in <a href="#2-establish-the-initial-installation">step 2</a>. Broken needs repair. The <a href="design.html#repair-boundary">design</a> states its obligations; building it:</p>
+<p>Of the <a href="guide.html#worlds">five worlds</a>, K's transaction owns the managed and the upgrading ones. Fresh and adopted are <code>bootstrapStable</code>, start and probe, as in <a href="#2-establish-the-initial-installation">step 2</a>. Broken needs repair. The <a href="design.html#repair-boundary">design</a> states its obligations; building it:</p>
 <ul>
   <li>Give repair its own entrypoint and request shape, so a request that only names a version cannot reach it, and run <code>recover</code> first.</li>
   <li>Quarantine by renaming the whole state directory under the installer's own state in one atomic move. Keep it until an operator removes it.</li>
