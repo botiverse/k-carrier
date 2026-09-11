@@ -70,7 +70,7 @@
 <ul>
   <li>The bootstrap must not contain another swap/rollback algorithm. K provides <code>launchRunner</code> for Node callers; there is not yet a product-ready shell bootstrap template.</li>
   <li><code>install.sh</code> and <code>self upgrade</code> use the same runner protocol and installation state. Keep versioned artifacts immutable.</li>
-  <li>What each entry does on each machine, and what it owes the caller for each outcome, is the <a href="installer.html">installer contract</a>.</li>
+  <li>What each entry does on each machine, and what it owes the caller for each outcome, is the <a href="installer.html">installer contract</a>; <a href="#4-implement-the-entries">step 4</a> builds it.</li>
   <li>The controller is an execution role, not a fourth deliverable.</li>
 </ul>
 
@@ -94,7 +94,18 @@ node scripts/build-runner.mjs examples/external-service/adapter.ts /tmp/k-runner
 <p><code>consented</code> records approval; it is not authorization supplied by an untrusted network client. Requests cannot select adapter modules, commands or release URLs. Logs go to stderr and the response to stdout.</p>
 <div class="note stop"><p>Directly invoking a worker does not supervise it. Use <code>launchRunner</code> for a supervised install, or <code>superviseRunner</code> when the caller needs a structured result. Both enforce execution and recovery deadlines and recover only the original operation. The <a href="https://github.com/botiverse/k-carrier/blob/main/examples/external-service/install.mjs">example installer</a> wires this flow; see <a href="#package-the-installer">packaging</a> for shipping the runner as a single executable.</p></div>
 
-<h2 id="4-observe-and-recover">4. Observe and recover</h2>
+<h2 id="4-implement-the-entries">4. Implement the entries</h2>
+<p>Step 3 submits one request by hand. A product has three entries that do it for the user, and the <a href="installer.html">installer contract</a> says what each should do on each machine, attended or not. It is advisory; what to build from it:</p>
+<ul>
+  <li><strong>Decide presence once.</strong> An explicit <code>CI</code> or <code>*_NON_INTERACTIVE=1</code> variable wins; otherwise a tty. Everything that asks, retries or prints for a person keys off this one decision.</li>
+  <li><strong>Make every entry produce the same request.</strong> An id, an exact version and recorded consent. The bootstrap and <code>self upgrade</code> may resolve a channel and ask; an unattended run must already carry both, and refuses otherwise. Nothing selects code, commands or URLs.</li>
+  <li><strong>Settle before anything else.</strong> Every entry runs recovery first and reports what it settled. Only then does it read the world it is in: fresh and adopted are <code>bootstrapStable</code>, start and probe; managed is the upgrade; broken is refused unless a person asked for repair.</li>
+  <li><strong>Give repair its own entry.</strong> Its own request shape, its own id, explicit consent for this machine. A request that only names a version cannot reach it, and it is never started unattended. What it must keep is the <a href="design.html#repair-boundary">repair boundary</a>.</li>
+  <li><strong>Print one line and one exit code per outcome.</strong> What happened, what did not change, what to do next. The <a href="installer.html#obligations">obligations matrix</a> gives the interactive and non-interactive versions of each; the <a href="installer.html#entrypoints">entries figure</a> gives the exact lines.</li>
+</ul>
+<div class="note"><p>The reference implementation of this step is <a href="https://github.com/botiverse/raft-computer-installer">raft-computer-installer</a>: a bootstrap, a <code>self upgrade</code> command and a remote entry on top of one K runner. There is not yet a product-neutral template.</p></div>
+
+<h2 id="5-observe-and-recover">5. Observe and recover</h2>
 <p>Inspect both the operation outcome and the exit code; the <a href="reference.html#protocol-v1">reference</a> lists every code. Retry the same id and target to replay a terminal result; use a new id for a new attempt. Recovery itself is described in the guide under <a href="guide.html#failures">when something goes wrong</a>. What the integration has to provide:</p>
 <ul>
   <li>Exit 3 from the supervisor leaves a verified runner and <code>recovery.json</code>. Keep that directory and call <code>resumeRunner(path)</code> to retry offline.</li>
@@ -106,7 +117,7 @@ node scripts/build-runner.mjs examples/external-service/adapter.ts /tmp/k-runner
 <h3 id="repair-beyond-k">Repair beyond K</h3>
 <p>Of the five worlds, K's transaction owns the managed and the upgrading ones. Fresh and adopted are <code>bootstrapStable</code>, start and probe, as in step 2. Broken needs repair, which is installer work: the <a href="installer.html#repair">installer contract</a> describes it and the <a href="design.html#repair-boundary">repair boundary</a> states what it must keep.</p>
 
-<h2 id="5-validate-the-product">5. Validate the product</h2>
+<h2 id="6-validate-the-product">6. Validate the product</h2>
 <p>Use the <a href="test-plan.html">test plan</a>, then test your real installer and controller on each target platform. Cover baseline setup, running-service upgrade, bad-candidate rollback, installer death, offline recovery, workload and data retention, and service isolation. Observe declared OS lifecycle surfaces before retiring their previous manager. A green framework test is not product acceptance.</p>
 
 <h2 id="package-the-installer">Package the installer</h2>
