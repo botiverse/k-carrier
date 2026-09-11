@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The four worlds an installer meets</title>
+<title>What the installer does when it arrives</title>
 <style>
 :root {
   --ink: #111; --paper: #fffdf7; --soft: #f7f7f3; --muted: rgba(17,17,17,.52);
@@ -19,95 +19,72 @@ body { color-scheme: light; color: var(--ink); background: var(--paper);
 .frame svg { position: absolute; inset: 0; width: 1200px; height: 675px; }
 text { font-family: inherit; fill: var(--ink); }
 .h1 { font-size: 26px; font-weight: 700; }
-.sub { font-size: 18px; fill: var(--muted); }
-.t { font-size: 22px; font-weight: 700; }
-.d { font-size: 14.5px; fill: var(--muted); }
-.a { font-size: 14.5px; }
-.ab { font-size: 14.5px; font-weight: 700; }
-.m { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 13px; }
+.sub { font-size: 17px; fill: var(--muted); }
+.q { font-size: 15px; font-weight: 700; }
+.t { font-size: 15px; }
+.tb { font-size: 15px; font-weight: 700; }
+.d { font-size: 14px; fill: var(--muted); }
+.lbl { font-size: 13px; font-weight: 700; }
 .box { stroke: var(--ink); stroke-width: 2.5; }
 .shadow { fill: var(--ink); }
 .line { stroke: var(--ink); stroke-width: 2.5; fill: none; }
-.dash { stroke: var(--ink); stroke-width: 2.5; fill: none; stroke-dasharray: 8 7; }
 .tag { stroke: var(--ink); stroke-width: 2; }
 </style>
 </head>
 <body>
-<div class="frame" id="frame" role="img" aria-label="A state diagram of the four worlds. Fresh, adopted and broken machines each enter the managed world through an installer action: download and bootstrap stable; bootstrap stable from the running executable; or, on consent, quarantine and reinstall. Inside the managed world K runs upgrades that end promoted or rolled back and stay managed. A machine leaves the managed world for broken only when recovery cannot settle it.">
+<div class="frame" id="frame" role="img" aria-label="A flowchart of what the installer does when it arrives at a machine. First, unfinished K work is recovered. Then: if a readable stable slot exists, the machine is managed and K runs its transaction. If not, an executable and service installed before K are adopted by seeding stable from them. If recovery ended unresolved or the state is corrupt, the machine is broken and is repaired only on explicit consent by quarantining the state and starting fresh. Otherwise the machine is fresh: download, verify, seed stable, start, probe. Every path ends in the managed world.">
 <svg viewBox="0 0 1200 675">
   <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#111"/></marker></defs>
-  <text x="40" y="52" class="h1">The four worlds an installer meets</text>
-  <text x="40" y="82" class="sub">Three ways into the managed world, one way out of it. K owns only the loop inside.</text>
+  <text x="40" y="44" class="h1">What the installer does when it arrives</text>
+  <text x="40" y="70" class="sub">Four starting worlds, one destination: a machine K manages.</text>
+
+  <!-- column 1: questions -->
+  <g transform="translate(40,92)"><rect x="4" y="4" width="260" height="40" class="shadow"/><rect width="260" height="40" class="box" fill="var(--soft)"/><text x="130" y="26" text-anchor="middle" class="tb">The installer arrives</text></g>
+
+  <g transform="translate(40,160)"><polygon points="4,34 34,4 234,4 264,34 234,64 34,64" class="shadow"/><polygon points="0,30 30,0 230,0 260,30 230,60 30,60" class="box" fill="var(--paper)"/><text x="130" y="28" text-anchor="middle" class="q">Unfinished K work</text><text x="130" y="46" text-anchor="middle" class="q">in the journal?</text></g>
+
+  <g transform="translate(40,270)"><polygon points="4,34 34,4 234,4 264,34 234,64 34,64" class="shadow"/><polygon points="0,30 30,0 230,0 260,30 230,60 30,60" class="box" fill="var(--paper)"/><text x="130" y="36" text-anchor="middle" class="q">A readable stable slot?</text></g>
+
+  <g transform="translate(40,380)"><polygon points="4,34 34,4 234,4 264,34 234,64 34,64" class="shadow"/><polygon points="0,30 30,0 230,0 260,30 230,60 30,60" class="box" fill="var(--paper)"/><text x="130" y="28" text-anchor="middle" class="q">An executable and service</text><text x="130" y="46" text-anchor="middle" class="q">installed before K?</text></g>
+
+  <g transform="translate(40,490)"><polygon points="4,34 34,4 234,4 264,34 234,64 34,64" class="shadow"/><polygon points="0,30 30,0 230,0 260,30 230,60 30,60" class="box" fill="var(--paper)"/><text x="130" y="28" text-anchor="middle" class="q">Unresolved recovery, a corrupt</text><text x="130" y="46" text-anchor="middle" class="q">slot, a dead lock owner?</text></g>
 
   <!-- Fresh -->
-  <g transform="translate(40,130)">
-    <rect x="6" y="6" width="330" height="110" class="shadow"/><rect width="330" height="110" class="box" fill="var(--paper)"/>
-    <text x="18" y="36" class="t">Fresh</text>
-    <text x="18" y="64" class="d">Nothing on the machine.</text>
-    <text x="18" y="92" class="m">owner: installer</text>
+  <g transform="translate(40,590)"><rect x="4" y="4" width="260" height="70" class="shadow"/><rect width="260" height="70" class="box" fill="var(--paper)"/><text x="12" y="24" class="tb">Fresh</text><text x="12" y="44" class="t">download and verify the release,</text><text x="12" y="62" class="t">bootstrapStable, start, probe</text></g>
+
+  <!-- column 1 vertical flow -->
+  <line x1="170" y1="136" x2="170" y2="158" class="line" marker-end="url(#a)"/>
+  <line x1="170" y1="224" x2="170" y2="268" class="line" marker-end="url(#a)"/><text x="160" y="240" text-anchor="end" class="lbl">no</text>
+  <line x1="170" y1="334" x2="170" y2="378" class="line" marker-end="url(#a)"/><text x="180" y="360" class="lbl">no</text>
+  <line x1="170" y1="444" x2="170" y2="488" class="line" marker-end="url(#a)"/><text x="180" y="470" class="lbl">no</text>
+  <line x1="170" y1="554" x2="170" y2="588" class="line" marker-end="url(#a)"/><text x="180" y="576" class="lbl">no: nothing is there</text>
+
+  <!-- column 2: actions -->
+  <g transform="translate(370,160)"><rect x="4" y="4" width="265" height="60" class="shadow"/><rect width="265" height="60" class="box" fill="var(--soft)"/><text x="12" y="24" class="tb">K recovers it first</text><text x="12" y="44" class="t">restore stable, or replay the commit</text></g>
+  <line x1="304" y1="190" x2="368" y2="190" class="line" marker-end="url(#a)"/><text x="336" y="182" text-anchor="middle" class="lbl">yes</text>
+  <path d="M502 224 L502 246 L170 246" class="line"/><text x="330" y="240" text-anchor="middle" class="d">then continue</text>
+
+  <g transform="translate(370,380)"><rect x="4" y="4" width="265" height="60" class="shadow"/><rect width="265" height="60" class="box" fill="var(--blue)"/><text x="12" y="24" class="tb">Adopted</text><text x="12" y="44" class="t">bootstrapStable from the executable</text></g>
+  <line x1="304" y1="410" x2="368" y2="410" class="line" marker-end="url(#a)"/><text x="336" y="402" text-anchor="middle" class="lbl">yes</text>
+  <line x1="639" y1="410" x2="688" y2="410" class="line" marker-end="url(#a)"/>
+
+  <g transform="translate(370,490)"><rect x="4" y="4" width="265" height="74" class="shadow"/><rect width="265" height="74" class="box" fill="var(--red)"/><text x="12" y="24" class="tb">Broken</text><text x="12" y="44" class="t">repair only on explicit consent:</text><text x="12" y="62" class="t">quarantine the state, start fresh</text></g>
+  <line x1="304" y1="520" x2="368" y2="520" class="line" marker-end="url(#a)"/><text x="336" y="512" text-anchor="middle" class="lbl">yes</text>
+  <path d="M502 568 L502 614 L308 614" class="line" marker-end="url(#a)"/>
+  <text x="512" y="600" class="d">no rollback, a receipt instead</text>
+
+  <!-- column 3: managed -->
+  <g transform="translate(690,270)"><rect x="8" y="8" width="470" height="200" class="shadow"/><rect width="470" height="200" class="box" fill="var(--yellow)" stroke-width="4"/>
+    <text x="20" y="34" class="h1" style="font-size:22px">Managed</text>
+    <text x="20" y="60" class="t">K's two-slot transaction: stage, quiesce, stop,</text>
+    <text x="20" y="80" class="t">start the candidate, probe. Then promote,</text>
+    <text x="20" y="100" class="t">or roll back to stable.</text>
+    <rect x="20" y="120" width="164" height="28" class="tag" fill="var(--green)"/><text x="102" y="139" text-anchor="middle" class="tb">rollback guaranteed</text>
+    <text x="20" y="180" class="d">The normal case, and where every other path ends.</text>
   </g>
-  <!-- Adopted -->
-  <g transform="translate(40,290)">
-    <rect x="6" y="6" width="330" height="110" class="shadow"/><rect width="330" height="110" class="box" fill="var(--blue)"/>
-    <text x="18" y="36" class="t">Adopted</text>
-    <text x="18" y="64" class="d">An executable and service installed before K.</text>
-    <text x="18" y="84" class="d">No stable slot yet.</text>
-    <text x="18" y="104" class="m">owner: installer, then K</text>
-  </g>
-  <!-- Broken -->
-  <g transform="translate(40,480)">
-    <rect x="6" y="6" width="330" height="140" class="shadow"/><rect width="330" height="140" class="box" fill="var(--red)"/>
-    <text x="18" y="36" class="t">Broken</text>
-    <text x="18" y="64" class="d">State K cannot settle: unresolved recovery,</text>
-    <text x="18" y="84" class="d">a corrupt slot, a dead lock owner,</text>
-    <text x="18" y="104" class="d">a missing executable.</text>
-    <text x="18" y="128" class="m">owner: installer, on explicit consent</text>
-  </g>
-
-  <!-- Managed -->
-  <g transform="translate(760,130)">
-    <rect x="8" y="8" width="400" height="480" class="shadow"/><rect width="400" height="480" class="box" fill="var(--yellow)" stroke-width="4"/>
-    <text x="22" y="40" class="t">Managed</text>
-    <text x="22" y="68" class="d">A complete stable slot and a settled journal.</text>
-    <text x="22" y="88" class="d">Every invocation settles unfinished work first.</text>
-    <text x="22" y="118" class="m">owner: K</text>
-    <!-- the K loop -->
-    <rect x="22" y="140" width="356" height="300" class="box" fill="var(--paper)"/>
-    <text x="40" y="170" class="ab">K's two-slot transaction</text>
-    <text x="40" y="192" class="d">stage, quiesce, stop, start, probe</text>
-    <g transform="translate(40,215)"><rect x="4" y="4" width="130" height="44" class="shadow"/><rect width="130" height="44" class="box" fill="var(--paper)"/><text x="65" y="28" text-anchor="middle" class="m">upgrade</text></g>
-    <g transform="translate(228,215)"><rect x="4" y="4" width="130" height="44" class="shadow"/><rect width="130" height="44" class="box" fill="var(--green)"/><text x="65" y="28" text-anchor="middle" class="m">promoted</text></g>
-    <g transform="translate(228,290)"><rect x="4" y="4" width="130" height="44" class="shadow"/><rect width="130" height="44" class="box" fill="var(--red)"/><text x="65" y="28" text-anchor="middle" class="m">rolled-back</text></g>
-    <line x1="174" y1="237" x2="224" y2="237" class="line" marker-end="url(#a)"/>
-    <path d="M174 237 L200 237 L200 312 L224 312" class="line" marker-end="url(#a)"/>
-    <!-- both return to managed -->
-    <path d="M293 344 L293 372 L105 372 L105 266" class="line" marker-end="url(#a)"/>
-    <text x="118" y="394" class="d">both outcomes stay managed</text>
-    <rect x="40" y="406" width="150" height="28" class="tag" fill="var(--green)"/><text x="115" y="425" text-anchor="middle" class="ab">rollback guaranteed</text>
-  </g>
-
-  <!-- arrows into managed -->
-  <line x1="376" y1="196" x2="754" y2="196" class="line" marker-end="url(#a)"/>
-  <text x="565" y="152" text-anchor="middle" class="ab">installer</text>
-  <text x="565" y="172" text-anchor="middle" class="a">download and verify the release,</text>
-  <text x="565" y="222" text-anchor="middle" class="a">bootstrapStable, start, probe</text>
-  <rect x="490" y="234" width="150" height="24" class="tag" fill="var(--paper)"/><text x="565" y="251" text-anchor="middle" class="m">verified + probed</text>
-
-  <line x1="376" y1="356" x2="754" y2="356" class="line" marker-end="url(#a)"/>
-  <text x="565" y="312" text-anchor="middle" class="ab">installer</text>
-  <text x="565" y="332" text-anchor="middle" class="a">bootstrapStable from the running</text>
-  <text x="565" y="382" text-anchor="middle" class="a">executable, then a normal upgrade</text>
-  <rect x="490" y="394" width="150" height="24" class="tag" fill="var(--paper)"/><text x="565" y="411" text-anchor="middle" class="m">verified + probed</text>
-
-  <line x1="376" y1="548" x2="754" y2="548" class="line" marker-end="url(#a)"/>
-  <text x="565" y="486" text-anchor="middle" class="ab">installer, on consent: repair</text>
-  <text x="565" y="506" text-anchor="middle" class="a">quarantine the state directory, reinstall</text>
-  <text x="565" y="524" text-anchor="middle" class="a">from a trusted release, bootstrapStable</text>
-  <rect x="440" y="560" width="250" height="24" class="tag" fill="var(--paper)"/><text x="565" y="577" text-anchor="middle" class="m">consent + receipt, no rollback</text>
-
-  <!-- managed -> broken -->
-  <path d="M900 619 L900 648 L205 648 L205 632" class="dash" marker-end="url(#a)"/>
-  <text x="560" y="668" text-anchor="middle" class="d">the only way out of managed: recovery cannot settle the machine</text>
+  <line x1="304" y1="300" x2="688" y2="300" class="line" marker-end="url(#a)"/><text x="336" y="292" text-anchor="middle" class="lbl">yes</text>
+  <path d="M304 640 L900 640 L900 480" class="line" marker-end="url(#a)"/>
+  <text x="910" y="560" class="d">managed from now on</text>
 </svg>
 </div>
 <script>
