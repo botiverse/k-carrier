@@ -71,7 +71,6 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
     <tr><td><code>--version V</code></td><td>The exact version. Default: the channel's current release, resolved through the release authority.</td></tr>
     <tr><td><code>--channel C</code></td><td>Which channel to resolve. Attended, the resolved version is shown and asked about.</td></tr>
     <tr><td><code>--yes</code></td><td>Skip the question when attended. Unattended runs never ask; running one is the consent.</td></tr>
-    <tr><td><code>--id ID</code></td><td>The operation id. The same id replays the first receipt.</td></tr>
     <tr><td><code>--allow-downgrade</code></td><td>Intend an older target. Without it, an older target is held. This is also how a bad release is left: name the version that worked.</td></tr>
   </tbody>
 </table>
@@ -96,7 +95,7 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
 <ol class="steps">
   <li><div>Every entry hands the installer the same request: an <strong>id</strong>, an <strong>exact version</strong> and <strong>recorded consent</strong>. It selects nothing else: no code, no commands, no URLs.</div></li>
   <li><div>A channel is resolved to one version before anything changes, and the receipt records that version, never the channel. Attended, the person sees the version and answers; unattended, the channel's current release is the target and the invocation is the consent.</div></li>
-  <li><div>The same id with the same target replays the first receipt and touches nothing. A different target for the same id is refused. A new attempt is a new id.</div></li>
+  <li><div>Every run has an operation id, and the same id with the same target replays the first receipt and touches nothing. The id is the installer's: a launcher that must be able to repeat a request names it through the environment, a person never sees it. A new attempt is a new id.</div></li>
 </ol>
 <h3 id="presence">Presence</h3>
 <ol class="steps">
