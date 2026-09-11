@@ -25,7 +25,7 @@
 </header>
 
 <h2 id="entrypoints">Where K stops</h2>
-<p>Downloading a new executable is the easy part. The application may still be running. Power may fail halfway through replacement. The new version may fail to start on this one machine. Replacing the file proves nothing about whether the service came back. K's answer to all of that is one journaled transaction with a defined result, and this page is about that transaction.</p>
+<p>The machine is remote and nobody operates it. The upgrade has to stop the running service, start the new one, and keep working while the service is down; if the new version does not start, the old one has to come back on its own, because nobody can log in to put it back. K's answer is one journaled transaction with a defined result, run by a process that is not the application. This page is about that transaction.</p>
 <p id="worlds">What K does not decide is everything around it: who may ask, whether anyone is present to consent, and what is already on the machine. K's transaction covers a machine it already manages and one whose upgrade was interrupted; the installer built on K decides the rest. That behavior is the <a href="installer.html">installer contract</a>, a separate and advisory page.</p>
 
 <h2 id="pieces">The pieces</h2>
