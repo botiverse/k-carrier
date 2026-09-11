@@ -97,11 +97,11 @@ node scripts/build-runner.mjs examples/external-service/adapter.ts /tmp/k-runner
 <h2 id="4-implement-the-entries">4. Implement the entries</h2>
 <p>Step 3 submits one request by hand. A product has three entries that do it for the user, and the <a href="installer.html">installer contract</a> says what each should do on each machine, attended or not. It is advisory; what to build from it:</p>
 <ul>
-  <li><strong>Decide presence once.</strong> An explicit <code>CI</code> or <code>*_NON_INTERACTIVE=1</code> variable wins; otherwise a tty. Everything that asks, retries or prints for a person keys off this one decision.</li>
+  <li><strong>Decide presence once.</strong> An explicit <code>CI</code> or <code>*_NON_INTERACTIVE=1</code> wins; otherwise a tty. Everything that asks, retries or prints keys off it.</li>
   <li><strong>Make every entry produce the same request.</strong> An id, an exact version and recorded consent. The bootstrap and <code>self upgrade</code> may resolve a channel and ask; an unattended run must already carry both, and refuses otherwise. Nothing selects code, commands or URLs.</li>
   <li><strong>Settle before anything else.</strong> Every entry runs recovery first and reports what it settled. Only then does it read the world it is in: fresh and adopted are <code>bootstrapStable</code>, start and probe; managed is the upgrade; broken is refused unless a person asked for repair.</li>
   <li><strong>Give repair its own entry.</strong> Its own request shape, its own id, explicit consent for this machine. A request that only names a version cannot reach it, and it is never started unattended. What it must keep is the <a href="design.html#repair-boundary">repair boundary</a>.</li>
-  <li><strong>Print one line and one exit code per outcome.</strong> What happened, what did not change, what to do next. The <a href="installer.html#obligations">obligations matrix</a> gives the interactive and non-interactive versions of each; the <a href="installer.html#entrypoints">entries figure</a> gives the exact lines.</li>
+  <li><strong>Print one line and one exit code per outcome.</strong> What happened, what did not change, what to do next. The <a href="installer.html#obligations">outcomes table</a> gives the line, and what attended and unattended runs add.</li>
 </ul>
 <div class="note"><p>The reference implementation of this step is <a href="https://github.com/botiverse/raft-computer-installer">raft-computer-installer</a>: a bootstrap, a <code>self upgrade</code> command and a remote entry on top of one K runner. There is not yet a product-neutral template.</p></div>
 

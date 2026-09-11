@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Who can do what, where</title>
+<style>
+:root { --ink: #111; --paper: #fffdf7; --muted: rgba(17,17,17,.55); }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body { color-scheme: light; color: var(--ink); background: var(--paper);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+.frame { position: relative; width: 1200px; height: 675px; overflow: hidden;
+  background: radial-gradient(circle at 1px 1px, rgba(17,17,17,.045) 1px, transparent 1.5px) 0 0 / 16px 16px, var(--paper); }
+.frame svg { position: absolute; inset: 0; width: 1200px; height: 675px; }
+text { font-family: inherit; fill: var(--ink); }
+.h1 { font-size: 26px; font-weight: 700; }
+.sub { font-size: 17px; fill: var(--muted); }
+.t { font-size: 16px; }
+.tb { font-size: 17px; font-weight: 700; }
+.d { font-size: 13px; fill: var(--muted); }
+.box { stroke: var(--ink); stroke-width: 2.5; }
+.shadow { fill: var(--ink); }
+</style>
+</head>
+<body>
+<div class="frame" id="frame" role="img" aria-label="A grid of three entries by five worlds. install.sh can install on a fresh machine, settle an upgrading one, adopt then upgrade a pre-K installation, upgrade a managed one, and repair a broken one on explicit consent. self upgrade settles, adopts and upgrades but cannot run on a fresh or broken machine. A remote authority settles and upgrades a managed machine only. Below: attended runs may ask and may offer repair; unattended runs must carry an exact version and consent, and never ask, retry or repair.">
+<svg viewBox="0 0 1200 675">
+  <text x="40" y="44" class="h1">Who can do what, where</text>
+  <text x="40" y="70" class="sub">Three entries by five worlds. Every entry settles unfinished K work first; only the shell can install or repair.</text>
+  <text x="341.0" y="122" text-anchor="middle" class="tb">Fresh</text>
+  <text x="341.0" y="140" text-anchor="middle" class="d">nothing installed</text>
+  <text x="523.0" y="122" text-anchor="middle" class="tb">Upgrading</text>
+  <text x="523.0" y="140" text-anchor="middle" class="d">unfinished K work</text>
+  <text x="705.0" y="122" text-anchor="middle" class="tb">Adopted</text>
+  <text x="705.0" y="140" text-anchor="middle" class="d">installed before K</text>
+  <text x="887.0" y="122" text-anchor="middle" class="tb">Managed</text>
+  <text x="887.0" y="140" text-anchor="middle" class="d">K manages it</text>
+  <text x="1069.0" y="122" text-anchor="middle" class="tb">Broken</text>
+  <text x="1069.0" y="140" text-anchor="middle" class="d">cannot start</text>
+  <text x="40" y="190" class="tb" style="font-family:ui-monospace,Menlo,monospace">install.sh</text>
+  <text x="40" y="210" class="d">person at the shell, or a script</text>
+  <rect x="258" y="158" width="174" height="88" class="shadow"/>
+  <rect x="254" y="154" width="174" height="88" fill="#7bc8ff" class="box"/>
+  <text x="341.0" y="194" text-anchor="middle" class="tb">Install</text>
+  <text x="341.0" y="216" text-anchor="middle" class="d">verify, seed, start, probe</text>
+  <rect x="440" y="158" width="174" height="88" class="shadow"/>
+  <rect x="436" y="154" width="174" height="88" fill="#ffb25f" class="box"/>
+  <text x="523.0" y="194" text-anchor="middle" class="tb">Settle first</text>
+  <text x="523.0" y="216" text-anchor="middle" class="d">then continue</text>
+  <rect x="622" y="158" width="174" height="88" class="shadow"/>
+  <rect x="618" y="154" width="174" height="88" fill="#98e59b" class="box"/>
+  <text x="705.0" y="194" text-anchor="middle" class="tb">Adopt + upgrade</text>
+  <text x="705.0" y="216" text-anchor="middle" class="d">seed from the running app</text>
+  <rect x="804" y="158" width="174" height="88" class="shadow"/>
+  <rect x="800" y="154" width="174" height="88" fill="#98e59b" class="box"/>
+  <text x="887.0" y="194" text-anchor="middle" class="tb">Upgrade</text>
+  <text x="887.0" y="216" text-anchor="middle" class="d">K transaction, rollback</text>
+  <rect x="986" y="158" width="174" height="88" class="shadow"/>
+  <rect x="982" y="154" width="174" height="88" fill="#ffe66b" class="box"/>
+  <text x="1069.0" y="194" text-anchor="middle" class="tb">Repair</text>
+  <text x="1069.0" y="216" text-anchor="middle" class="d">on explicit consent only</text>
+  <text x="40" y="286" class="tb" style="font-family:ui-monospace,Menlo,monospace">self upgrade</text>
+  <text x="40" y="306" class="d">a person, inside the app</text>
+  <rect x="254" y="250" width="174" height="88" fill="#f0efe9" stroke="rgba(17,17,17,.35)" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <text x="341.0" y="304" text-anchor="middle" class="d">nothing to run</text>
+  <rect x="440" y="254" width="174" height="88" class="shadow"/>
+  <rect x="436" y="250" width="174" height="88" fill="#ffb25f" class="box"/>
+  <text x="523.0" y="290" text-anchor="middle" class="tb">Settle first</text>
+  <text x="523.0" y="312" text-anchor="middle" class="d">then continue</text>
+  <rect x="622" y="254" width="174" height="88" class="shadow"/>
+  <rect x="618" y="250" width="174" height="88" fill="#98e59b" class="box"/>
+  <text x="705.0" y="290" text-anchor="middle" class="tb">Adopt + upgrade</text>
+  <text x="705.0" y="312" text-anchor="middle" class="d">seed from the running app</text>
+  <rect x="804" y="254" width="174" height="88" class="shadow"/>
+  <rect x="800" y="250" width="174" height="88" fill="#98e59b" class="box"/>
+  <text x="887.0" y="290" text-anchor="middle" class="tb">Upgrade</text>
+  <text x="887.0" y="312" text-anchor="middle" class="d">K transaction, rollback</text>
+  <rect x="982" y="250" width="174" height="88" fill="#f0efe9" stroke="rgba(17,17,17,.35)" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <text x="1069.0" y="304" text-anchor="middle" class="d">the app is not running</text>
+  <text x="40" y="382" class="tb" style="font-family:ui-monospace,Menlo,monospace">remote authority</text>
+  <text x="40" y="402" class="d">nobody on the machine</text>
+  <rect x="254" y="346" width="174" height="88" fill="#f0efe9" stroke="rgba(17,17,17,.35)" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <text x="341.0" y="400" text-anchor="middle" class="d">nothing to reach</text>
+  <rect x="440" y="350" width="174" height="88" class="shadow"/>
+  <rect x="436" y="346" width="174" height="88" fill="#ffb25f" class="box"/>
+  <text x="523.0" y="386" text-anchor="middle" class="tb">Settle first</text>
+  <text x="523.0" y="408" text-anchor="middle" class="d">then continue</text>
+  <rect x="618" y="346" width="174" height="88" fill="#f0efe9" stroke="rgba(17,17,17,.35)" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <text x="705.0" y="400" text-anchor="middle" class="d">not managed yet</text>
+  <rect x="804" y="350" width="174" height="88" class="shadow"/>
+  <rect x="800" y="346" width="174" height="88" fill="#98e59b" class="box"/>
+  <text x="887.0" y="386" text-anchor="middle" class="tb">Upgrade</text>
+  <text x="887.0" y="408" text-anchor="middle" class="d">K transaction, rollback</text>
+  <rect x="982" y="346" width="174" height="88" fill="#f0efe9" stroke="rgba(17,17,17,.35)" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <text x="1069.0" y="400" text-anchor="middle" class="d">never repair remotely</text>
+  <rect x="44" y="488" width="540" height="150" class="shadow"/><rect x="40" y="484" width="540" height="150" fill="#fff" class="box"/>
+  <text x="60" y="518" class="tb">Attended</text><text x="150" y="518" class="d">a tty, and no CI / *_NON_INTERACTIVE=1</text>
+  <text x="60" y="548" class="t">May resolve a channel to a version and ask.</text>
+  <text x="60" y="574" class="t">May offer repair, and must get a yes for this machine.</text>
+  <text x="60" y="600" class="t">Says what happened, what did not change, what to do next.</text>
+  <rect x="624" y="488" width="540" height="150" class="shadow"/><rect x="620" y="484" width="540" height="150" fill="#fff" class="box"/>
+  <text x="640" y="518" class="tb">Unattended</text><text x="760" y="518" class="d">CI or *_NON_INTERACTIVE=1, or no tty</text>
+  <text x="640" y="548" class="t">The request must already carry an exact version and consent.</text>
+  <text x="640" y="574" class="t">Never asks, never retries on its own, never repairs.</text>
+  <text x="640" y="600" class="t">Returns the exit code and reason; the caller decides.</text>
+</svg>
+</div>
+<script>
+const frame = document.getElementById('frame');
+function fitFrame() {
+  const scale = Math.min(1, window.innerWidth / 1200, window.innerHeight / 675);
+  frame.style.transform = `scale(${scale})`;
+  frame.style.transformOrigin = "top left";
+}
+fitFrame();
+window.addEventListener("resize", fitFrame);
+</script>
+</body>
+</html>
