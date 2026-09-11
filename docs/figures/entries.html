@@ -33,10 +33,10 @@ text { font-family: inherit; fill: var(--ink); }
 </style>
 </head>
 <body>
-<div class="frame" id="frame" role="img" aria-label="A three-by-three grid: the entries install.sh, self upgrade and remote authority against the machine conditions nothing installed, application running and application cannot start. install.sh installs a fresh machine. On a running machine it should say what will happen and ask, then upgrades or rolls back to an exact version with the installer outside the application's service unit, and may offer a repair on explicit consent. On a machine that cannot start it may repair on explicit request, reporting a receipt instead of a rollback. self upgrade needs a running application: it resolves the channel to an exact version, shows it and asks, then becomes install.sh. A remote authority is unreachable unless the application runs; it must pin an exact version, record the approver, never prompt and never repair, and claims success only from the receipt and the live readback.">
+<div class="frame" id="frame" role="img" aria-label="A three-by-three grid of K's recommended behavior: the entries install.sh, self upgrade and remote authority against the machine conditions nothing installed, application running and application cannot start. install.sh installs a fresh machine. On a running machine it says what will happen and asks y/n, upgrades or rolls back to an exact version with the installer running outside the application's service unit; with no terminal it never asks, and the version and consent must be in the request. On a machine that cannot start it offers a repair only when a person says yes, reporting a receipt instead of a rollback; with no terminal it reports broken and stops. self upgrade needs a running application: it resolves the channel to an exact version, shows it and asks, then becomes install.sh. A remote authority is unreachable unless the application runs; it pins an exact version, records the approver, never prompts and never repairs, and claims success only from the receipt and the live readback.">
 <svg viewBox="0 0 1200 675">
   <text x="40" y="44" class="h1">What each entry means, by machine condition</text>
-  <text x="40" y="70" class="sub">One installer underneath. What the entry owes around it depends on who is present and what the machine is doing.</text>
+  <text x="40" y="70" class="sub">K's recommended behavior around one shared installer. It depends on who is present and what the machine is doing.</text>
 
   <!-- column headers -->
   <text x="400" y="112" text-anchor="middle" class="ch">Nothing installed</text>
@@ -54,22 +54,22 @@ text { font-family: inherit; fill: var(--ink); }
   </g>
 
   <g transform="translate(560,130)"><rect x="4" y="4" width="280" height="155" class="shadow"/><rect width="280" height="155" class="box" fill="var(--yellow)"/>
-    <text x="12" y="24" class="t">SHOULD say what will happen and ask</text>
-    <text x="12" y="42" class="t">first. Upgrades or rolls back to an</text>
-    <text x="12" y="60" class="t">exact version. The installer runs</text>
-    <text x="12" y="78" class="t">outside the app's service unit.</text>
-    <text x="12" y="96" class="t">Repair MAY be offered, explicit</text>
-    <text x="12" y="114" class="t">consent only.</text>
+    <text x="12" y="24" class="t">Says what will happen and asks y/n.</text>
+    <text x="12" y="42" class="t">Upgrades or rolls back to an exact</text>
+    <text x="12" y="60" class="t">version; the installer runs outside</text>
+    <text x="12" y="78" class="t">the app's service unit. With no</text>
+    <text x="12" y="96" class="t">terminal it never asks: the version</text>
+    <text x="12" y="114" class="t">and consent must be in the request.</text>
     <rect x="12" y="126" width="68" height="18" class="mark" fill="var(--green)"/><text x="46" y="139" text-anchor="middle" class="tag">upgrade</text>
     <rect x="88" y="126" width="74" height="18" class="mark" fill="var(--soft)"/><text x="125" y="139" text-anchor="middle" class="tag">rollback</text>
   </g>
 
   <g transform="translate(860,130)"><rect x="4" y="4" width="280" height="155" class="shadow"/><rect width="280" height="155" class="box" fill="var(--paper)"/>
-    <text x="12" y="28" class="t">MAY repair, on explicit request only:</text>
-    <text x="12" y="46" class="t">quarantine the state, reinstall</text>
-    <text x="12" y="64" class="t">verified bytes, bootstrapStable.</text>
-    <text x="12" y="82" class="t">Reports a repair: a receipt, never</text>
-    <text x="12" y="100" class="t">a rollback.</text>
+    <text x="12" y="28" class="t">Offers a repair only when a person</text>
+    <text x="12" y="46" class="t">says yes: quarantine, verified bytes,</text>
+    <text x="12" y="64" class="t">bootstrapStable. A receipt, never a</text>
+    <text x="12" y="82" class="t">rollback. With no terminal it reports</text>
+    <text x="12" y="100" class="t">broken and stops.</text>
     <rect x="12" y="126" width="126" height="18" class="mark" fill="var(--yellow)"/><text x="75" y="139" text-anchor="middle" class="tag">repair on consent</text>
   </g>
 
@@ -79,8 +79,8 @@ text { font-family: inherit; fill: var(--ink); }
   <g transform="translate(260,300)"><rect width="280" height="155" class="na"/><text x="140" y="82" text-anchor="middle" class="d">Nothing to run it from.</text></g>
 
   <g transform="translate(560,300)"><rect x="4" y="4" width="280" height="155" class="shadow"/><rect width="280" height="155" class="box" fill="var(--paper)"/>
-    <text x="12" y="28" class="t">SHOULD resolve the channel to an</text>
-    <text x="12" y="46" class="t">exact version, show it and ask. Then</text>
+    <text x="12" y="28" class="t">Resolves the channel to an exact</text>
+    <text x="12" y="46" class="t">version, shows it and asks y/n. Then</text>
     <text x="12" y="64" class="t">it is install.sh: the same bootstrap,</text>
     <text x="12" y="82" class="t">a pinned installer.</text>
     <rect x="12" y="126" width="96" height="18" class="mark" fill="var(--blue)"/><text x="60" y="139" text-anchor="middle" class="tag">= install.sh</text>
@@ -94,10 +94,11 @@ text { font-family: inherit; fill: var(--ink); }
   <g transform="translate(260,470)"><rect width="280" height="155" class="na"/><text x="140" y="82" text-anchor="middle" class="d">Unreachable.</text></g>
 
   <g transform="translate(560,470)"><rect x="4" y="4" width="280" height="155" class="shadow"/><rect width="280" height="155" class="box" fill="var(--paper)"/>
-    <text x="12" y="28" class="t">MUST pin an exact version and record</text>
-    <text x="12" y="46" class="t">the approver. NEVER prompts, NEVER</text>
-    <text x="12" y="64" class="t">repairs. Success is claimed only from</text>
-    <text x="12" y="82" class="t">the receipt and the live readback.</text>
+    <text x="12" y="28" class="t">Pins an exact version and records</text>
+    <text x="12" y="46" class="t">the approver in the request. Never</text>
+    <text x="12" y="64" class="t">prompts, never repairs. Success is</text>
+    <text x="12" y="82" class="t">claimed only from the receipt and the</text>
+    <text x="12" y="100" class="t">live readback.</text>
     <rect x="12" y="126" width="68" height="18" class="mark" fill="var(--green)"/><text x="46" y="139" text-anchor="middle" class="tag">upgrade</text>
     <rect x="88" y="126" width="74" height="18" class="mark" fill="var(--soft)"/><text x="125" y="139" text-anchor="middle" class="tag">rollback</text>
   </g>
