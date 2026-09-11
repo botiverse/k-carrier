@@ -24,7 +24,7 @@ text { font-family: inherit; fill: var(--ink); }
 </style>
 </head>
 <body>
-<div class="frame" id="frame" role="img" aria-label="A grid of three entries by five worlds. install.sh can install on a fresh machine, settle an upgrading one, adopt then upgrade a pre-K installation, upgrade a managed one, and repair a broken one on explicit consent. self upgrade settles, adopts and upgrades but cannot run on a fresh or broken machine. A remote authority settles and upgrades a managed machine only. Below: attended runs may ask and may offer repair; unattended runs must carry an exact version and consent, and never ask, retry or repair.">
+<div class="frame" id="frame" role="img" aria-label="A grid of three entries by five worlds. install.sh can install on a fresh machine, settle an upgrading one, adopt then upgrade a pre-K installation, upgrade a managed one, and repair a broken one. self upgrade settles, adopts and upgrades but cannot run on a fresh or broken machine. A remote authority settles and upgrades a managed machine only. Below: attended runs may ask and may offer repair; unattended runs take the channel's current release, treat the run as consent, and never ask or retry.">
 <svg viewBox="0 0 1200 600">
   <g transform="translate(0,-75)">
   <text x="341.0" y="122" text-anchor="middle" class="tb">Fresh</text>
@@ -58,7 +58,7 @@ text { font-family: inherit; fill: var(--ink); }
   <rect x="986" y="158" width="174" height="88" class="shadow"/>
   <rect x="982" y="154" width="174" height="88" fill="#ffe66b" class="box"/>
   <text x="1069.0" y="194" text-anchor="middle" class="tb">Repair</text>
-  <text x="1069.0" y="216" text-anchor="middle" class="d">on explicit consent only</text>
+  <text x="1069.0" y="216" text-anchor="middle" class="d">quarantine, then fresh</text>
   <text x="40" y="286" class="tb" style="font-family:ui-monospace,Menlo,monospace">self upgrade</text>
   <text x="40" y="306" class="d">asks in the app, then runs install.sh unattended</text>
   <rect x="254" y="250" width="174" height="88" fill="#f0efe9" stroke="rgba(17,17,17,.35)" stroke-width="1.5" stroke-dasharray="6 5"/>
@@ -92,17 +92,17 @@ text { font-family: inherit; fill: var(--ink); }
   <text x="887.0" y="386" text-anchor="middle" class="tb">Upgrade</text>
   <text x="887.0" y="408" text-anchor="middle" class="d">K transaction, rollback</text>
   <rect x="982" y="346" width="174" height="88" fill="#f0efe9" stroke="rgba(17,17,17,.35)" stroke-width="1.5" stroke-dasharray="6 5"/>
-  <text x="1069.0" y="400" text-anchor="middle" class="d">never repair remotely</text>
+  <text x="1069.0" y="400" text-anchor="middle" class="d">the app is not running</text>
   <rect x="44" y="488" width="540" height="150" class="shadow"/><rect x="40" y="484" width="540" height="150" fill="#fff" class="box"/>
   <text x="60" y="518" class="tb">Attended</text><text x="150" y="518" class="d">a tty, and no CI / *_NON_INTERACTIVE=1</text>
   <text x="60" y="548" class="t">May resolve a channel to a version and ask.</text>
-  <text x="60" y="574" class="t">May offer repair, and must get a yes for this machine.</text>
+  <text x="60" y="574" class="t">Asks once, naming what will change, before anything changes.</text>
   <text x="60" y="600" class="t">Says what happened, what did not change, what to do next.</text>
   <rect x="624" y="488" width="540" height="150" class="shadow"/><rect x="620" y="484" width="540" height="150" fill="#fff" class="box"/>
   <text x="640" y="518" class="tb">Unattended</text><text x="760" y="518" class="d">CI or *_NON_INTERACTIVE=1, or no tty</text>
   <text x="640" y="548" class="t">No version named means the channel's current release.</text>
   <text x="640" y="574" class="t">Running it is the consent; the receipt records who and what.</text>
-  <text x="640" y="600" class="t">Never asks, never retries on its own, never repairs.</text>
+  <text x="640" y="600" class="t">Never asks, never retries on its own.</text>
   </g>
 </svg>
 </div>

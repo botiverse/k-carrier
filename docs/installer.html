@@ -27,7 +27,7 @@
 <div class="note"><p>Still settling. K ships the transaction, <code>bootstrapStable</code>, the lock and the receipts; the rest is the installer's. The reference implementation is <a href="https://github.com/botiverse/raft-computer-installer">raft-computer-installer</a>. Two shipped installers, Codex's and the current Raft one, are what this page was checked against; see <a href="prior-art.html#installers">prior art</a>.</p></div>
 
 <h2 id="problem">The problem</h2>
-<p>A request comes from the shell, from the application, or from a remote authority. Someone is there to answer a question, or nobody is. The machine has nothing installed, or an installation K manages, or one mid-upgrade, or one that predates K, or one that cannot start. Only the shell can reach a machine whose application is down, and only a person can consent to a repair, because a repair cannot be rolled back. Most installers answer the common cells of that space and improvise the rest, and the improvised cells are where machines get stuck.</p>
+<p>A request comes from the shell, from the application, or from a remote authority. Someone is there to answer a question, or nobody is. The machine has nothing installed, or an installation K manages, or one mid-upgrade, or one that predates K, or one that cannot start. Only the shell can reach a machine whose application is down, and a repair, unlike an upgrade, cannot be rolled back. Most installers answer the common cells of that space and improvise the rest, and the improvised cells are where machines get stuck.</p>
 
 <h2 id="entrypoints">Who can do what, where</h2>
 <figure class="fig embed">
@@ -47,14 +47,14 @@
 curl -fsSL https://example.com/install.sh | sh -s -- --channel alpha          # attended, another channel
 CI=1 curl -fsSL https://example.com/install.sh | sh                           # unattended: the channel's current release, no questions
 curl -fsSL https://example.com/install.sh | sh -s -- --version 2.3.0 --yes    # this version, no questions
-curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --yes   # attended only</code></pre>
+curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --yes   # only a broken machine accepts this</code></pre>
 <div class="table-scroll wide">
 <table class="grid">
   <thead><tr><th>Command</th><th>Meaning</th></tr></thead>
   <tbody>
     <tr><td><code>install</code>, <code>upgrade</code> (default)</td><td>Bring this machine to one exact version. What that means is decided by the world: install, adopt then upgrade, or upgrade. Broken is refused, or offered repair when attended.</td></tr>
     <tr><td><code>rollback</code></td><td>Upgrade to the previous stable version as an explicit, intended target.</td></tr>
-    <tr><td><code>repair</code></td><td>Its own request and consent. Attended only.</td></tr>
+    <tr><td><code>repair</code></td><td>Ask for repair explicitly. Held unless the machine is broken.</td></tr>
     <tr><td><code>recover &lt;file&gt;</code></td><td>Retry an unresolved recovery offline, from the file the unresolved run printed.</td></tr>
     <tr><td><code>status</code></td><td>The world and the live service. The last receipt is not a live observation.</td></tr>
   </tbody>
@@ -66,7 +66,7 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
   <tbody>
     <tr><td><code>--version V</code></td><td>The exact version. Default: the channel's current release, resolved through the release authority.</td></tr>
     <tr><td><code>--channel C</code></td><td>Which channel to resolve. Attended, the resolved version is shown and asked about.</td></tr>
-    <tr><td><code>--yes</code></td><td>Skip the question when attended. Unattended runs never ask; running one is the consent. Repair always needs it, and is attended only.</td></tr>
+    <tr><td><code>--yes</code></td><td>Skip the question when attended. Unattended runs never ask; running one is the consent.</td></tr>
     <tr><td><code>--approved-by WHO</code></td><td>Who consented, for the receipt. Defaults to the local user.</td></tr>
     <tr><td><code>--id ID</code></td><td>The operation id. The same id replays the first receipt.</td></tr>
     <tr><td><code>--allow-downgrade</code></td><td>Intend an older target. Without it, an older target is held.</td></tr>
@@ -77,7 +77,7 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
 <table class="grid">
   <thead><tr><th>Environment</th><th>Meaning</th></tr></thead>
   <tbody>
-    <tr><td><code>CI</code>, <code>&lt;PRODUCT&gt;_NON_INTERACTIVE=1</code></td><td>Unattended, whatever the terminal says: no questions, no repair.</td></tr>
+    <tr><td><code>CI</code>, <code>&lt;PRODUCT&gt;_NON_INTERACTIVE=1</code></td><td>Unattended, whatever the terminal says: no questions.</td></tr>
     <tr><td><code>&lt;PRODUCT&gt;_HOME</code></td><td>The product's state root. K's state lives under it.</td></tr>
     <tr><td><code>&lt;PRODUCT&gt;_INSTALL_DIR</code></td><td>Where the binary on <code>PATH</code> is published.</td></tr>
     <tr><td><code>&lt;PRODUCT&gt;_RELEASE_BASE</code></td><td>The byte store: <code>&lt;version&gt;/manifest.json</code> and the artifacts it names.</td></tr>
@@ -99,7 +99,7 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
 <ol class="steps">
   <li><div>Whether a person is present is decided once, before anything else: an explicit <code>CI</code> or <code>*_NON_INTERACTIVE=1</code> wins; otherwise a tty on stdin or <code>/dev/tty</code>.</div></li>
   <li><div>An entry may collect consent attended and then run the installer unattended. <code>self upgrade</code> does exactly this: it asks in the application, then launches the same bootstrap non-interactively with the version and the consent in the request.</div></li>
-  <li><div>Unattended, nothing prompts. Running the installer is the consent, and the receipt records who ran it and to what version; <code>--yes</code> only matters attended, where it skips the question. Optional side effects, such as removing another manager's copy or adding to <code>PATH</code>, default to no. Repair is the one thing an unattended run never does.</div></li>
+  <li><div>Unattended, nothing prompts. Running the installer is the consent to whatever the machine needs, repair included, and the receipt records who ran it and what was done; <code>--yes</code> only matters attended, where it skips the question. Optional side effects, such as removing another manager's copy or adding to <code>PATH</code>, default to no.</div></li>
 </ol>
 <h3 id="lock-settle">Lock and settle</h3>
 <ol class="steps">
@@ -109,7 +109,7 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
 <h3 id="worlds">Worlds</h3>
 <ol class="steps">
   <li><div>After settling, the installer reads the machine once: a readable stable slot is <strong>managed</strong>; a service installed before K is <strong>adopted</strong> by seeding stable from its running executable; unresolved recovery, a corrupt slot or a dead lock owner is <strong>broken</strong>; nothing is <strong>fresh</strong>.</div></li>
-  <li><div>Managed and adopted are K's transaction, with rollback. Fresh is verify, seed stable, start, probe: no transaction, no rollback, nothing to restore. Broken is refused unless a person asked for repair.</div></li>
+  <li><div>Managed and adopted are K's transaction, with rollback. Fresh is verify, seed stable, start, probe: no transaction, no rollback, nothing to restore. Broken is repaired, and the run says so.</div></li>
   <li><div>An installation owned by another manager, such as a package manager, is held, exit 2. The installer may say where it is and, attended, offer to remove it. It never removes it unattended.</div></li>
   <li><div>A target older than what is installed is held, exit 2, unless the request says the downgrade is intended. Refusing to downgrade is not success.</div></li>
 </ol>
@@ -121,7 +121,7 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
 </ol>
 <h3 id="repair">Repair</h3>
 <ol class="steps">
-  <li><div>Repair is its own request, id and consent for this machine. A failed upgrade never escalates to it; a request that only names a version cannot reach it; it never runs unattended.</div></li>
+  <li><div>Repair is what a broken machine gets, and only a broken machine: a failed upgrade never escalates to it, and on a machine that can be upgraded a repair request is held. Attended, it is asked about once like any other action, naming what will be quarantined. Unattended, running the installer is the consent, as for everything else.</div></li>
   <li><div>Settle first. Never under a live lock. Quarantine K's state by one atomic rename; delete nothing; never touch data outside the slots. Stop an unresponsive service only by an identity you recorded, never a bare pid.</div></li>
   <li><div>Install and probe exactly as an upgrade would, then <code>bootstrapStable</code>, so the next upgrade is a normal transaction. No rollback; the receipt says <em>repaired</em>, never <em>promoted</em>, and names the quarantine, the version and the approver. What repair must keep is the normative <a href="design.html#repair-boundary">repair boundary</a>.</div></li>
 </ol>
@@ -145,7 +145,7 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
     <tr><td>Rolled back <span class="tag cond">1</span></td><td><code>Candidate 2.3.0 failed probe. Rolled back; 2.2.1 running.</code></td><td>Say why the candidate failed.</td><td>Never retry the same target on its own.</td></tr>
     <tr><td>Held <span class="tag cond">2</span></td><td><code>Held: &lt;reason&gt;. Nothing changed. Retry with a new id.</code></td><td>Explain: owned elsewhere, older target, declined, another installer running.</td><td>The caller decides. No retry.</td></tr>
     <tr><td>Unresolved <span class="tag cond">3</span></td><td><code>Cannot settle. Recover with: install.sh recover &lt;path&gt;.</code></td><td>Print the recovery file.</td><td>Keep the file; no new work until it is settled.</td></tr>
-    <tr><td>Broken</td><td><code>Stable 2.2.1 won't start. Repair = quarantine + fresh 2.3.0. No rollback. Proceed? [y/n]</code></td><td>Offer repair; require a yes for this machine.</td><td><span class="tag no">stop</span> exit 2 <code>Repair needs consent; no one here. Nothing changed.</code></td></tr>
+    <tr><td>Broken</td><td><code>Repaired: quarantined &lt;path&gt;; 2.3.0 installed and running (pid 1234).</code></td><td>Ask first: <code>Stable 2.2.1 won't settle. Repair = quarantine + fresh 2.3.0. No rollback. Proceed? [y/N]</code></td><td>Repair, and say what was quarantined.</td></tr>
     <tr><td>Same id again</td><td>The archived receipt</td><td>No lifecycle effects.</td><td>Same.</td></tr>
   </tbody>
 </table>
