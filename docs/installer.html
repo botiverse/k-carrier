@@ -24,7 +24,7 @@
   <p class="lede">What an installer built on K does for every way a request can arrive, every machine it can land on, and every way it can end. K's transaction is code and is fixed. This contract wraps it, and is advisory.</p>
 </header>
 
-<div class="note"><p>Still settling. K ships the transaction, <code>bootstrapStable</code>, the lock and the receipts; the rest of this page is the installer's. The first implementation is <a href="https://github.com/botiverse/raft-computer-installer">raft-computer-installer</a>.</p></div>
+<div class="note"><p>Still settling. K ships the transaction, <code>bootstrapStable</code>, the lock and the receipts; the rest is the installer's. The reference implementation is <a href="https://github.com/botiverse/raft-computer-installer">raft-computer-installer</a>. Two shipped installers, Codex's and the current Raft one, are what this page was checked against; see <a href="prior-art.html#installers">prior art</a>.</p></div>
 
 <h2 id="problem">The problem</h2>
 <p>A request comes from the shell, from the application, or from a remote authority. Someone is there to answer a question, or nobody is. The machine has nothing installed, or an installation K manages, or one mid-upgrade, or one that predates K, or one that cannot start. Only the shell can reach a machine whose application is down, and only a person can consent to a repair, because a repair cannot be rolled back. Most installers answer the common cells of that space and improvise the rest, and the improvised cells are where machines get stuck.</p>
@@ -34,17 +34,58 @@
 <div class="stage"><iframe src="figures/entries-grid.html" title="Three entries by five worlds, and what attended and unattended runs may do" loading="lazy" scrolling="no"></iframe></div>
 <figcaption>Every cell has one answer. Grey cells are unreachable by that entry, not errors.</figcaption>
 </figure>
-<p id="request">Every entry hands the installer the same request: an <strong>id</strong>, an <strong>exact version</strong> and <strong>recorded consent</strong>. A channel is resolved to a version by the entry, and who approved it is recorded. A request selects nothing else. The same id sent twice replays the first receipt and touches nothing. Whether a person is present is decided once, before anything else: an explicit <code>CI</code> or <code>*_NON_INTERACTIVE=1</code> wins, otherwise a tty.</p>
 
-<h2 id="worlds">How the installer reads the machine</h2>
-<p>It settles any unfinished K work before it looks, so a machine mid-upgrade is never mistaken for anything else. Then, in order: a readable stable slot means managed; a service installed before K is adopted by seeding stable from it; unresolved recovery, a corrupt slot or a dead lock owner means broken; otherwise fresh. Only managed and upgrading have rollback.</p>
+<h2 id="run">One run, whatever the entry</h2>
 <figure class="fig embed">
-<div class="stage"><iframe src="figures/worlds.html" title="What the installer does when it arrives: five starting worlds, one destination" loading="lazy" scrolling="no"></iframe></div>
-<figcaption>Five starting worlds, one destination.</figcaption>
+<div class="stage"><iframe src="figures/run.html" title="Seven gates every run passes in order, and what each refuses" loading="lazy" scrolling="no"></iframe></div>
+<figcaption>Refusals happen before anything changes. Only the last gate can say success.</figcaption>
 </figure>
 
+<h2 id="rules">The rules</h2>
+<h3 id="request">Request</h3>
+<ol class="steps">
+  <li><div>Every entry hands the installer the same request: an <strong>id</strong>, an <strong>exact version</strong> and <strong>recorded consent</strong>. It selects nothing else: no code, no commands, no URLs.</div></li>
+  <li><div>A channel is resolved to a version by the entry, before the installer runs, and consent is to that version. Consenting to "latest" is not consent.</div></li>
+  <li><div>The same id with the same target replays the first receipt and touches nothing. A different target for the same id is refused. A new attempt is a new id.</div></li>
+</ol>
+<h3 id="presence">Presence</h3>
+<ol class="steps">
+  <li><div>Whether a person is present is decided once, before anything else: an explicit <code>CI</code> or <code>*_NON_INTERACTIVE=1</code> wins; otherwise a tty on stdin or <code>/dev/tty</code>.</div></li>
+  <li><div>An entry may collect consent attended and then run the installer unattended. <code>self upgrade</code> does exactly this: it asks in the application, then launches the same bootstrap non-interactively with the version and the consent in the request.</div></li>
+  <li><div>Unattended, nothing prompts and nothing is assumed. A request without an exact version and consent is refused with exit 2 before anything changes. Optional side effects, such as removing another manager's copy or adding to <code>PATH</code>, default to no.</div></li>
+</ol>
+<h3 id="lock-settle">Lock and settle</h3>
+<ol class="steps">
+  <li><div>One installer per state directory, under K's lock. Another live owner is held, exit 2. Liveness is decided by the lock protocol, never by age.</div></li>
+  <li><div>Every run finishes unfinished K work first, whatever was asked, and reports what it settled alongside its own outcome. This is recovery, not repair; it needs no network and no consent. Recovery that cannot settle is unresolved, exit 3, and no new work is admitted until it is.</div></li>
+</ol>
+<h3 id="worlds">Worlds</h3>
+<ol class="steps">
+  <li><div>After settling, the installer reads the machine once: a readable stable slot is <strong>managed</strong>; a service installed before K is <strong>adopted</strong> by seeding stable from its running executable; unresolved recovery, a corrupt slot or a dead lock owner is <strong>broken</strong>; nothing is <strong>fresh</strong>.</div></li>
+  <li><div>Managed and adopted are K's transaction, with rollback. Fresh is verify, seed stable, start, probe: no transaction, no rollback, nothing to restore. Broken is refused unless a person asked for repair.</div></li>
+  <li><div>An installation owned by another manager, such as a package manager, is held, exit 2. The installer may say where it is and, attended, offer to remove it. It never removes it unattended.</div></li>
+  <li><div>A target older than what is installed is held, exit 2, unless the request says the downgrade is intended. Refusing to downgrade is not success.</div></li>
+</ol>
+<h3 id="verify">Verify</h3>
+<ol class="steps">
+  <li><div>The release authority and the byte store are different trust domains. When both describe the target, their sha256 and size must agree before any download.</div></li>
+  <li><div>Bytes are verified against the manifest, after decompression if compressed, and again after staging. The staged executable must match the host platform and must report the requested version when asked. Any mismatch fails before any change, exit 1.</div></li>
+  <li><div>Downloads fail before anything changes; recovery needs none. Credentials for a private source come from the environment unattended, and may be prompted for attended.</div></li>
+</ol>
+<h3 id="repair">Repair</h3>
+<ol class="steps">
+  <li><div>Repair is its own request, id and consent for this machine. A failed upgrade never escalates to it; a request that only names a version cannot reach it; it never runs unattended.</div></li>
+  <li><div>Settle first. Never under a live lock. Quarantine K's state by one atomic rename; delete nothing; never touch data outside the slots. Stop an unresponsive service only by an identity you recorded, never a bare pid.</div></li>
+  <li><div>Install and probe exactly as an upgrade would, then <code>bootstrapStable</code>, so the next upgrade is a normal transaction. No rollback; the receipt says <em>repaired</em>, never <em>promoted</em>, and names the quarantine, the version and the approver. What repair must keep is the normative <a href="design.html#repair-boundary">repair boundary</a>.</div></li>
+</ol>
+<h3 id="report">Report</h3>
+<ol class="steps">
+  <li><div>Success is claimed only after a live probe reports the requested version, a pid and a new start id. An accepted request, a finished download, a replaced file, a started process: none of these is success.</div></li>
+  <li><div>Every run ends in one printed line and one exit code: 0 promoted or up to date, 1 failed or rolled back, 2 held, 3 unresolved. The line says what happened, what did not change, and what to do next.</div></li>
+  <li><div>Attended, the line explains and may point at a next command. Unattended, it is the same line plus the code, and the caller decides; the installer never retries the same target on its own.</div></li>
+</ol>
+
 <h2 id="obligations">What each outcome prints</h2>
-<p>One line and one exit code. Success is claimed after the live probe, never on acceptance. Attended runs explain and may ask; unattended runs return the code and reason and let the caller decide.</p>
 <div class="table-scroll wide">
 <table class="grid">
   <thead><tr><th>Outcome</th><th>The line</th><th>Attended adds</th><th>Unattended adds</th></tr></thead>
@@ -55,23 +96,13 @@
     <tr><td>Promoted <span class="tag yes">0</span></td><td><code>2.2.1 → 2.3.0 promoted. Running pid 1234. Receipt i_9f.</code></td><td>Version, pid and start id come from the readback.</td><td>Same.</td></tr>
     <tr><td>Failed before any change <span class="tag cond">1</span></td><td><code>Failed before any change: &lt;reason&gt;. 2.2.1 still running.</code></td><td></td><td>Never retry the same target on its own.</td></tr>
     <tr><td>Rolled back <span class="tag cond">1</span></td><td><code>Candidate 2.3.0 failed probe. Rolled back; 2.2.1 running.</code></td><td>Say why the candidate failed.</td><td>Never retry the same target on its own.</td></tr>
-    <tr><td>Held <span class="tag cond">2</span></td><td><code>Held: &lt;reason&gt;. Nothing changed. Retry with a new id.</code></td><td>Explain: owned elsewhere, incompatible, declined.</td><td>The caller decides. No retry.</td></tr>
+    <tr><td>Held <span class="tag cond">2</span></td><td><code>Held: &lt;reason&gt;. Nothing changed. Retry with a new id.</code></td><td>Explain: owned elsewhere, older target, declined, another installer running.</td><td>The caller decides. No retry.</td></tr>
     <tr><td>Unresolved <span class="tag cond">3</span></td><td><code>Cannot settle. Recover with: install.sh recover &lt;path&gt;.</code></td><td>Print the recovery file.</td><td>Keep the file; no new work until it is settled.</td></tr>
     <tr><td>Broken</td><td><code>Stable 2.2.1 won't start. Repair = quarantine + fresh 2.3.0. No rollback. Proceed? [y/n]</code></td><td>Offer repair; require a yes for this machine.</td><td><span class="tag no">stop</span> exit 2 <code>Repair needs consent; no one here. Nothing changed.</code></td></tr>
     <tr><td>Same id again</td><td>The archived receipt</td><td>No lifecycle effects.</td><td>Same.</td></tr>
   </tbody>
 </table>
 </div>
-
-<h2 id="repair">Repair</h2>
-<p>The one forceful thing the installer does, and the one K never does.</p>
-<ul>
-  <li>Its own request, id and consent for this machine. A failed upgrade never escalates to it; a request that only names a version cannot reach it; it never runs unattended.</li>
-  <li>Recovery first, and never while a K lock owner is alive.</li>
-  <li>Quarantine K's state by one atomic rename; delete nothing; never touch data outside the slots. Stop an unresponsive service only by an identity you recorded, never a bare pid.</li>
-  <li>Install and probe exactly as an upgrade would, then <code>bootstrapStable</code>, so the next upgrade is a normal transaction. No rollback; the receipt says <em>repaired</em>, names the quarantine, the version and the approver.</li>
-</ul>
-<p>What repair must keep so K's state stays sound is the normative <a href="design.html#repair-boundary">repair boundary</a>. Whether to offer it is a product choice.</p>
 
 <footer class="page-foot"><a href="guide.html">Back: How an upgrade works</a><a href="example.html">Next: Runnable example</a></footer>
 </main>

@@ -70,6 +70,13 @@
 <p>The original test survey also informed table-driven platform tests and observing events after a known marker. K adds its own fault injection, seeded simulation and real-runner tests; these do not establish exhaustive platform reliability. See the <a href="harness-design.html">harness guide</a> for what each layer proves.</p>
 <div class="note"><p>These are conceptual influences. The project's attribution record states that no upstream implementation code was copied.</p></div>
 
+<h2 id="installers">Two shipped installers, read against the contract</h2>
+<p>The <a href="installer.html">installer contract</a> was checked against two <code>curl | sh</code> installers in September 2026. Neither is a claim about the products beyond what the scripts do.</p>
+<dl class="defs">
+  <div><dt>Codex <code>install.sh</code></dt><dd>Self-update is the CLI re-running the bootstrap with <code>CODEX_NON_INTERACTIVE=1</code> after the TUI exits; the contract's <code>self upgrade</code> row is that shape. Presence is one variable, then <code>/dev/tty</code>, then stdin. Unattended defaults every prompt to no rather than refusing, which works because the upgrade itself never asks. Versioned release directories and an atomically swapped <code>current</code> symlink are slots without a rollback command. Another manager's copy is detected and only ever removed on an attended yes. The lock reclaims by age, which K refuses. Consent is to "latest"; the channel is resolved inside the installer, which the contract moves into the entry.</dd></div>
+  <div><dt>Raft Computer <code>install.sh</code>, before this contract</dt><dd>The strongest verification chain seen: release authority and CDN must agree on sha256 and size before download, bytes are hashed before and after staging, the binary's platform is checked against the host, and the candidate must report the requested version. The contract's verify rules are taken from it. It has no presence model, no consent and no lock; a refused downgrade exits 0; and whenever K state exists it stops the service, quarantines the state and overwrites the binary, which is the contract's repair path taken by default and without consent. The reference implementation replaces that with settle, then managed upgrade, and repair only on request.</dd></div>
+</dl>
+
 <h2 id="external-installer-research">External installer research</h2>
 <p>The 2026-09-06 survey asked whether install, self-update and remote upgrade could share an external executor without introducing another permanent service. These are source-reading observations and K design inferences, not results from running those products. Moving upstream links are not a frozen comparison.</p>
 
