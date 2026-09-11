@@ -24,20 +24,19 @@
   <p class="lede">How K upgrades a machine nobody operates: one external installer, one journaled transaction, one receipt, and a defined answer for every way it can go wrong.</p>
 </header>
 
-<h2 id="entrypoints">Who starts an upgrade, and what they may ask for</h2>
-<p>An upgrade is requested from three places, and in one of them nobody is at the machine. Before any mechanism, this is the constraint to design for: who is present to approve, and how far they are from the consequences. Two kinds of action exist. A <strong>safe</strong> one is verified and reversible. A <strong>forceful</strong> one is consented and has no rollback.</p>
+<h2 id="entrypoints">Who can ask for what</h2>
+<p>Nothing in this section is specific to K; it is the shape of the problem any external installer has. What may be asked depends on two things: whether the application is running, which decides who can reach the machine at all, and whether the action is reversible, which decides who may approve it. An upgrade can be rolled back. A repair cannot, so it needs explicit consent from someone who can see the result.</p>
 <div class="table-scroll wide">
 <table class="grid">
-  <thead><tr><th>Entrypoint</th><th>Present</th><th>Safe</th><th>Forceful</th></tr></thead>
+  <thead><tr><th>On the machine</th><th>A person at the shell<br><span class="tag who">install.sh</span> <span class="tag who">self upgrade</span></th><th>A remote authority<br><span class="tag who">through the running application</span></th></tr></thead>
   <tbody>
-    <tr><td>A person at the shell, through <code>install.sh</code> or the application's <code>self upgrade</code></td><td><span class="tag who">person at the shell</span><br>Both run the same bootstrap; <code>self upgrade</code> only resolves a channel to a version and asks for consent first.</td><td><span class="tag yes">anything</span><br><code>install.sh</code> alone also does a clean install: a fresh machine, or one whose application cannot start.</td><td><span class="tag cond">explicit request</span><br>Through <code>install.sh</code>, since a repair starts from nothing runnable.</td></tr>
-    <tr><td>Remote control from a server</td><td><span class="tag who">nobody at the machine</span><br>An authenticated remote authority.</td><td><span class="tag yes">a reversible upgrade</span><br>To an exact version, with the consent recorded in the request.</td><td><span class="tag no">never from a failed upgrade</span><br>A remote repair, if offered, is its own attributed action.</td></tr>
-      </tbody>
+    <tr><td>Nothing installed</td><td><span class="tag yes">install</span><br>Only <code>install.sh</code>; there is nothing to run <code>self upgrade</code> from.</td><td><span class="tag no">unreachable</span></td></tr>
+    <tr><td>The application is running</td><td><span class="tag yes">upgrade</span> <span class="tag yes">rollback</span><br><span class="tag cond">repair, on explicit request</span></td><td><span class="tag yes">upgrade</span> <span class="tag yes">rollback</span><br>To an exact version, with the approver recorded in the request. Never a repair as the follow-up to a failed upgrade.</td></tr>
+    <tr><td>The application cannot start</td><td><span class="tag cond">repair, on explicit request</span><br>Only <code>install.sh</code>.</td><td><span class="tag no">unreachable</span></td></tr>
+  </tbody>
 </table>
 </div>
-<p><code>self upgrade</code> adds nothing the bootstrap cannot do. It must pin the installer it downloads, and it must launch the installer outside the application's service unit, because the installer is about to stop that application. A request that originates inside the running service is the remote row, whoever typed it.</p>
-<p>The farther the approver is from the machine, the narrower the action. In every cell the outcome must be a receipt on the machine, and success may be claimed only after a live probe, never when the request was accepted. Everything below exists to make that rule hold.</p>
-
+<p><code>self upgrade</code> is a convenience over <code>install.sh</code>: it resolves a channel to a version and asks for consent, then runs the same bootstrap with a pinned installer, launched outside the application's service unit because the installer is about to stop that application. The farther the approver is from the machine, the narrower the action, and in every cell success is claimed only after a live probe, never when the request was accepted.</p>
 
 <h2 id="worlds">What is already on the machine</h2>
 <p>The second constraint: the same request means something different depending on what is already there. There are four starting worlds. K's transaction covers one; the installer decides the rest.</p>

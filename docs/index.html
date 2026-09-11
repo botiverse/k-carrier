@@ -33,7 +33,7 @@
 
 <h2 id="why">Why upgrading is non-trivial</h2>
 <p>Downloading a new executable is only the beginning. The application may still be running. Power may fail halfway through replacement. The new version may fail to start on one particular machine. Replacing the file proves nothing about whether the service came back. And the installed updater may itself be too old or broken to help.</p>
-<p>Two more constraints shape the design, and the guide starts from them: <a href="guide.html#entrypoints">who asks for an upgrade</a>, often from far away from the machine, and <a href="guide.html#worlds">what is already on the machine</a> when the request arrives.</p>
+<p>Two more constraints shape the design, and the guide starts from them: <a href="guide.html#entrypoints">who can ask for what</a>, often from far away from the machine, and <a href="guide.html#worlds">what is already on the machine</a> when the request arrives.</p>
 
 <h2 id="promise">What K promises</h2>
 <p>K stages verified bytes in a second slot, stops the service, starts and probes the candidate, then commits or restores the previous executable. A durable journal lets a later installer recover interrupted work. An upgrade ends in exactly one of three states:</p>
