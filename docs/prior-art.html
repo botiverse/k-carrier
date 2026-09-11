@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en" data-theme="brutal">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prior art and research · K</title>
+<meta name="description" content="Installer designs K draws on (rustup, Tailscale, Datadog), the ideas taken from each and their limits, and the external installer research behind the execution boundary.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;700&family=Geist+Mono:wght@400;700&display=swap">
+<link rel="stylesheet" href="assets/rui.css">
+<link rel="stylesheet" href="assets/site.css">
+<script defer src="assets/site.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="mark">K</span>k-carrier <small>docs</small></a>
+  <button class="menu-btn" type="button" aria-controls="nav" aria-expanded="false">Menu</button>
+</header>
+<nav id="nav" class="sidebar" aria-label="Documentation"></nav>
+
+<main id="main" class="page">
+<header class="page-head">
+  <h1>Prior art and research</h1>
+  <p class="lede">K draws on existing installer designs. This page records the ideas and their limits. It is not a claim that K supersedes every updater or that another project lacks a feature.</p>
+</header>
+
+<h2 id="design-influences">Design influences</h2>
+<p>The original surveys used upstream source snapshots or moving <code>main</code> links and were not exhaustive product audits. Attribution is summarized in <a href="https://github.com/botiverse/k-carrier/blob/main/NOTICE">NOTICE</a>.</p>
+<figure class="fig">
+<svg viewBox="0 0 960 250" role="img" aria-labelledby="figinfl">
+  <title id="figinfl">Three sources each contribute one idea to K</title>
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--line-strong)"/></marker></defs>
+  <g transform="translate(20,20)"><rect x="4" y="4" width="270" height="96" class="k-shadow"/><rect width="270" height="96" class="k-box"/>
+    <text x="16" y="28" class="k-title">Rustup</text>
+    <text x="16" y="54" class="k-text">Thin bootstrap; an installer that</text>
+    <text x="16" y="74" class="k-text">runs apart from the installed program</text>
+  </g>
+  <g transform="translate(345,20)"><rect x="4" y="4" width="270" height="96" class="k-shadow"/><rect width="270" height="96" class="k-box"/>
+    <text x="16" y="28" class="k-title">Tailscale clientupdate</text>
+    <text x="16" y="54" class="k-text">Respect installation ownership;</text>
+    <text x="16" y="74" class="k-text">replacing bytes is not a restart</text>
+  </g>
+  <g transform="translate(670,20)"><rect x="4" y="4" width="270" height="96" class="k-shadow"/><rect width="270" height="96" class="k-box"/>
+    <text x="16" y="28" class="k-title">Datadog installer</text>
+    <text x="16" y="54" class="k-text">Stable/experiment slots with</text>
+    <text x="16" y="74" class="k-text">promotion and rollback</text>
+  </g>
+  <line x1="155" y1="120" x2="155" y2="150" class="k-line"/>
+  <line x1="480" y1="120" x2="480" y2="150" class="k-line"/>
+  <line x1="805" y1="120" x2="805" y2="150" class="k-line"/>
+  <path d="M155 150 L805 150" class="k-line"/>
+  <line x1="480" y1="150" x2="480" y2="176" class="k-line" marker-end="url(#ah)"/>
+  <g transform="translate(330,180)"><rect x="4" y="4" width="300" height="50" class="k-shadow"/><rect width="300" height="50" class="k-hi"/>
+    <text x="150" y="31" text-anchor="middle" class="k-bold">K: conceptual influences only</text>
+  </g>
+  <text x="480" y="246" text-anchor="middle" class="k-muted">No upstream implementation code was copied.</text>
+</svg>
+</figure>
+<div class="table-scroll wide">
+<table class="grid">
+  <thead><tr><th>Source</th><th>Idea used in K</th><th>Boundary</th></tr></thead>
+  <tbody>
+    <tr><td><a href="https://github.com/rust-lang/rustup">Rustup</a></td><td>Thin bootstrap and an installer that can execute independently of the installed program</td><td>Helper code still has a version, trust requirements and platform-specific replacement constraints</td></tr>
+    <tr><td><a href="https://github.com/tailscale/tailscale/tree/main/clientupdate">Tailscale clientupdate</a></td><td>Respect installation ownership; distinguish replacing bytes from restarting the service</td><td>K uses an external runner; it does not embed the transaction in the application daemon</td></tr>
+    <tr><td><a href="https://github.com/DataDog/datadog-agent/tree/main/pkg/fleet">Datadog installer</a></td><td>Stable/experiment slots with promotion and rollback</td><td>K does not adopt a package catalog, permanent installer daemon or fleet control plane</td></tr>
+    <tr><td><a href="https://github.com/tailscale/tailscale/tree/main/clientupdate/distsign">Tailscale distsign</a></td><td>A studied example of distribution authentication</td><td>K currently checks SHA-256 and size, not publisher signatures; no signing roadmap is implied</td></tr>
+  </tbody>
+</table>
+</div>
+<p>The <a href="#external-installer-research">external installer research</a> below gives source links and explains the execution-boundary decision. K's supported contract is defined by its <a href="design.html">design</a>, not by feature comparisons with other projects.</p>
+<p>The original test survey also informed table-driven platform tests and observing events after a known marker. K adds its own fault injection, seeded simulation and real-runner tests; these do not establish exhaustive platform reliability. See the <a href="harness-design.html">harness guide</a> for what each layer proves.</p>
+<div class="note"><p>These are conceptual influences. The project's attribution record states that no upstream implementation code was copied.</p></div>
+
+<h2 id="external-installer-research">External installer research</h2>
+<p>The 2026-09-06 survey asked whether install, self-update and remote upgrade could share an external executor without introducing another permanent service. These are source-reading observations and K design inferences, not results from running those products. Moving upstream links are not a frozen comparison.</p>
+
+<h3 id="rustup">Rustup: a thin bootstrap and replaceable installer</h3>
+<p><a href="https://github.com/rust-lang/rustup/blob/main/rustup-init.sh">rustup-init.sh</a> selects a platform download and runs the installer. The shell does not implement Rust installation. <a href="https://github.com/rust-lang/rustup/blob/main/src/cli/self_update.rs">Self-update</a> also obtains an installer executable; the helper has a release version and may remain until a later invocation cleans it up.</p>
+<p><a href="https://github.com/rust-lang/rustup/blob/main/src/cli/self_update/unix.rs">Unix replacement</a> and <a href="https://github.com/rust-lang/rustup/blob/main/src/cli/self_update/windows.rs">Windows replacement</a> handle different execution/deletion constraints. A different PID alone does not prove that an updater can survive stopping a service or replace a running Windows executable safely.</p>
+<div class="note"><p><strong>K decision:</strong> share an independently runnable installer across entrypoints. Keep its persistent state, runtime, trust and recovery ownership explicit.</p></div>
+
+<h3 id="tailscale">Tailscale: installation and service readiness are separate</h3>
+<p>The surveyed Linux binary path in <a href="https://github.com/tailscale/tailscale/blob/main/clientupdate/clientupdate.go">clientupdate.go</a> attempts a service restart separately and reports when bytes were updated but restart failed. Platform/package-specific paths respect the installation owner. This observation does not establish whether other paths have rollback.</p>
+<div class="note"><p><strong>K decision:</strong> successful installation is insufficient for service promotion. Probe the live process and defer installations owned by another manager.</p></div>
+
+<h3 id="datadog">Datadog: reuse slots, not a second control plane</h3>
+<p>The <a href="#design-influences">earlier survey</a> informed K's stable/experiment slots. The published <a href="https://pkg.go.dev/github.com/DataDog/datadog-agent/test/new-e2e/tests/installer/windows">Windows installer test interface</a> distinguishes direct install from starting, promoting and stopping experiments. The follow-up did not verify all current installer internals.</p>
+<div class="note"><p><strong>K decision:</strong> retain the existing transaction, lock, journal and host adapter. A disposable runner can use them without a permanent installer service or a parallel remote-job database. Recovery and archived receipts remain local.</p></div>
+
+<p>The resulting <a href="design.html">design</a> specifies a built installer, a bounded request protocol and an external controller. Product data compatibility, platform packaging and remote authorization remain product responsibilities.</p>
+
+<footer class="page-foot"><span></span><a href="formal.html">Back: Formal model</a></footer>
+</main>
+</body>
+</html>

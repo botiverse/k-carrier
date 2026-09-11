@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en" data-theme="brutal">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design · K</title>
+<meta name="description" content="The normative contract for K's execution model, transaction, supervision, controller boundary and repair boundary.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;700&family=Geist+Mono:wght@400;700&display=swap">
+<link rel="stylesheet" href="assets/rui.css">
+<link rel="stylesheet" href="assets/site.css">
+<script defer src="assets/site.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="mark">K</span>k-carrier <small>docs</small></a>
+  <button class="menu-btn" type="button" aria-controls="nav" aria-expanded="false">Menu</button>
+</header>
+<nav id="nav" class="sidebar" aria-label="Documentation"></nav>
+
+<main id="main" class="page">
+<header class="page-head">
+  <h1>Design</h1>
+  <p class="lede">The normative contract for K's execution model, transaction, supervision and controller boundary. It states obligations; it does not explain them. Read <a href="guide.html">how an upgrade works</a> first for the narrative and vocabulary, and the <a href="reference.html">reference</a> for wire formats, exit codes, budgets and file layout.</p>
+</header>
+
+<h2 id="execution-and-trust">Execution and trust</h2>
+<figure class="fig">
+<svg viewBox="0 0 960 270" role="img" aria-labelledby="figx">
+  <title id="figx">Entry, supervisor, worker, state directory, controller and application, with the trust boundary</title>
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--line-strong)"/></marker></defs>
+  <rect x="200" y="14" width="540" height="246" class="k-dash"/>
+  <text x="212" y="36" class="k-muted">outside the application slots and service unit</text>
+  <g transform="translate(20,60)"><rect x="4" y="4" width="150" height="76" class="k-shadow"/><rect width="150" height="76" class="k-box"/><text x="75" y="28" text-anchor="middle" class="k-bold">Entry</text><text x="75" y="48" text-anchor="middle" class="k-mono">bootstrap, CLI,</text><text x="75" y="64" text-anchor="middle" class="k-mono">remote control</text></g>
+  <g transform="translate(215,60)"><rect x="4" y="4" width="150" height="76" class="k-shadow"/><rect width="150" height="76" class="k-box"/><text x="75" y="28" text-anchor="middle" class="k-bold">Supervisor</text><text x="75" y="48" text-anchor="middle" class="k-mono">verify and launch</text><text x="75" y="64" text-anchor="middle" class="k-mono">the runner</text></g>
+  <g transform="translate(410,60)"><rect x="4" y="4" width="150" height="76" class="k-shadow"/><rect width="150" height="76" class="k-hi"/><text x="75" y="28" text-anchor="middle" class="k-bold">Worker</text><text x="75" y="52" text-anchor="middle" class="k-mono">K + product adapter</text></g>
+  <g transform="translate(590,60)"><rect x="4" y="4" width="130" height="76" class="k-shadow"/><rect width="130" height="76" class="k-box"/><text x="65" y="28" text-anchor="middle" class="k-bold">Controller</text><text x="65" y="48" text-anchor="middle" class="k-mono">product lifecycle</text><text x="65" y="64" text-anchor="middle" class="k-mono">program</text></g>
+  <g transform="translate(790,60)"><rect x="4" y="4" width="150" height="76" class="k-shadow"/><rect width="150" height="76" class="k-box"/><text x="75" y="28" text-anchor="middle" class="k-bold">Application</text><text x="75" y="52" text-anchor="middle" class="k-mono">in its service unit</text></g>
+  <g transform="translate(410,170)"><rect x="4" y="4" width="150" height="76" class="k-shadow"/><rect width="150" height="76" class="k-inset"/><text x="75" y="26" text-anchor="middle" class="k-bold">State</text><text x="75" y="46" text-anchor="middle" class="k-mono">lock, journal, slots,</text><text x="75" y="64" text-anchor="middle" class="k-mono">receipts</text></g>
+  <line x1="172" y1="98" x2="213" y2="98" class="k-line" marker-end="url(#ah)"/>
+  <line x1="367" y1="98" x2="408" y2="98" class="k-line" marker-end="url(#ah)"/>
+  <line x1="562" y1="98" x2="588" y2="98" class="k-line" marker-end="url(#ah)"/>
+  <line x1="722" y1="98" x2="788" y2="98" class="k-line" marker-end="url(#ah)"/>
+  <line x1="485" y1="140" x2="485" y2="168" class="k-line" marker-end="url(#ah)"/>
+</svg>
+<figcaption>Requests select an action and a target version. Code, commands and download URLs are fixed at build time.</figcaption>
+</figure>
+<ul>
+  <li>The runner and its runtime live outside the application slots and service unit. Stopping the application must leave the worker alive. A child process can still belong to a systemd cgroup or Windows job; the publisher must arrange isolation.</li>
+  <li>The supervisor retains recovery code until settlement. Installation state persists. An OS hook or operator must restart installation after reboot.</li>
+  <li>The adapter is fixed at build time. Requests select an action and a target version, never code, commands or download URLs.</li>
+  <li>The publisher authenticates distribution metadata and caller authority. K checks artifact SHA-256 and size; these checks do not establish publisher identity. See <a href="integration.html#package-the-installer">packaging</a>.</li>
+</ul>
+
+<h2 id="components">Components</h2>
+<p>Paths are relative to <a href="https://github.com/botiverse/k-carrier/tree/main/core/src"><code>core/src/</code></a>.</p>
+<table class="grid">
+  <thead><tr><th>Component</th><th>Responsibility</th></tr></thead>
+  <tbody>
+    <tr><td><code>launcher/</code></td><td>Acquire, verify, execute and clean runner code; supervise recovery</td></tr>
+    <tr><td><code>protocol/</code></td><td>Validate the bounded request/response contract</td></tr>
+    <tr><td><code>runner/</code></td><td>Serve stdin/stdout, execute requests and map outcomes to exit codes</td></tr>
+    <tr><td><code>createRunner.ts</code></td><td>Assemble source, host, policy and transaction state</td></tr>
+    <tr><td><code>lifecycle/</code></td><td>Stop/start/probe the application, including command-based control</td></tr>
+    <tr><td><code>artifact/</code>, <code>txn/</code>, <code>converge/</code></td><td>Verified acquisition, durable transactions and readiness predicates</td></tr>
+  </tbody>
+</table>
+<dl class="defs">
+  <div><dt><code>createRunner</code></dt><dd><code>createRunner(options)</code> constructs the transaction interface.</dd></div>
+  <div><dt><code>serveRunner</code></dt><dd><code>serveRunner(factory)</code> serves it in the runner process.</dd></div>
+  <div><dt><code>launchRunner</code></dt><dd><code>launchRunner({release, request, scratchDir, interpreter?})</code> verifies and supervises a worker, writes one final response and returns its exit code.</dd></div>
+  <div><dt><code>superviseRunner</code></dt><dd>Returns the same result as data, including any retained <code>recoveryFile</code>.</dd></div>
+  <div><dt><code>resumeRunner</code></dt><dd><code>resumeRunner(recoveryFile)</code> verifies that retained runner and performs operation-bound recovery without distribution access.</dd></div>
+</dl>
+
+<h2 id="transaction-and-recovery">Transaction and recovery</h2>
+<p>Each installation has one lock, stable and experiment executable slots, and a journal. K stages verified candidate bytes, quiesces work, stops the old service, starts the candidate and evaluates live readiness. Passing candidates are promoted; failed candidates restore stable. Application data belongs outside the slots.</p>
+<figure class="fig">
+<svg viewBox="0 0 960 190" role="img" aria-labelledby="figph">
+  <title id="figph">The seven journal phases and the two recovery rules around promote intent</title>
+  <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--line-strong)"/></marker></defs>
+  <rect x="784" y="14" width="8" height="120" class="k-hi"/>
+  <g transform="translate(20,50)"><rect x="3" y="3" width="80" height="44" class="k-shadow"/><rect width="80" height="44" class="k-box"/><text x="40" y="28" text-anchor="middle" class="k-mono">idle</text></g>
+  <g transform="translate(130,50)"><rect x="3" y="3" width="100" height="44" class="k-shadow"/><rect width="100" height="44" class="k-box"/><text x="50" y="28" text-anchor="middle" class="k-mono">staged</text></g>
+  <g transform="translate(260,50)"><rect x="3" y="3" width="130" height="44" class="k-shadow"/><rect width="130" height="44" class="k-box"/><text x="65" y="28" text-anchor="middle" class="k-mono">handing-over</text></g>
+  <g transform="translate(420,50)"><rect x="3" y="3" width="170" height="44" class="k-shadow"/><rect width="170" height="44" class="k-box"/><text x="85" y="28" text-anchor="middle" class="k-mono">running-experiment</text></g>
+  <g transform="translate(620,50)"><rect x="3" y="3" width="110" height="44" class="k-shadow"/><rect width="110" height="44" class="k-box"/><text x="55" y="28" text-anchor="middle" class="k-mono">readback</text></g>
+  <g transform="translate(820,20)"><rect x="3" y="3" width="120" height="44" class="k-shadow"/><rect width="120" height="44" class="k-ok"/><text x="60" y="28" text-anchor="middle" class="k-mono">promoted</text></g>
+  <g transform="translate(820,90)"><rect x="3" y="3" width="120" height="44" class="k-shadow"/><rect width="120" height="44" class="k-danger"/><text x="60" y="28" text-anchor="middle" class="k-mono">rolled-back</text></g>
+  <line x1="103" y1="72" x2="128" y2="72" class="k-line" marker-end="url(#ah2)"/>
+  <line x1="233" y1="72" x2="258" y2="72" class="k-line" marker-end="url(#ah2)"/>
+  <line x1="393" y1="72" x2="418" y2="72" class="k-line" marker-end="url(#ah2)"/>
+  <line x1="593" y1="72" x2="618" y2="72" class="k-line" marker-end="url(#ah2)"/>
+  <path d="M733 72 L760 72 L760 42 L818 42" class="k-line" marker-end="url(#ah2)"/>
+  <path d="M733 72 L760 72 L760 112 L818 112" class="k-dash" marker-end="url(#ah2)"/>
+  <path d="M130 150 L130 160 L730 160 L730 150" class="k-hair"/>
+  <text x="430" y="180" text-anchor="middle" class="k-text">before durable promote intent: restore stable</text>
+  <path d="M820 150 L820 160 L940 160 L940 150" class="k-hair"/>
+  <text x="880" y="180" text-anchor="middle" class="k-text">after it: replay commit</text>
+</svg>
+<figcaption>Intent is journaled before effects. Recovery takes the same lock and uses existing slot bytes without release lookup.</figcaption>
+</figure>
+<p>A running candidate alone does not authorize commit. Corrupt or unknown state, and another live lock owner, prevent conflicting operations. Filesystem durability and controller behavior determine the real platform guarantees.</p>
+
+<h2 id="transaction-completion">Transaction completion</h2>
+<div class="note"><p><strong>Required for the initial release.</strong> Every started operation has an owner that waits for a durable terminal result or explicitly reports unresolved recovery. An installer invocation must first settle unfinished work before admitting a new upgrade. Recovering an interrupted operation does not retry its requested upgrade.</p></div>
+<h3 id="the-supervisor">The supervisor</h3>
+<ul>
+  <li>runs outside the application service unit;</li>
+  <li>retains the verified runner while the operation is active;</li>
+  <li>enforces execution and recovery budgets (<a href="reference.html#supervisor-budgets">values</a>);</li>
+  <li>starts a recovery worker after an abnormal exit;</li>
+  <li>stops supervising after completion or an explicit unresolved result.</li>
+</ul>
+<p>Recovery attempts and total elapsed time are bounded. Exhaustion preserves state and provides a recovery command rather than reporting success.</p>
+<h3 id="takeover">Takeover and binding</h3>
+<dl class="defs">
+  <div><dt>Observe exit first</dt><dd>Before starting a successor, the supervisor must observe the prior worker exit. The recovery worker then takes the lock and fences outstanding controller effects before replaying lifecycle actions. An expired deadline alone is insufficient; an unconfirmed exit forbids takeover.</dd></div>
+  <div><dt>Bind to the original id</dt><dd>Recovery must bind to the original operation id under K's transaction lock. If another operation has since run, recovery inspects or replays the original result without modifying the newer operation. Recovery reuses the existing journal and receipts; supervision does not create another transaction log.</dd></div>
+  <div><dt>Clean up after settlement</dt><dd>Persist the outcome, release owned resources, then remove disposable code. Never delete slots, a live owner's lock, or recovery logs to make an interrupted operation appear complete. If recovery remains unresolved, preserve the evidence and a verified means to invoke it again. Installer startup handles leftover work; machine reboot still requires an OS hook or operator to start the installer.</dd></div>
+  <div><dt>Budget every host call</dt><dd>Every engine host call has a positive budget. Uncertain effects retain the worker's lock until it exits. Bundled workers exit after flushing their response; custom in-process callers must also exit on <code>HostCallUncertain</code> rather than reuse that worker.</dd></div>
+  <div><dt>Local lock only</dt><dd>The lock is a local filesystem protocol requiring atomic creation and coherent directory reads (<a href="reference.html#lock-protocol">details</a>). It is not a distributed or NFS lock. Operation ids, receipt archival and replay rules are in the <a href="reference.html#receipts-and-retries">reference</a>.</dd></div>
+</dl>
+
+<h2 id="repair-boundary">Repair boundary</h2>
+<div class="note stop"><p>K's refusals forbid silent bypass: no part of K clears a live owner's lock, overwrites an incomplete stable slot, reconstructs missing history, or terminates a process by recorded pid.</p></div>
+<p>They do not forbid a product installer from repairing a machine K cannot, provided the repair stays outside K's transaction and keeps these obligations:</p>
+<dl class="defs">
+  <div><dt>Settle first</dt><dd>Run recovery to its terminal or unresolved result before repairing. Repair is never the automatic response to a failed upgrade.</dd></div>
+  <div><dt>Never under a live lock</dt><dd>Liveness is decided by the lock protocol, not by age.</dd></div>
+  <div><dt>Quarantine, do not delete</dt><dd>Slots, journal, lock, receipts and recovery logs move aside intact in one atomic rename. Data outside the slots is left alone.</dd></div>
+  <div><dt>Consent and receipt</dt><dd>Repair runs only on explicit, attributable consent for that machine and operation, and records what it displaced, what it installed and who approved it.</dd></div>
+  <div><dt>Re-enter K</dt><dd>Repair ends with <code>bootstrapStable</code> on the installed bytes and a live probe. Until then no upgrade may be admitted.</dd></div>
+  <div><dt>No rollback claim</dt><dd>Repair is reported as a repair, never as a promoted upgrade.</dd></div>
+</dl>
+<p>K supplies <code>bootstrapStable</code> and the lock protocol; whether to offer repair is a product decision.</p>
+
+<h2 id="host-control-contract">Host control contract</h2>
+<p><code>createRunner</code> requires a HostAdapter. Its operations and the controller's obligations:</p>
+<table class="grid">
+  <thead><tr><th>Operation</th><th>Controller obligation</th></tr></thead>
+  <tbody>
+    <tr><td><code>fence</code></td><td>Drain or fence previous controller effects; required when effects can outlive the worker</td></tr>
+    <tr><td><code>quiesce</code></td><td>Stop admission and durably park promised workloads; repeated calls safe</td></tr>
+    <tr><td><code>stop</code></td><td>Stop the specified slot's service and confirm termination</td></tr>
+    <tr><td><code>start</code></td><td>Start the selected artifact idempotently, without creating duplicate residents</td></tr>
+    <tr><td><code>healthProbe</code></td><td>Return version, pid and startId from one ready live instance</td></tr>
+    <tr><td><code>resume</code></td><td>Restore parked work on either candidate or rolled-back stable</td></tr>
+  </tbody>
+</table>
+<ul>
+  <li>The controller must work while the old application is down.</li>
+  <li><code>start</code> returning does not establish readiness; the probe does.</li>
+  <li>K probes once before handover and records that incarnation's <code>startId</code> with the handing-over intent. Readback evidence carrying the same <code>startId</code> is refused and rolls back: the old service was not replaced.</li>
+  <li><code>start</code> must not execute the artifact in place inside the slot on Windows; promotion renames slot directories and a running executable locks its directory. Copy or hard-link to a runtime path outside the slots.</li>
+  <li>A stateless service satisfies <code>quiesce</code> and <code>resume</code> by acknowledging. The obligations apply to workloads the product promises to preserve.</li>
+  <li>Adapters with no effects surviving their worker may omit <code>fence</code>. All other adapters must supply it and test it against their real service manager. <code>createCommandHost</code> always delivers <code>fence</code>; a command controller that queues nothing acknowledges it.</li>
+  <li>If OS lifecycle surfaces are declared, K also requires them to reference the promoted artifact before retiring their previous manager. Undeclared surfaces are not observed.</li>
+</ul>
+<p><code>createCommandHost</code> runs an external controller via argv without a shell, records the controller pid durably before each call, and drains recorded controllers before <code>fence</code> during recovery. Wire format, bounds and pid handling are in the <a href="reference.html#command-controller-protocol">reference</a>. The recorded pid is never used to kill an arbitrary process. <code>fence</code> acknowledgement is a product contract, not something K infers from process exit. Fire-and-forget stop cannot establish termination.</p>
+
+<h2 id="product-responsibilities">Product responsibilities</h2>
+<p>The adapter defines release lookup, installation ownership, consent, notification and compatibility policy. Package-manager-owned installations defer to their owner. K restores executables; products provide data-migration compatibility, backup and restore, and any promised workload continuity. Service upgrades can interrupt availability. Remote authorization, distribution channels and cloud reconnection belong to the product integration.</p>
+<p>Use the <a href="integration.html">integration guide</a> and <a href="example.html">service example</a> to build an installer. The <a href="test-plan.html">test plan</a> describes framework and product acceptance; <a href="prior-art.html">prior art</a> records design influences.</p>
+
+<footer class="page-foot"><a href="integration.html">Back: Integration</a><a href="reference.html">Next: Reference</a></footer>
+</main>
+</body>
+</html>

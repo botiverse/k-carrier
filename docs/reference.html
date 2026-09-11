@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en" data-theme="brutal">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reference · K</title>
+<meta name="description" content="Normative wire formats, exit codes, budgets and on-disk layout for K.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;700&family=Geist+Mono:wght@400;700&display=swap">
+<link rel="stylesheet" href="assets/rui.css">
+<link rel="stylesheet" href="assets/site.css">
+<script defer src="assets/site.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="mark">K</span>k-carrier <small>docs</small></a>
+  <button class="menu-btn" type="button" aria-controls="nav" aria-expanded="false">Menu</button>
+</header>
+<nav id="nav" class="sidebar" aria-label="Documentation"></nav>
+
+<main id="main" class="page">
+<header class="page-head">
+  <h1>Reference</h1>
+  <p class="lede">Normative wire formats, exit codes, budgets and on-disk layout. This page states what K does and requires, not why. For the reasoning, read the <a href="design.html">design</a>; for a narrative, the <a href="guide.html">guide</a>.</p>
+</header>
+
+<figure class="fig">
+<svg viewBox="0 0 960 250" role="img" aria-labelledby="figw">
+  <title id="figw">Two protocols: the runner protocol on stdin and stdout, and the command controller protocol between host and controller</title>
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--line-strong)"/></marker></defs>
+  <text x="20" y="30" class="k-title">Runner protocol</text>
+  <text x="520" y="30" class="k-title">Command controller protocol</text>
+  <line x1="480" y1="14" x2="480" y2="236" class="k-hair"/>
+  <!-- runner protocol -->
+  <g transform="translate(20,90)"><rect x="4" y="4" width="110" height="64" class="k-shadow"/><rect width="110" height="64" class="k-box"/><text x="55" y="28" text-anchor="middle" class="k-bold">Caller</text><text x="55" y="50" text-anchor="middle" class="k-mono">supervisor</text></g>
+  <g transform="translate(330,90)"><rect x="4" y="4" width="130" height="64" class="k-shadow"/><rect width="130" height="64" class="k-hi"/><text x="65" y="28" text-anchor="middle" class="k-bold">Runner</text><text x="65" y="50" text-anchor="middle" class="k-mono">K + adapter</text></g>
+  <line x1="132" y1="108" x2="328" y2="108" class="k-line" marker-end="url(#ah)"/><text x="230" y="98" text-anchor="middle" class="k-mono">stdin: one JSON request</text>
+  <line x1="328" y1="138" x2="132" y2="138" class="k-line" marker-end="url(#ah)"/><text x="230" y="158" text-anchor="middle" class="k-mono">stdout: one JSON response</text>
+  <text x="230" y="174" text-anchor="middle" class="k-mono">+ exit code 0, 1, 2 or 3</text>
+  <text x="395" y="184" text-anchor="middle" class="k-muted">stderr: logs</text>
+  <text x="240" y="222" text-anchor="middle" class="k-mono">actions: upgrade, recover, status</text>
+  <!-- controller protocol -->
+  <g transform="translate(520,90)"><rect x="4" y="4" width="130" height="64" class="k-shadow"/><rect width="130" height="64" class="k-box"/><text x="65" y="28" text-anchor="middle" class="k-bold">Host</text><text x="65" y="50" text-anchor="middle" class="k-mono">createCommandHost</text></g>
+  <g transform="translate(830,90)"><rect x="4" y="4" width="120" height="64" class="k-shadow"/><rect width="120" height="64" class="k-box"/><text x="60" y="28" text-anchor="middle" class="k-bold">Controller</text><text x="60" y="50" text-anchor="middle" class="k-mono">your program</text></g>
+  <line x1="652" y1="108" x2="828" y2="108" class="k-line" marker-end="url(#ah)"/><text x="740" y="98" text-anchor="middle" class="k-mono">stdin: one JSON request</text>
+  <line x1="828" y1="138" x2="652" y2="138" class="k-line" marker-end="url(#ah)"/><text x="740" y="158" text-anchor="middle" class="k-mono">stdout: ok + evidence</text>
+  <text x="740" y="174" text-anchor="middle" class="k-mono">bounded to 64 KiB, 30 s</text>
+  <text x="735" y="222" text-anchor="middle" class="k-mono">actions: fence, quiesce, stop, start, probe, resume</text>
+</svg>
+<figcaption>Different protocols. Upgrade, recover and status go to the runner; fence, quiesce, stop, start, probe and resume go to the application controller.</figcaption>
+</figure>
+
+<h2 id="protocol-v1">Protocol v1</h2>
+<p>One JSON request on stdin, one response on stdout, then exit. Logs go to stderr. Decoded input is bounded to 16,384 JavaScript string code units. Unknown fields, actions or protocol versions, invalid ids or targets, and a nonboolean <code>consented</code> are rejected before the adapter factory runs. Request ids and target strings are nonempty, trimmed strings of at most 256 code units.</p>
+
+<h3 id="requests">Requests</h3>
+<pre><code>{"protocolVersion":1,"action":"upgrade","id":"job-123","targetVersion":"2.0.0","consented":true}
+{"protocolVersion":1,"action":"recover"}
+{"protocolVersion":1,"action":"recover","expected":{"id":"job-123","targetVersion":"2.0.0"}}
+{"protocolVersion":1,"action":"status"}</code></pre>
+<dl class="defs">
+  <div><dt><code>consented</code></dt><dd>Records approval already obtained by an authenticated caller. It is not authorization from an untrusted client. Ownership and compatibility checks still apply.</dd></div>
+  <div><dt><code>expected</code></dt><dd>Binds automated recovery to one operation. The binding is checked under the lock before any controller action. Missing or mismatched history refuses recovery. A completed original operation replays its result even when newer work is pending. An operator <code>recover</code> without <code>expected</code> runs once against the current unfinished operation.</dd></div>
+</dl>
+
+<h3 id="actions-and-exit-codes">Actions and exit codes</h3>
+<div class="table-scroll wide">
+<table class="grid">
+  <thead><tr><th>Action</th><th>Effect</th><th class="n">0</th><th class="n">1</th><th class="n">2</th><th class="n">3</th></tr></thead>
+  <tbody>
+    <tr><td><code>upgrade</code></td><td>Install the exact requested version; a mismatched source result is rejected</td><td>promoted or up-to-date</td><td>failure or rollback</td><td>held</td><td>unresolved</td></tr>
+    <tr><td><code>recover</code></td><td>Settle persisted work under the same lock; never starts a new upgrade</td><td>successful or no recorded outcome</td><td>recorded failure or rollback</td><td>held receipt</td><td>unresolved</td></tr>
+    <tr><td><code>status</code></td><td>Read the current receipt without lifecycle calls</td><td>readable, including <code>genesis</code></td><td>unreadable</td><td></td><td></td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3 id="responses">Responses</h3>
+<p>Execution replies carry <code>protocolVersion</code>, <code>action</code>, <code>result</code>, <code>exitCode</code>, <code>operation</code> and <code>error</code>. Input rejection or adapter-construction failure may return only <code>protocolVersion</code>, <code>result</code>, <code>exitCode</code> and <code>error</code>. Termination can leave no complete response; inspect persistent state and recover.</p>
+<p><code>operation.kind</code> is <code>observed</code> (with the operation record), <code>genesis</code> (no operation recorded) or <code>unreadable</code>.</p>
+<ul>
+  <li>A successful upgrade completion must match the request id and target.</li>
+  <li>Exceptions cannot manufacture a rollback receipt.</li>
+  <li><code>status</code> exit 0 means readable; it does not prove current health.</li>
+  <li><code>recover</code> can return <code>result: "recovered"</code> with exit 1 after restoring stable and recording a rolled-back upgrade.</li>
+  <li>A supervisor that cannot settle returns <code>result: "recovery-required"</code>, exit 3, and a <code>recoveryFile</code> path.</li>
+</ul>
+
+<h2 id="receipts-and-retries">Receipts and retries</h2>
+<p><code>operation.json</code> holds the current operation. Before starting another, K archives a terminal receipt at <code>receipts/&lt;sha256(operation-id)&gt;.json</code> under the same lock. Archived receipts have no automatic garbage collection.</p>
+<ul>
+  <li>An id binds to one target. A same-id terminal retry returns the current or archived result without repeating lifecycle effects; a different target for the same id is rejected.</li>
+  <li>Recovery settles the interrupted operation, so retrying its id returns that outcome.</li>
+  <li>A new attempt, including one after a policy hold, needs a new id.</li>
+  <li>Replayed results are historical, not live observations.</li>
+  <li>Receipt retention is independent of transport delivery.</li>
+  <li>Unreadable records refuse operations; missing history cannot be reconstructed.</li>
+  <li><code>status</code> reads the current receipt only. There is no by-id status or archive-list action.</li>
+</ul>
+
+<h2 id="supervisor-budgets">Supervisor budgets</h2>
+<table class="grid">
+  <thead><tr><th>Budget</th><th>Default</th><th>Option</th></tr></thead>
+  <tbody>
+    <tr><td>Worker execution</td><td>10 minutes</td><td><code>executionTimeoutMs</code></td></tr>
+    <tr><td>Each recovery attempt</td><td>2 minutes</td><td><code>recoveryTimeoutMs</code></td></tr>
+    <tr><td>Recovery attempts</td><td>2</td><td><code>recoveryAttempts</code> (0 to 10)</td></tr>
+    <tr><td>Total</td><td>execution + 2 × recovery (14 minutes)</td><td><code>totalTimeoutMs</code></td></tr>
+    <tr><td>Exit observation after termination</td><td>1 second</td><td>fixed</td></tr>
+  </tbody>
+</table>
+<p>All budgets are positive integers. Artifact acquisition has separate transfer budgets derived from the artifact size (<code>artifactTransferPolicy</code>). An unconfirmed worker exit forbids takeover. Exhaustion preserves state and returns exit 3 with a recovery file; it never reports success.</p>
+
+<h2 id="engine-host-call-budget">Engine host-call budget</h2>
+<p>Every host call, including fence, readback, resume and recovery, has a positive budget, default 120 seconds (<code>hostCallBudgetMs</code>). A call whose effect is uncertain raises <code>HostCallUncertain</code>; the worker retains its lock until it exits. Bundled workers exit after flushing their response. An in-process caller that receives <code>HostCallUncertain</code> must also exit rather than reuse that worker.</p>
+
+<h2 id="command-controller-protocol">Command controller protocol</h2>
+<p><code>createCommandHost({stateDir, command, timeoutMs?})</code> runs an external controller via argv, without a shell.</p>
+<p>Request on stdin:</p>
+<pre><code>{"protocolVersion":1,"action":"fence"}
+{"protocolVersion":1,"action":"quiesce"}
+{"protocolVersion":1,"action":"stop","slot":"stable","artifactPath":"&lt;stateDir&gt;/slots/stable/artifact.bin"}
+{"protocolVersion":1,"action":"start","slot":"experiment","artifactPath":"&lt;stateDir&gt;/slots/experiment/artifact.bin"}
+{"protocolVersion":1,"action":"probe"}
+{"protocolVersion":1,"action":"resume"}</code></pre>
+<p>Response on stdout:</p>
+<pre><code>{"protocolVersion":1,"ok":true}
+{"protocolVersion":1,"ok":true,"evidence":{"version":"2.0.0","pid":4242,"startId":"..."}}</code></pre>
+<ul>
+  <li>Output is bounded to 64 KiB. Each call has a positive timeout, default 30 seconds.</li>
+  <li>A controller must do nothing without a complete request.</li>
+  <li><code>probe</code> evidence must come from one live service instance. The controller process's own pid is invalid evidence.</li>
+  <li>Reported errors exclude arbitrary stderr.</li>
+  <li>Before delivering a command, the host durably records the controller pid in a unique file under <code>controllers/</code>. Recovery waits for recorded controllers to exit, then calls <code>fence</code>. Failure or timeout there prevents lifecycle replay. The recorded pid is never used to kill an arbitrary process; pid reuse or inaccessible identity yields a conservative unresolved result.</li>
+  <li><code>fence</code> acknowledgement is a product contract. K cannot infer it from process exit. A fire-and-forget <code>stop</code> cannot establish termination.</li>
+</ul>
+
+<h2 id="lock-protocol">Lock protocol</h2>
+<p><code>upgrade.lock</code> has one live owner per state directory. Unique process-owned contender entries serialize creation and reclamation, including the partial-write window. Only entries of provably dead owners are reclaimed. Pid reuse conservatively refuses acquisition; age never proves that a live owner is dead. The protocol requires local atomic file creation and coherent directory reads. It is not a distributed or NFS lock.</p>
+
+<h2 id="state-directory-layout">State directory layout</h2>
+<pre class="tree">&lt;stateDir&gt;/
+  upgrade.lock            <i>live owner</i>
+  upgrade.lock.claims/    <i>contender entries</i>
+  journal.jsonl           <i>append-only write-ahead phase record, fsync'd per line</i>
+  operation.json          <i>current operation receipt</i>
+  receipts/&lt;sha256(id)&gt;.json
+  slots/stable/artifact.bin
+  slots/stable/VERSION
+  slots/experiment/artifact.bin
+  slots/experiment/VERSION
+  incoming/               <i>staging for verified downloads before slot placement</i>
+  controllers/            <i>recorded controller pids</i></pre>
+<p>Each slot holds one <code>artifact.bin</code> and its <code>VERSION</code>. Package layouts and additional install hooks need a product contract. Application data belongs outside the slots. <code>status</code> reads <code>operation.json</code> without taking the lock.</p>
+<p>Journal entries are <code>{seq, timestampMs, intent, detail}</code>. The <code>handing-over</code> entry's <code>detail.priorStartId</code> records the incarnation probed before the upgrade touched anything; it is absent when nothing was live. Renames and journal appends fsync the containing directory on POSIX. Slot publication also syncs the copied artifact, VERSION file and staging directory first. A failed directory sync stops the operation. Windows directory sync is a no-op and provides no equivalent power-loss durability guarantee.</p>
+
+<h2 id="supervisor-scratch-layout">Supervisor scratch layout</h2>
+<pre class="tree">&lt;scratchDir&gt;/k-runner-&lt;random&gt;/
+  runner.mjs | runner.bin   <i>verified runner (mode 0700)</i>
+  recovery.json             <i>invocation descriptor: file, interpreter, sha256, size, recover request</i></pre>
+<p><code>recovery.json</code> is an invocation descriptor, not a transaction log. It is removed after settlement and retained on an unresolved result. <code>resumeRunner(path)</code> re-verifies the runner against the recorded hash before executing it.</p>
+
+<h2 id="release-metadata">Release metadata</h2>
+<pre><code>{"version":"2.0.0","url":"https://.../service","sha256":"&lt;hex&gt;","size":123456,
+ "gzip":{"url":"https://.../service.gz","sha256":"&lt;hex&gt;","size":45678}}</code></pre>
+<p><code>sha256</code> and <code>size</code> always describe the installed bytes. When <code>gzip</code> is present K downloads and verifies the compressed object, bounds decompression, then verifies the canonical size and hash. Failure of a selected gzip object is terminal; K does not fall back to the canonical URL. Resume offsets refer to the compressed object.</p>
+
+<footer class="page-foot"><a href="design.html">Back: Design</a><a href="test-plan.html">Next: Test plan</a></footer>
+</main>
+</body>
+</html>

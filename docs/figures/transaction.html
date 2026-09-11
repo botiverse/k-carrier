@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One upgrade, start to finish</title>
+<style>
+:root {
+  --ink: #111; --paper: #fffdf7; --soft: #f7f7f3; --muted: rgba(17,17,17,.52);
+  --yellow: #ffe66b; --pink: #ff7aa2; --blue: #7bc8ff; --green: #98e59b;
+  --orange: #ffb25f; --purple: #b7a1ff; --red: #ff7b73;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body { color-scheme: light; color: var(--ink); background: var(--paper);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 18px; }
+.label, .mono { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; }
+.frame { position: relative; width: 1200px; height: 675px; overflow: hidden;
+  background: radial-gradient(circle at 1px 1px, rgba(17,17,17,.045) 1px, transparent 1.5px) 0 0 / 16px 16px, var(--paper); }
+.frame > * { position: absolute; }
+.panel, .card { border: 2px solid var(--ink); background: var(--soft); }
+.panel { background: repeating-linear-gradient(180deg, transparent 0 44px, rgba(17,17,17,.045) 44px 47px), var(--soft); }
+.shadow { box-shadow: 6px 6px 0 var(--ink); }
+h1 { position: absolute; left: 40px; top: 28px; margin: 0; font-size: 26px; font-weight: 700; }
+.caption { left: 40px; top: 66px; width: 1120px; font-size: 20px; color: var(--muted); min-height: 28px; }
+.caption b { color: var(--ink); }
+
+/* journal */
+.journal { left: 40px; top: 120px; width: 380px; height: 400px; padding: 0 0 0 0; }
+.journal .head { position: absolute; left: 0; top: 0; width: 100%; height: 44px; line-height: 44px; padding: 0 16px; border-bottom: 2px solid var(--ink); background: var(--paper); font-size: 17px; font-weight: 700; }
+.journal .row { position: absolute; left: 0; width: 100%; height: 47px; line-height: 47px; padding: 0 16px; font-size: 16px; opacity: 0; transform: translateX(-8px); transition: opacity .25s, transform .25s; white-space: nowrap; }
+.journal .row.on { opacity: 1; transform: none; }
+.journal .row.hi { background: var(--yellow); font-weight: 700; }
+.journal .row .seq { display: inline-block; width: 22px; color: var(--muted); }
+
+/* slots */
+.slots { left: 460px; top: 120px; width: 300px; height: 400px; }
+.slot { position: absolute; left: 0; width: 300px; height: 176px; padding: 14px 18px; }
+.slot.s1 { top: 0; } .slot.s2 { top: 224px; }
+.slot .name { font-size: 15px; color: var(--muted); }
+.slot .v { font-size: 30px; font-weight: 700; margin-top: 6px; }
+.slot .state { font-size: 16px; margin-top: 8px; min-height: 22px; }
+.slot.empty { background: repeating-linear-gradient(45deg, transparent 0 10px, rgba(17,17,17,.06) 10px 12px), var(--paper); }
+.slot.bytes { background: var(--yellow); }
+.slot.stable { background: var(--green); }
+.slot .arrow { position: absolute; right: -50px; top: 70px; font-size: 26px; opacity: 0; }
+.bar { position: absolute; left: 18px; right: 18px; bottom: 16px; height: 10px; border: 2px solid var(--ink); background: var(--paper); display: none; }
+.bar i { display: block; height: 100%; width: 0; background: var(--ink); transition: width .6s linear; }
+.slot.filling .bar { display: block; }
+
+/* process */
+.proc { left: 800px; top: 120px; width: 360px; height: 400px; padding: 18px 20px; }
+.proc .name { font-size: 15px; color: var(--muted); }
+.proc .v { font-size: 30px; font-weight: 700; margin-top: 6px; }
+.proc .meta { font-size: 16px; margin-top: 10px; line-height: 1.6; }
+.proc .dot { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--ink); vertical-align: -2px; margin-right: 8px; background: #ddd; }
+.proc.running .dot { background: var(--green); } .proc.starting .dot { background: var(--yellow); } .proc.stopped .dot { background: #d8d8d3; }
+.proc .status { font-size: 20px; font-weight: 700; margin-top: 18px; }
+.proc .probe { margin-top: 18px; font-size: 16px; padding: 10px 12px; border: 2px dashed var(--ink); opacity: 0; transition: opacity .25s; }
+.proc .probe.on { opacity: 1; }
+.proc .probe.ok { border-style: solid; background: var(--green); }
+.receipt { left: 800px; top: 452px; width: 360px; padding: 10px 14px; border: 2px solid var(--ink); background: var(--yellow); font-size: 16px; font-weight: 700; opacity: 0; transform: rotate(-2deg) scale(.9); transition: opacity .3s, transform .3s; }
+.receipt.on { opacity: 1; transform: rotate(-2deg) scale(1); }
+
+/* timeline */
+.axis { left: 40px; top: 560px; width: 1120px; height: 80px; }
+.axis .track { position: absolute; left: 0; right: 0; top: 30px; height: 0; border-top: 2px solid var(--ink); }
+.axis .tick { position: absolute; top: 22px; width: 2px; height: 18px; background: var(--ink); }
+.axis .tl { position: absolute; top: 46px; font-size: 14px; transform: translateX(-50%); white-space: nowrap; color: var(--muted); }
+.axis .tl.on { color: var(--ink); font-weight: 700; }
+.axis .head { position: absolute; top: 14px; width: 4px; height: 34px; background: var(--ink); margin-left: -2px; }
+.axis .noreturn { position: absolute; top: 0; width: 6px; height: 30px; background: var(--yellow); border: 2px solid var(--ink); margin-left: -3px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="frame" id="frame" role="img" aria-label="Twelve-second loop of one K upgrade: the worker journals staged, handing-over, running-experiment and readback intents while the experiment slot fills with verified 2.0.0 bytes, the controller stops version 1.0.0 and starts 2.0.0, the probe returns a new pid and start id, promote intent is written as the point of no return, experiment becomes stable and a receipt is persisted.">
+  <h1>One upgrade, start to finish</h1>
+  <div class="caption" id="cap"></div>
+
+  <div class="panel shadow journal" id="journal">
+    <div class="head mono">journal.jsonl</div>
+    <div class="row mono" style="top:47px"><span class="seq">1</span>staged</div>
+    <div class="row mono" style="top:94px"><span class="seq">2</span>handing-over  priorStartId=a1</div>
+    <div class="row mono" style="top:141px"><span class="seq">3</span>running-experiment</div>
+    <div class="row mono" style="top:188px"><span class="seq">4</span>readback  2.0.0 pid 4311 b7</div>
+    <div class="row mono hi" style="top:235px"><span class="seq">5</span>promote  ← point of no return</div>
+    <div class="row mono" style="top:282px"><span class="seq">6</span>promoted</div>
+  </div>
+
+  <div class="slots">
+    <div class="card shadow slot s1" id="s1"><div class="name mono">slots/stable</div><div class="v" id="s1v">1.0.0</div><div class="state" id="s1s">trusted bytes</div></div>
+    <div class="card shadow slot s2" id="s2"><div class="name mono">slots/experiment</div><div class="v" id="s2v">empty</div><div class="state" id="s2s"></div><div class="bar"><i id="s2b"></i></div></div>
+  </div>
+
+  <div class="card shadow proc" id="proc">
+    <div class="name mono">application process</div>
+    <div class="v" id="pv">1.0.0</div>
+    <div class="meta mono" id="pm">pid 4242<br>startId a1</div>
+    <div class="status" id="ps"><span class="dot"></span><span id="pst">running</span></div>
+    <div class="probe mono" id="probe">probe → version, pid, startId</div>
+  </div>
+  <div class="receipt mono" id="receipt">operation.json: promoted · exit 0</div>
+
+  <div class="axis" id="axis"><div class="track"></div></div>
+</div>
+<script>
+const frame = document.getElementById('frame');
+function fitFrame() {
+  const scale = Math.min(1, window.innerWidth / 1200, window.innerHeight / 675);
+  frame.style.transform = `scale(${scale})`;
+  frame.style.transformOrigin = "top left";
+}
+fitFrame();
+window.addEventListener("resize", fitFrame);
+
+// Declarative timeline: t is normalized 0..1 over one CYCLE_MS loop.
+const CYCLE_MS = 12000;
+const EVENTS = [
+  { t: 0.00, tick: 'request',  cap: '<b>Bootstrap</b> asks the supervisor for one operation: id job-1, target 2.0.0.' },
+  { t: 0.08, tick: 'verify',   cap: '<b>Supervisor</b> downloads the runner, checks its hash and size, spawns the worker with the request on stdin.' },
+  { t: 0.16, tick: 'fetch',    cap: '<b>Worker</b> takes the lock, settles leftovers, asks the release source for exactly 2.0.0 and verifies the bytes.', s2: 'filling' },
+  { t: 0.26, tick: 'stage',    cap: 'Bytes are in the experiment slot. Nothing running has changed yet.', journal: 1, s2: 'bytes' },
+  { t: 0.36, tick: 'stop',     cap: '<b>Controller</b> quiesces, parks in-flight work, stops 1.0.0 and confirms the process is gone.', journal: 2, proc: 'stopping' },
+  { t: 0.43, proc: 'stopped' },
+  { t: 0.49, tick: 'start',    cap: '<b>Controller</b> starts the candidate from the experiment slot.', journal: 3, proc: 'starting' },
+  { t: 0.58, tick: 'probe',    cap: '<b>Worker</b> probes: right version, a new pid, a startId different from the one journaled before the stop.', journal: 4, proc: 'probed' },
+  { t: 0.68, tick: 'promote',  cap: '<b>Promote intent.</b> Before this line the safe move is to restore 1.0.0; after it, to finish the promotion.', journal: 5, noreturn: true },
+  { t: 0.78, tick: 'promoted', cap: 'Experiment becomes stable. <b>Controller</b> resumes parked work.', journal: 6, swap: true },
+  { t: 0.88, tick: 'receipt',  cap: 'Receipt persisted in operation.json. Worker exits 0; the supervisor relays it.', receipt: true },
+];
+const TICKS = ['request','verify','fetch','stage','stop','start','probe','promote','promoted','receipt'];
+
+const $ = (id) => document.getElementById(id);
+const axis = $('axis');
+for (const ev of EVENTS) if (ev.tick) {
+  const x = ev.t * 1120;
+  const tick = document.createElement('div'); tick.className = 'tick'; tick.style.left = x + 'px'; axis.append(tick);
+  const tl = document.createElement('div'); tl.className = 'tl mono'; tl.id = 'tl-' + ev.tick; tl.style.left = x + 'px'; tl.textContent = ev.tick; axis.append(tl);
+  if (ev.noreturn) { const n = document.createElement('div'); n.className = 'noreturn'; n.style.left = x + 'px'; axis.append(n); }
+}
+const head = document.createElement('div'); head.className = 'head'; axis.append(head);
+
+function render(phase) {
+  const s = { journal: 0, s2: 'empty', proc: 'running', swap: false, receipt: false, cap: '', tick: null };
+  for (const ev of EVENTS) if (ev.t <= phase) {
+    if (ev.journal) s.journal = ev.journal;
+    if (ev.s2) s.s2 = ev.s2;
+    if (ev.proc) s.proc = ev.proc;
+    if (ev.swap) s.swap = true;
+    if (ev.receipt) s.receipt = true;
+    if (ev.cap) s.cap = ev.cap;
+    if (ev.tick) s.tick = ev.tick;
+  }
+  $('cap').innerHTML = s.cap;
+  document.querySelectorAll('#journal .row').forEach((r, i) => r.classList.toggle('on', i < s.journal));
+  const s2 = $('s2');
+  s2.className = 'card shadow slot s2 ' + (s.swap ? 'stable' : s.s2 === 'empty' ? 'empty' : s.s2 === 'filling' ? 'empty filling' : 'bytes');
+  $('s2v').textContent = s.s2 === 'empty' ? 'empty' : '2.0.0';
+  $('s2s').textContent = s.swap ? 'now stable' : s.s2 === 'filling' ? 'downloading, verifying sha256 + size' : s.s2 === 'bytes' ? 'verified bytes staged' : '';
+  $('s2b').style.width = s.s2 === 'filling' ? Math.min(100, ((phase - 0.16) / 0.10) * 100) + '%' : '0';
+  const s1 = $('s1');
+  s1.className = 'card shadow slot s1 ' + (s.swap ? 'empty' : 'stable');
+  $('s1v').textContent = s.swap ? 'cleared' : '1.0.0';
+  $('s1s').textContent = s.swap ? 'previous stable, no longer needed' : 'trusted bytes, the fallback';
+  const proc = $('proc');
+  const running2 = s.proc === 'probed' || s.swap;
+  proc.className = 'card shadow proc ' + (s.proc === 'running' || running2 ? 'running' : s.proc === 'starting' ? 'starting' : 'stopped');
+  const isNew = s.proc === 'starting' || running2;
+  $('pv').textContent = isNew ? '2.0.0' : '1.0.0';
+  $('pm').innerHTML = isNew ? 'pid 4311<br>startId b7' : 'pid 4242<br>startId a1';
+  $('pst').textContent = s.proc === 'stopping' ? 'quiesced, stopping' : s.proc === 'stopped' ? 'stopped, exit confirmed' : s.proc === 'starting' ? 'starting' : 'running';
+  const probe = $('probe');
+  probe.className = 'probe mono' + (s.proc === 'starting' ? ' on' : running2 ? ' on ok' : '');
+  probe.textContent = running2 ? 'probe ✓ 2.0.0, pid 4311, startId b7 ≠ a1' : 'probe → version, pid, startId';
+  $('receipt').classList.toggle('on', s.receipt);
+  for (const t of TICKS) $('tl-' + t).classList.toggle('on', t === s.tick);
+  head.style.left = (phase * 1120) + 'px';
+}
+
+// `?t=0.6` renders one fixed phase (used for screenshots); reduced motion shows the end state.
+const fixed = Number(new URLSearchParams(location.search).get('t'));
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (fixed >= 0 && fixed <= 1 && location.search.includes('t=')) { render(fixed); }
+else if (reduced) { render(0.95); }
+else {
+  const start = performance.now();
+  (function loop(now) { render(((now - start) % CYCLE_MS) / CYCLE_MS); requestAnimationFrame(loop); })(start);
+}
+</script>
+</body>
+</html>

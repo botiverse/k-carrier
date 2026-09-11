@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en" data-theme="brutal">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harness design · K</title>
+<meta name="description" content="How K's test harness is layered, what each layer proves, registered checks, and the limits of fault coverage.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;700&family=Geist+Mono:wght@400;700&display=swap">
+<link rel="stylesheet" href="assets/rui.css">
+<link rel="stylesheet" href="assets/site.css">
+<script defer src="assets/site.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="mark">K</span>k-carrier <small>docs</small></a>
+  <button class="menu-btn" type="button" aria-controls="nav" aria-expanded="false">Menu</button>
+</header>
+<nav id="nav" class="sidebar" aria-label="Documentation"></nav>
+
+<main id="main" class="page">
+<header class="page-head">
+  <h1>Harness design</h1>
+  <p class="lede">The harness tests K's transaction mechanisms. The external runner tests exercise application integration. Neither replaces acceptance tests for a product's actual service manager, installer packaging and data.</p>
+</header>
+
+<h2 id="test-layers">Test layers</h2>
+<figure class="fig">
+<svg viewBox="0 0 960 400" role="img" aria-labelledby="figlayers">
+  <title id="figlayers">Four stacked test layers: mechanisms, execution boundary, real processes, product acceptance</title>
+  <!-- bracket for pnpm test -->
+  <path d="M30 40 L18 40 L18 288 L30 288" class="k-hair"/>
+  <text x="14" y="164" text-anchor="middle" transform="rotate(-90 14 164)" class="k-mono">pnpm test</text>
+  <!-- layer 4: product acceptance (top, outside) -->
+  <g transform="translate(40,20)"><rect x="4" y="4" width="900" height="70" class="k-shadow"/><rect width="900" height="70" class="k-inset"/>
+    <text x="16" y="28" class="k-title">Product acceptance</text>
+    <text x="16" y="52" class="k-text">Product repository and target machines. Proves real service isolation, packaging, workload restoration and data compatibility.</text>
+  </g>
+  <!-- layer 3 -->
+  <g transform="translate(40,104)"><rect x="4" y="4" width="900" height="70" class="k-shadow"/><rect width="900" height="70" class="k-box"/>
+    <text x="16" y="28" class="k-title">Real processes</text>
+    <text x="16" y="52" class="k-text">A separate runner upgrades an application with no K dependency; another worker recovers after a crash.</text>
+    <text x="884" y="28" text-anchor="end" class="k-mono">core/src/runner/process.test.ts</text>
+  </g>
+  <!-- layer 2 -->
+  <g transform="translate(40,188)"><rect x="4" y="4" width="900" height="70" class="k-shadow"/><rect width="900" height="70" class="k-box"/>
+    <text x="16" y="28" class="k-title">Execution boundary</text>
+    <text x="16" y="52" class="k-text">Input rejection, verified runner execution, bounded calls, receipt and exit-code binding.</text>
+    <text x="884" y="28" text-anchor="end" class="k-mono">protocol, launcher, runner, command-controller tests</text>
+  </g>
+  <!-- layer 1 -->
+  <g transform="translate(40,272)"><rect x="4" y="4" width="900" height="70" class="k-shadow"/><rect width="900" height="70" class="k-hi"/>
+    <text x="16" y="28" class="k-title">Mechanisms</text>
+    <text x="16" y="52" class="k-text">Locking, journal ordering, slots, policy, rollback and convergence.</text>
+    <text x="884" y="28" text-anchor="end" class="k-mono">core unit tests, harness checks, injected effects</text>
+  </g>
+  <text x="490" y="378" text-anchor="middle" class="k-muted">The top layer lives outside this repository. The bracket marks what one pnpm test run covers.</text>
+</svg>
+<figcaption>Each layer produces different evidence. The harness starts at the bottom; the product finishes at the top.</figcaption>
+</figure>
+<div class="table-scroll wide">
+<table class="grid">
+  <thead><tr><th>Layer</th><th>Implementation</th><th>Evidence</th></tr></thead>
+  <tbody>
+    <tr><td>Mechanisms</td><td>Core unit tests, harness checks, injected effects</td><td>Locking, journal ordering, slots, policy, rollback and convergence</td></tr>
+    <tr><td>Execution boundary</td><td>Protocol, launcher, runner and command-controller tests</td><td>Input rejection, verified runner execution, bounded calls, receipt and exit-code binding</td></tr>
+    <tr><td>Real processes</td><td><a href="https://github.com/botiverse/k-carrier/blob/main/core/src/runner/process.test.ts"><code>core/src/runner/process.test.ts</code></a></td><td>A separate runner upgrades an application with no K dependency; another worker recovers after a crash</td></tr>
+    <tr><td>Product acceptance</td><td>Product repository and target machines</td><td>Real service isolation, packaging, workload restoration and data compatibility</td></tr>
+  </tbody>
+</table>
+</div>
+<p><code>pnpm test</code> runs the first three layers; <code>pnpm test:runner</code> selects the runner boundary and integration tests. Direct Node tests are not all registered harness checks, so <code>--list</code> is not the complete test inventory.</p>
+
+<h2 id="components">Components</h2>
+<p>All paths below are under <a href="https://github.com/botiverse/k-carrier/tree/main/harness/src"><code>harness/src/</code></a>.</p>
+<dl class="defs">
+  <div><dt><code>fake-host/</code></dt><dd>In-process hosts and spawned service processes with controllable faults</dd></div>
+  <div><dt><code>fake-server/</code></dt><dd>Local artifact delivery, range requests and corrupted responses</dd></div>
+  <div><dt><code>artifact-factory/</code></dt><dd>Runnable, version-stamped fixture artifacts with selectable failures</dd></div>
+  <div><dt><code>fixtures/</code></dt><dd>Internal byte-replacement, service and workload-ledger fixtures</dd></div>
+  <div><dt><code>scenario/</code></dt><dd>Isolated sandboxes and virtual time</dd></div>
+  <div><dt><code>crash/</code></dt><dd>Transition-derived fault matrix and recovery assertions</dd></div>
+  <div><dt><code>sim/</code></dt><dd>Seeded fault scheduling, invariant checks and replayable failure records</dd></div>
+  <div><dt><code>teeth/</code></dt><dd>Named checks, selection and known-green/known-red tests</dd></div>
+</dl>
+<div class="note stop"><p>Core receives host, source, clock and effects through normal interfaces. It must not detect tests or gain test-only bypasses. Logical tests use virtual time; process/network tests use bounded waits and clean up their resources.</p></div>
+
+<h2 id="registered-checks">Registered checks</h2>
+<p>A registered check (called a <em>tooth</em> in the code) declares its id, tested layers, profile, invariant or baseline failure condition, and a mutation that must fail. The registry rejects invalid declarations and duplicate ids. Known-green cases establish that correct behavior passes; known-red and adversarial cases establish that the check catches its intended failure. A declared mutation is not evidence that a separate mutation campaign has run.</p>
+<p>The harness profiles <code>swap</code> and <code>service</code> select mechanism checks. Internal fixtures invoke the engine directly; product examples use the external runner.</p>
+<dl class="defs">
+  <div><dt><code>--adapter</code></dt><dd>Runs the subset supported by a harness adapter's declared contract; it expects the harness driver interface, not an arbitrary product HostAdapter.</dd></div>
+  <div><dt><code>--bin</code></dt><dd>Drives a fixture or binary through explicitly declared commands in <code>k.target.ts</code> (or <code>--target</code>). Missing command declarations fail; the harness does not infer CLI names.</dd></div>
+</dl>
+<p>See <code>node harness/src/cli.ts --help</code> for current options.</p>
+
+<h2 id="fault-coverage-and-limits">Fault coverage and limits</h2>
+<figure class="fig">
+<svg viewBox="0 0 960 200" role="img" aria-labelledby="figcrash">
+  <title id="figcrash">The crash enumerator injects a crash at three points around every transition: before the journal write, after it, and after the action</title>
+  <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--line-strong)"/></marker></defs>
+  <g transform="translate(40,70)"><rect x="4" y="4" width="180" height="50" class="k-shadow"/><rect width="180" height="50" class="k-box"/><text x="90" y="31" text-anchor="middle" class="k-mono">phase N</text></g>
+  <g transform="translate(390,70)"><rect x="4" y="4" width="180" height="50" class="k-shadow"/><rect width="180" height="50" class="k-soft"/><text x="90" y="31" text-anchor="middle" class="k-mono">journal write</text></g>
+  <g transform="translate(740,70)"><rect x="4" y="4" width="180" height="50" class="k-shadow"/><rect width="180" height="50" class="k-box"/><text x="90" y="31" text-anchor="middle" class="k-mono">action, phase N+1</text></g>
+  <line x1="224" y1="95" x2="388" y2="95" class="k-line" marker-end="url(#ah2)"/>
+  <line x1="574" y1="95" x2="738" y2="95" class="k-line" marker-end="url(#ah2)"/>
+  <!-- crash points -->
+  <g transform="translate(306,95)"><rect x="-8" y="-8" width="16" height="16" class="k-danger" transform="rotate(45)"/></g>
+  <text x="306" y="60" text-anchor="middle" class="k-muted">before journal write</text>
+  <g transform="translate(656,95)"><rect x="-8" y="-8" width="16" height="16" class="k-danger" transform="rotate(45)"/></g>
+  <text x="656" y="60" text-anchor="middle" class="k-muted">after journal write</text>
+  <g transform="translate(830,140)"><rect x="-8" y="-8" width="16" height="16" class="k-danger" transform="rotate(45)"/></g>
+  <text x="830" y="168" text-anchor="middle" class="k-muted">after the action</text>
+  <text x="40" y="190" class="k-muted">Crossed with every transition in the table. Injected effects and simulated crashes; not OS kills or power loss.</text>
+</svg>
+<figcaption>Three crash points per transition. Directed real-process tests separately kill a worker between stop and start.</figcaption>
+</figure>
+<p>The crash enumerator crosses the transaction transition table with three points: before journal write, after journal write and after the action. The matrix uses injected effects and simulated crashes. Directed real-process tests separately kill a worker between stop and start and verify recovery. The generated matrix is not a claim that every point was tested with OS kills or physical power loss.</p>
+<p>Seeded simulation explores additional effect interleavings. Its receipts preserve the seed and transcript hash; failing seeds are saved for replay. Regressions should become fixed cases. Simulation does not establish filesystem durability, service-manager isolation or platform-specific executable replacement.</p>
+<div class="note"><p>Recovery uses the same contract at every layer: before durable promote intent, restore stable; after it, replay commit. Product controllers must also isolate unfinished asynchronous effects before retrying a timed-out operation.</p></div>
+<p>See the <a href="test-plan.html">test plan</a> for commands and acceptance criteria, and the <a href="design.html">design</a> for the transaction and wire contracts.</p>
+
+<footer class="page-foot"><a href="test-plan.html">Back: Test plan</a><a href="formal.html">Next: Formal model</a></footer>
+</main>
+</body>
+</html>

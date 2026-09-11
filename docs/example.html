@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en" data-theme="brutal">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Runnable example · K</title>
+<meta name="description" content="A service with no K dependency, a command controller and a runner built with a trusted adapter, driven from a terminal.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;700&family=Geist+Mono:wght@400;700&display=swap">
+<link rel="stylesheet" href="assets/rui.css">
+<link rel="stylesheet" href="assets/site.css">
+<script defer src="assets/site.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="mark">K</span>k-carrier <small>docs</small></a>
+  <button class="menu-btn" type="button" aria-controls="nav" aria-expanded="false">Menu</button>
+</header>
+<nav id="nav" class="sidebar" aria-label="Documentation"></nav>
+
+<main id="main" class="page">
+<header class="page-head">
+  <h1>Runnable service upgrade walkthrough</h1>
+  <p class="lede">A service with no K dependency, a command controller, and a runner built with a trusted adapter. It uses local temporary files and a <code>data:</code> release URL, so it needs no cloud account or published application release. Run the commands from the repository root with Node 24 and pnpm installed.</p>
+</header>
+
+<figure class="fig">
+<svg viewBox="0 0 960 330" role="img" aria-labelledby="fige">
+  <title id="fige">The temporary example home and the two protocols: requests go to the runner, lifecycle commands go to the controller</title>
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--line-strong)"/></marker></defs>
+  <!-- home layout -->
+  <rect x="24" y="24" width="300" height="290" class="k-shadow"/>
+  <rect x="20" y="20" width="300" height="290" class="k-inset"/>
+  <text x="36" y="48" class="k-title">$K_EXAMPLE_HOME</text>
+  <text x="36" y="78" class="k-mono">runner.mjs</text><text x="150" y="78" class="k-muted">K + adapter</text>
+  <text x="36" y="100" class="k-mono">runner-release.json</text><text x="190" y="100" class="k-muted">hash, size</text>
+  <text x="36" y="122" class="k-mono">controller.mjs</text><text x="150" y="122" class="k-muted">stop, start, probe</text>
+  <text x="36" y="144" class="k-mono">release.json</text><text x="150" y="144" class="k-muted">v2 as data: URL</text>
+  <text x="36" y="166" class="k-mono">active.mjs</text><text x="150" y="166" class="k-muted">runtime copy, not a slot</text>
+  <text x="36" y="196" class="k-mono">k/</text><text x="70" y="196" class="k-muted">state directory</text>
+  <text x="52" y="218" class="k-mono">upgrade.lock</text>
+  <text x="52" y="238" class="k-mono">journal.jsonl</text>
+  <text x="52" y="258" class="k-mono">slots/stable/</text>
+  <text x="52" y="278" class="k-mono">slots/experiment/</text>
+  <text x="52" y="298" class="k-mono">receipts/</text>
+  <!-- runner protocol -->
+  <g transform="translate(380,40)"><rect x="4" y="4" width="250" height="96" class="k-shadow"/><rect width="250" height="96" class="k-hi"/><text x="125" y="26" text-anchor="middle" class="k-bold">Runner protocol</text><text x="125" y="50" text-anchor="middle" class="k-mono">upgrade, recover, status</text><text x="125" y="72" text-anchor="middle" class="k-muted">one JSON request on stdin</text><text x="125" y="88" text-anchor="middle" class="k-muted">one response on stdout</text></g>
+  <text x="380" y="164" class="k-text">Spoken by install.mjs and by you,</text>
+  <text x="380" y="184" class="k-text">to runner.mjs.</text>
+  <!-- controller protocol -->
+  <g transform="translate(680,40)"><rect x="4" y="4" width="260" height="96" class="k-shadow"/><rect width="260" height="96" class="k-box"/><text x="130" y="26" text-anchor="middle" class="k-bold">Controller protocol</text><text x="130" y="50" text-anchor="middle" class="k-mono">fence, quiesce, stop,</text><text x="130" y="68" text-anchor="middle" class="k-mono">start, probe, resume</text><text x="130" y="88" text-anchor="middle" class="k-muted">one call per command</text></g>
+  <text x="680" y="164" class="k-text">Spoken by the worker (and by you,</text>
+  <text x="680" y="184" class="k-text">for a live probe) to controller.mjs.</text>
+  <line x1="634" y1="88" x2="678" y2="88" class="k-line" marker-end="url(#ah)"/>
+  <!-- service -->
+  <g transform="translate(680,230)"><rect x="4" y="4" width="260" height="56" class="k-shadow"/><rect width="260" height="56" class="k-box"/><text x="130" y="24" text-anchor="middle" class="k-bold">service.mjs</text><text x="130" y="44" text-anchor="middle" class="k-mono">no K import, loopback health</text></g>
+  <line x1="920" y1="140" x2="920" y2="228" class="k-line" marker-end="url(#ah)"/>
+  <text x="908" y="212" text-anchor="end" class="k-muted">runs from active.mjs</text>
+</svg>
+<figcaption>Two different protocols. Upgrade, recover and status go to the runner; fence, probe, start, stop, quiesce and resume go to the application controller.</figcaption>
+</figure>
+
+<h2 id="prepare-an-installation">Prepare an installation</h2>
+<p>The temporary home contains the example controller, application data and a K state subdirectory. The runner and interpreter are outside the K slots. The setup step creates trusted v1 bytes, seeds stable, starts the service and prepares a v2 release.</p>
+<pre><code>pnpm install --frozen-lockfile
+export K_EXAMPLE_HOME="$(mktemp -d)"
+node scripts/build-runner.mjs examples/external-service/adapter.ts "$K_EXAMPLE_HOME/runner.mjs"
+node --input-type=module &lt;&lt;'JS'
+import { readFile, writeFile, copyFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { bootstrapStable, createCommandHost } from './core/src/index.ts';
+const dir = process.env.K_EXAMPLE_HOME;
+const stateDir = join(dir, 'k');
+await copyFile('examples/external-service/controller.mjs', join(dir, 'controller.mjs'));
+const template = await readFile('examples/external-service/service.mjs', 'utf8');
+const initial = join(dir, 'initial.mjs');
+await writeFile(initial, template.replace('VERSION_PLACEHOLDER', '1.0.0'));
+await bootstrapStable({ stateDir, version: '1.0.0', artifactPath: initial });
+const runner = await readFile(join(dir, 'runner.mjs'));
+await writeFile(join(dir, 'runner-release.json'), JSON.stringify({ version: 'demo-runner-1',
+  url: `data:application/octet-stream;base64,${runner.toString('base64')}`,
+  sha256: createHash('sha256').update(runner).digest('hex'), size: runner.length }));
+const candidate = Buffer.from(template.replace('VERSION_PLACEHOLDER', '2.0.0'));
+await writeFile(join(dir, 'release.json'), JSON.stringify({ version: '2.0.0',
+  url: `data:application/octet-stream;base64,${candidate.toString('base64')}`,
+  sha256: createHash('sha256').update(candidate).digest('hex'), size: candidate.length }));
+const host = createCommandHost({ stateDir, command: [process.execPath, join(dir, 'controller.mjs'), dir] });
+await host.start('stable');
+console.log(await host.healthProbe()); // version 1.0.0 plus pid/startId
+JS</code></pre>
+<div class="note"><p><code>bootstrapStable</code> only initializes the fallback. It does not represent an upgrade operation, so a status request at this point can report <code>genesis</code> even though v1 is installed and running.</p></div>
+
+<h2 id="upgrade-retry-and-observe">Upgrade, retry and observe</h2>
+<pre><code>node examples/external-service/install.mjs upgrade demo-v2 2.0.0
+node examples/external-service/install.mjs upgrade demo-v2 2.0.0
+printf '%s' '{"protocolVersion":1,"action":"status"}' | node "$K_EXAMPLE_HOME/runner.mjs"</code></pre>
+<table class="grid">
+  <thead><tr><th>Command</th><th>Expected response</th></tr></thead>
+  <tbody>
+    <tr><td>First <code>upgrade demo-v2 2.0.0</code></td><td><code>result: "promoted"</code>, <code>exitCode: 0</code>, an operation with <code>outcome: "promoted"</code></td></tr>
+    <tr><td>Second, same id and target</td><td><code>result: "replayed"</code> and the same operation, without restarting the application</td></tr>
+    <tr><td><code>status</code></td><td>The current receipt. Not a live observation.</td></tr>
+  </tbody>
+</table>
+<p>Probe separately for a live observation:</p>
+<pre><code>printf '%s' '{"protocolVersion":1,"action":"probe"}' | node "$K_EXAMPLE_HOME/controller.mjs" "$K_EXAMPLE_HOME"</code></pre>
+<p>The probe should report version 2.0.0 with a different pid and startId from setup. These are <strong>different protocols</strong>: upgrade, recover and status go to the runner; fence, probe, start, stop, quiesce and resume go to the application controller.</p>
+
+<h2 id="recovery-and-cleanup">Recovery and cleanup</h2>
+<p>The installer supervises its worker and recovers automatically. If it exits 3, keep the reported recovery file and run:</p>
+<pre><code>node examples/external-service/install.mjs recover /path/from/output/recovery.json</code></pre>
+<p>This verifies the retained runner and works without release distribution access. It recovers the original operation only. For operator-directed recovery of current unfinished work, start a runner against the same state directory and submit <code>{"protocolVersion":1,"action":"recover"}</code>. Recovery completes persisted intent or restores stable; it does not initiate another upgrade. See the <a href="reference.html#protocol-v1">protocol's exit-code table</a>, including why a successful rollback is exit 1.</p>
+<p>Stop this demo before removing its temporary home:</p>
+<pre><code>node --input-type=module &lt;&lt;'JS'
+import { rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { createCommandHost } from './core/src/index.ts';
+const dir = process.env.K_EXAMPLE_HOME;
+if (!dir) throw new Error('K_EXAMPLE_HOME is required');
+const host = createCommandHost({ stateDir: join(dir, 'k'),
+  command: [process.execPath, join(dir, 'controller.mjs'), dir] });
+await host.stop('stable');
+await rm(dir, { recursive: true });
+JS
+unset K_EXAMPLE_HOME</code></pre>
+
+<h2 id="what-this-proves">What this proves</h2>
+<p><code>pnpm test:runner</code> automates upgrade, wrong-version rollback, current and archive replay, concurrent lock rejection, killing the runner between stop and start, recovery with the release source removed, bounded failed recovery, a controller surviving its worker, and restarting after the whole invocation is lost. The test owns and cleans its own home; it does not reuse the walkthrough's directory.</p>
+<div class="note stop"><p>This adapter and controller spawn Node via <code>process.execPath</code>, which is only correct under an external Node interpreter. Inside a single executable (SEA), <code>process.execPath</code> is the SEA itself; see the <a href="integration.html#build-a-single-executable">integration guide</a> before packaging this pattern.</p></div>
+<p>This controller is a demo, not a production supervisor. Its service implements cooperative shutdown and a loopback health protocol; an unreachable endpoint is not generally proof that an arbitrary production process has died. A product controller must establish process ownership and termination through its service manager, authenticate control access, and implement workload preservation. The demo copies selected slot bytes to <code>active.mjs</code> so Node treats them as ESM and so the running file is never inside a slot directory that promotion will rename; that runtime copy is not a third rollback slot. Localhost is not authentication.</p>
+<p>Source: <a href="https://github.com/botiverse/k-carrier/blob/main/examples/external-service/adapter.ts">adapter.ts</a>, <a href="https://github.com/botiverse/k-carrier/blob/main/examples/external-service/controller.mjs">controller.mjs</a>, <a href="https://github.com/botiverse/k-carrier/blob/main/examples/external-service/install.mjs">install.mjs</a>, <a href="https://github.com/botiverse/k-carrier/blob/main/examples/external-service/service.mjs">service.mjs</a>.</p>
+
+<footer class="page-foot"><a href="guide.html">Back: How an upgrade works</a><a href="integration.html">Next: Integration and distribution</a></footer>
+</main>
+</body>
+</html>

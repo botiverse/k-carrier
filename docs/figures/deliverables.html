@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Three deliverables</title>
+<style>
+:root {
+  --ink: #111; --paper: #fffdf7; --soft: #f7f7f3; --muted: rgba(17,17,17,.52);
+  --yellow: #ffe66b; --pink: #ff7aa2; --blue: #7bc8ff; --green: #98e59b;
+  --orange: #ffb25f; --purple: #b7a1ff; --red: #ff7b73;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body { color-scheme: light; color: var(--ink); background: var(--paper);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 17px; }
+.mono { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; }
+.frame { position: relative; width: 1200px; height: 675px; overflow: hidden;
+  background: radial-gradient(circle at 1px 1px, rgba(17,17,17,.045) 1px, transparent 1.5px) 0 0 / 16px 16px, var(--paper); }
+.frame > * { position: absolute; }
+h1 { left: 40px; top: 28px; margin: 0; font-size: 26px; font-weight: 700; }
+.sub { left: 40px; top: 66px; font-size: 18px; color: var(--muted); }
+.card { top: 120px; width: 350px; height: 250px; border: 2px solid var(--ink); background: var(--paper); box-shadow: 6px 6px 0 var(--ink); padding: 20px 22px; }
+.card h2 { margin: 0 0 10px; font-size: 24px; }
+.card p { margin: 0 0 10px; font-size: 16px; line-height: 1.45; }
+.card .v { position: absolute; left: 22px; bottom: 16px; font-size: 14px; padding: 4px 8px; border: 2px solid var(--ink); background: var(--soft); }
+.cdn { left: 40px; top: 420px; width: 1120px; height: 215px; border: 2px solid var(--ink); background: var(--soft); box-shadow: 6px 6px 0 var(--ink); padding: 14px 22px; font-size: 16px; line-height: 1.55; white-space: pre; }
+.cdn .h { font-weight: 700; margin-bottom: 4px; display: block; }
+.cdn .c { color: var(--muted); }
+.cdn .b { background: var(--soft); border-bottom: 3px solid var(--blue); }
+.cdn .i { background: var(--yellow); }
+.cdn .r { background: var(--green); }
+</style>
+</head>
+<body>
+<div class="frame" id="frame" role="img" aria-label="Three independently versioned deliverables: the bootstrap script, the installer built from K and your adapter, and the product release. They can share one CDN, for example install.sh at the root, installers under a version directory, releases under another.">
+  <h1>What you ship: three things, three versions</h1>
+  <div class="sub">The installer version is not the application version. The bootstrap verifies the installer; the installer verifies the product.</div>
+
+  <div class="card" style="left:40px;border-bottom:8px solid var(--blue)">
+    <h2>Bootstrap</h2>
+    <p>Finds the platform, downloads and verifies the installer, launches it, relays the exit code.</p>
+    <p class="mono" style="color:var(--muted)">contains no upgrade logic</p>
+    <div class="v mono">install.sh, install.ps1</div>
+  </div>
+  <div class="card" style="left:425px;border-bottom:8px solid var(--yellow)">
+    <h2>Installer</h2>
+    <p>K plus your adapter and controller, released with its own version, platform artifacts, hashes and signatures where available.</p>
+    <div class="v mono">installer 1.4.1</div>
+  </div>
+  <div class="card" style="left:810px;border-bottom:8px solid var(--green)">
+    <h2>Product release</h2>
+    <p>The application executable your adapter's release source selects. Its version is the request's target version.</p>
+    <div class="v mono">service 2.8.0</div>
+  </div>
+
+  <div class="cdn mono"><span class="h">one CDN can hold all three   <span class="c">paths are illustrative, not a K schema</span></span>https://downloads.example.com/my-service/
+  <span class="b">install.sh</span>
+  <span class="i">installers/1.4.1/linux-x64/installer</span>      <span class="c">the bootstrap verifies this</span>
+  <span class="i">installers/1.4.1/manifest.json</span>
+  <span class="r">releases/2.8.0/linux-x64/service</span>          <span class="c">the installer verifies this</span>
+  <span class="r">releases/2.8.0/manifest.json</span></div>
+</div>
+<script>
+const frame = document.getElementById('frame');
+function fitFrame() {
+  const scale = Math.min(1, window.innerWidth / 1200, window.innerHeight / 675);
+  frame.style.transform = `scale(${scale})`;
+  frame.style.transformOrigin = "top left";
+}
+fitFrame();
+window.addEventListener("resize", fitFrame);
+</script>
+</body>
+</html>

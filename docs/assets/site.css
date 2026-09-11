@@ -1,0 +1,187 @@
+/* K docs site. Built on the raft-ui (rUI) brutal token layer in rui.css:
+   every colour, shadow and font below is a rUI token; nothing is hard-coded. */
+
+:root {
+  /* rUI's brutal font assignment (raft-ui/fonts.css), loaded from Google Fonts in each page head. */
+  --heading-font: "Hanken Grotesk", system-ui, sans-serif;
+  --sans-font: "Hanken Grotesk", system-ui, sans-serif;
+  --mono-font: "Geist Mono", ui-monospace, monospace;
+  --measure: 72ch;
+  --sidebar: 17rem;
+  --frame: 2px solid var(--line-strong);
+  --lift: var(--theme-shadow-md);
+  --lift-sm: var(--theme-shadow-sm);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { color-scheme: light; scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  margin: 0;
+  background: var(--layer-canvas);
+  color: var(--foreground-strong);
+  font-family: var(--sans-font);
+  font-size: 17px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Frame ─────────────────────────────────────────────────────────────── */
+
+.skip { position: absolute; left: -999px; top: 0; }
+.skip:focus { left: 1rem; top: 1rem; z-index: 100; background: var(--primary-500); padding: .5rem 1rem; border: var(--frame); }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: .75rem 1rem;
+  border-bottom: var(--frame);
+  background: var(--layer-panel);
+  position: sticky; top: 0; z-index: 30;
+}
+.brand { display: inline-flex; align-items: baseline; gap: .5rem; text-decoration: none; color: inherit; font-weight: 700; font-size: 1.25rem; }
+.brand .mark { display: inline-grid; place-items: center; width: 1.6rem; height: 1.6rem; border: var(--frame); background: var(--primary-500); box-shadow: var(--lift-sm); font-size: .95rem; line-height: 1; }
+.brand small { font-weight: 400; color: var(--foreground-muted); font-size: .85rem; }
+.menu-btn { appearance: none; font: inherit; font-weight: 700; background: var(--layer-panel); border: var(--frame); box-shadow: var(--lift-sm); padding: .35rem .7rem; cursor: pointer; }
+.menu-btn:active { box-shadow: none; transform: translate(2px, 2px); }
+
+.sidebar {
+  display: none;
+  border-bottom: var(--frame);
+  background: var(--layer-panel);
+  padding: 1rem;
+}
+.sidebar[data-open] { display: block; }
+.sidebar h2 { font-size: .8rem; font-weight: 700; color: var(--foreground-hint); margin: 1rem 0 .35rem; letter-spacing: .02em; }
+.sidebar h2:first-child { margin-top: 0; }
+.sidebar ul { list-style: none; margin: 0; padding: 0; }
+.sidebar a { display: block; padding: .3rem .5rem; text-decoration: none; color: var(--foreground); border-left: 3px solid transparent; }
+.sidebar a:hover { background: var(--fill-muted); }
+.sidebar a[aria-current="page"] { border-left-color: var(--line-strong); background: var(--primary-soft); font-weight: 700; }
+.sidebar .meta { margin-top: 1.25rem; font-family: var(--mono-font); font-size: .78rem; color: var(--foreground-hint); }
+.sidebar .meta a { display: inline; padding: 0; border: 0; color: inherit; text-decoration: underline; }
+
+.page { padding: 1.5rem 1rem 4rem; }
+.page > * { max-width: var(--measure); }
+.page > .wide, .page > figure.fig { max-width: min(64rem, 100%); }
+
+@media (min-width: 64rem) {
+  .topbar .menu-btn { display: none; }
+  .topbar { position: fixed; top: 0; left: 0; width: var(--sidebar); height: 4.5rem; border-bottom: 0; border-right: var(--frame); padding: 1.25rem 1.25rem 0; align-items: flex-start; }
+  .sidebar { display: block; position: fixed; top: 4.5rem; left: 0; bottom: 0; width: var(--sidebar); overflow-y: auto; border-bottom: 0; border-right: var(--frame); padding: 0 1.25rem 2rem; }
+  .page { margin-left: var(--sidebar); padding: 3rem 3rem 6rem; }
+}
+
+/* ── Type ──────────────────────────────────────────────────────────────── */
+
+h1, h2, h3 { font-family: var(--heading-font); line-height: 1.15; letter-spacing: -.01em; margin: 0; }
+h1 { font-size: clamp(2rem, 4vw, 2.75rem); font-weight: 700; }
+h2 { font-size: 1.6rem; font-weight: 700; margin-top: 3rem; padding-top: 1rem; border-top: var(--frame); }
+h3 { font-size: 1.15rem; font-weight: 700; margin-top: 2rem; }
+h2 + h3 { margin-top: 1.25rem; }
+.page-head { margin-bottom: 2rem; }
+.page-head .lede { font-size: 1.2rem; color: var(--foreground-muted); margin: .75rem 0 0; }
+p { margin: .9rem 0; }
+p + p { margin-top: .6rem; }
+ul, ol { padding-left: 1.4rem; }
+li { margin: .35rem 0; }
+li::marker { color: var(--foreground-hint); }
+a { color: inherit; text-decoration-thickness: 1.5px; text-underline-offset: .15em; }
+a:hover { background: var(--primary-soft); }
+strong { font-weight: 700; }
+hr { border: 0; border-top: var(--frame); margin: 2.5rem 0; }
+
+.anchor { text-decoration: none; margin-left: .4rem; color: var(--foreground-hint); font-weight: 400; opacity: 0; }
+h2:hover .anchor, h3:hover .anchor, .anchor:focus { opacity: 1; }
+
+code, pre, kbd, .mono { font-family: var(--mono-font); }
+code { font-size: .88em; background: var(--fill-muted); padding: .05em .35em; border: 1px solid var(--line-hairline); }
+pre { font-size: .84rem; line-height: 1.5; background: var(--layer-inset); border: var(--frame); box-shadow: var(--lift-sm); padding: .9rem 1.1rem; overflow-x: auto; margin: 1rem 0; }
+pre code { background: none; border: 0; padding: 0; font-size: inherit; }
+.tree { white-space: pre; }
+.tree i { font-style: normal; color: var(--foreground-hint); }
+
+/* ── Structure ─────────────────────────────────────────────────────────── */
+
+figure.fig { margin: 1.5rem 0 2rem; border: var(--frame); box-shadow: var(--lift); background: var(--layer-panel); padding: 1rem 1rem .6rem; }
+figure.fig svg { display: block; width: 100%; height: auto; }
+figure.fig figcaption { font-size: .88rem; color: var(--foreground-muted); margin-top: .5rem; }
+
+table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.5rem; font-size: .95rem; }
+.table-scroll { overflow-x: auto; }
+th, td { text-align: left; vertical-align: top; padding: .55rem .7rem; border-bottom: 1px solid var(--line-muted); }
+th { font-weight: 700; background: var(--fill-muted); border-bottom: var(--frame); }
+table.grid { border: var(--frame); box-shadow: var(--lift-sm); }
+table.grid tbody tr:last-child td { border-bottom: 0; }
+td.n, th.n { font-family: var(--mono-font); font-weight: 700; font-size: 1.15rem; width: 3rem; text-align: center; }
+td.n { background: var(--layer-inset); border-right: 1px solid var(--line-muted); }
+
+.note { border-left: 5px solid var(--line-strong); background: var(--primary-soft); padding: .75rem 1rem; margin: 1.25rem 0; }
+.note.stop { background: var(--danger-soft); }
+.note > :first-child { margin-top: 0; }
+.note > :last-child { margin-bottom: 0; }
+
+.tag { display: inline-block; font-family: var(--mono-font); font-size: .72rem; line-height: 1; padding: .3em .5em; border: 1.5px solid var(--line-strong); background: var(--layer-panel); white-space: nowrap; vertical-align: middle; }
+.tag.yes { background: var(--success-soft); }
+.tag.no { background: var(--danger-soft); }
+.tag.cond { background: var(--primary-soft); }
+.tag.who { background: var(--info-soft); }
+
+.cards { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); margin: 1.25rem 0 1.5rem; }
+.card { border: var(--frame); box-shadow: var(--lift-sm); background: var(--layer-panel); padding: .9rem 1rem; }
+.card h3 { margin: 0 0 .4rem; font-size: 1.05rem; display: flex; align-items: center; gap: .5rem; }
+.card h3 .dot { width: .85rem; height: .85rem; border: 2px solid var(--line-strong); flex: none; }
+.card p { margin: .35rem 0; font-size: .93rem; }
+.card .owner { font-family: var(--mono-font); font-size: .75rem; color: var(--foreground-hint); margin-top: .6rem; }
+.card.k { border-width: 3px; }
+
+.steps { list-style: none; counter-reset: step; padding: 0; margin: 1.25rem 0; }
+.steps > li { counter-increment: step; display: grid; grid-template-columns: 2.4rem 1fr; gap: .8rem; padding: .7rem 0; border-top: 1px solid var(--line-muted); }
+.steps > li::before { content: counter(step); font-family: var(--mono-font); font-weight: 700; font-size: 1.05rem; display: grid; place-items: center; width: 2.2rem; height: 2.2rem; border: var(--frame); background: var(--layer-panel); box-shadow: var(--lift-sm); }
+.steps > li.hi::before { background: var(--primary-500); }
+.steps > li > :first-child { margin-top: .2rem; }
+.steps .actor { font-family: var(--mono-font); font-size: .74rem; border: 1.5px solid var(--line-strong); padding: .15em .45em; margin-right: .35rem; white-space: nowrap; }
+.steps .journal { display: inline-block; margin-top: .4rem; padding: .2rem .55rem; background: var(--primary-soft); border: 1.5px dashed var(--line-strong); font-family: var(--mono-font); font-size: .78rem; }
+
+dl.defs { margin: 1rem 0; }
+dl.defs div { display: grid; grid-template-columns: minmax(8rem, 12rem) 1fr; gap: 1rem; padding: .5rem 0; border-top: 1px solid var(--line-muted); }
+dl.defs dt { font-weight: 700; }
+dl.defs dd { margin: 0; }
+
+.page-foot { margin-top: 4rem; padding-top: 1rem; border-top: var(--frame); display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; }
+.page-foot a { text-decoration: none; border: var(--frame); box-shadow: var(--lift-sm); padding: .5rem .9rem; font-weight: 700; background: var(--layer-panel); }
+.page-foot a:hover { background: var(--primary-soft); }
+.page-foot a:active { box-shadow: none; transform: translate(2px, 2px); }
+
+.status { display: grid; gap: .5rem; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); margin: 1rem 0 1.5rem; }
+.status div { border: var(--frame); padding: .6rem .75rem; background: var(--layer-panel); font-size: .92rem; }
+.status b { display: block; margin-bottom: .2rem; }
+.status .done { border-left: 6px solid var(--success); }
+.status .part { border-left: 6px solid var(--primary-500); }
+.status .none { border-left: 6px solid var(--line-muted); }
+
+/* ── SVG diagram vocabulary ────────────────────────────────────────────── */
+
+.k-box { fill: var(--layer-panel); stroke: var(--line-strong); stroke-width: 2; }
+.k-hi { fill: var(--primary-500); stroke: var(--line-strong); stroke-width: 2; }
+.k-soft { fill: var(--primary-soft); stroke: var(--line-strong); stroke-width: 2; }
+.k-danger { fill: var(--danger-soft); stroke: var(--line-strong); stroke-width: 2; }
+.k-ok { fill: var(--success-soft); stroke: var(--line-strong); stroke-width: 2; }
+.k-inset { fill: var(--layer-inset); stroke: var(--line-strong); stroke-width: 2; }
+.k-shadow { fill: var(--line-strong); }
+.k-line { stroke: var(--line-strong); stroke-width: 2; fill: none; }
+.k-dash { stroke: var(--line-strong); stroke-width: 2; fill: none; stroke-dasharray: 6 5; }
+.k-hair { stroke: var(--line-muted); stroke-width: 1.5; fill: none; }
+.k-text { font-family: var(--sans-font); font-size: 15px; fill: var(--foreground-strong); }
+.k-bold { font-family: var(--sans-font); font-size: 15px; font-weight: 700; fill: var(--foreground-strong); }
+.k-mono { font-family: var(--mono-font); font-size: 11px; fill: var(--foreground-strong); }
+.k-muted { font-family: var(--sans-font); font-size: 13px; fill: var(--foreground-muted); }
+.k-title { font-family: var(--heading-font); font-size: 17px; font-weight: 700; fill: var(--foreground-strong); }
+
+/* ── Embedded figures (standalone HTML artboards in docs/figures/) ─────── */
+
+figure.fig.embed { padding: 0; }
+.embed .stage { position: relative; aspect-ratio: 1200 / 675; width: 100%; overflow: hidden; background: var(--layer-panel); }
+.embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.embed figcaption { padding: .5rem 1rem .6rem; }

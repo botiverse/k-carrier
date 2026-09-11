@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en" data-theme="brutal">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test plan · K</title>
+<meta name="description" content="How to validate K's external runner design: commands, acceptance criteria, the transaction completion release gate, and product acceptance.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;700&family=Geist+Mono:wght@400;700&display=swap">
+<link rel="stylesheet" href="assets/rui.css">
+<link rel="stylesheet" href="assets/site.css">
+<script defer src="assets/site.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="mark">K</span>k-carrier <small>docs</small></a>
+  <button class="menu-btn" type="button" aria-controls="nav" aria-expanded="false">Menu</button>
+</header>
+<nav id="nav" class="sidebar" aria-label="Documentation"></nav>
+
+<main id="main" class="page">
+<header class="page-head">
+  <h1>Test plan</h1>
+  <p class="lede">Use this plan to validate the <a href="design.html">external runner design</a>. The <a href="harness-design.html">harness guide</a> explains test structure and fault coverage.</p>
+</header>
+
+<h2 id="run-the-checks">Run the checks</h2>
+<p>Node 24 and the repository's pinned pnpm are required.</p>
+<pre><code>pnpm install --frozen-lockfile
+pnpm check
+pnpm test:runner
+node harness/src/cli.ts --list
+node harness/src/cli.ts sim
+node harness/src/cli.ts sim --seed 42 --json</code></pre>
+<p><code>pnpm check</code> includes typechecking, lint, ratchets and all Node tests. <code>test:runner</code> is a focused alternative when iterating on the external boundary, not an extra requirement after the full suite. <code>--list</code> lists registered harness checks; protocol and real-runner Node tests also contribute coverage.</p>
+
+<figure class="fig">
+<svg viewBox="0 0 960 250" role="img" aria-labelledby="figgates">
+  <title id="figgates">Two gates: the framework suite and the transaction completion release gate, followed by product acceptance</title>
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--line-strong)"/></marker></defs>
+  <!-- gate 1 -->
+  <g transform="translate(20,40)"><rect x="4" y="4" width="270" height="130" class="k-shadow"/><rect width="270" height="130" class="k-box"/>
+    <text x="16" y="30" class="k-title">Framework suite</text>
+    <text x="16" y="56" class="k-text">Acceptance criteria below,</text>
+    <text x="16" y="76" class="k-text">every layer of the harness.</text>
+    <text x="16" y="104" class="k-mono">pnpm check</text>
+    <text x="16" y="120" class="k-mono">gates Linux and macOS in CI</text>
+  </g>
+  <!-- gate 2 -->
+  <g transform="translate(345,40)"><rect x="4" y="4" width="270" height="130" class="k-shadow"/><rect width="270" height="130" class="k-hi"/>
+    <text x="16" y="30" class="k-title">Transaction completion gate</text>
+    <text x="16" y="56" class="k-text">Real worker, live service, killed</text>
+    <text x="16" y="76" class="k-text">processes, stale locks, budgets.</text>
+    <text x="16" y="104" class="k-mono">supervise.test.ts, lock.test.ts</text>
+    <text x="16" y="120" class="k-mono">required for the initial release</text>
+  </g>
+  <!-- product -->
+  <g transform="translate(670,40)"><rect x="4" y="4" width="270" height="130" class="k-shadow"/><rect width="270" height="130" class="k-inset"/>
+    <text x="16" y="30" class="k-title">Product acceptance</text>
+    <text x="16" y="56" class="k-text">Your installer on your target</text>
+    <text x="16" y="76" class="k-text">platforms, with its own data.</text>
+    <text x="16" y="104" class="k-mono">product repository</text>
+    <text x="16" y="120" class="k-mono">not certified by a green suite</text>
+  </g>
+  <line x1="294" y1="105" x2="343" y2="105" class="k-line" marker-end="url(#ah)"/>
+  <line x1="619" y1="105" x2="668" y2="105" class="k-line" marker-end="url(#ah)"/>
+  <text x="480" y="215" text-anchor="middle" class="k-muted">Whole-invocation loss is simulated by killing supervisor and worker, not by a physical power cut.</text>
+  <text x="480" y="235" text-anchor="middle" class="k-muted">Product OS startup triggers remain separate acceptance.</text>
+</svg>
+<figcaption>A green framework suite proves the mechanism. It does not certify a product's platform support.</figcaption>
+</figure>
+
+<h2 id="acceptance-criteria">Acceptance criteria</h2>
+<div class="table-scroll wide">
+<table class="grid">
+  <thead><tr><th>Area</th><th>Required behavior</th><th>Failure that must be detected</th></tr></thead>
+  <tbody>
+    <tr><td>Runner acquisition</td><td>Verify runner size/hash before execution; preserve exit result and clean scratch code</td><td>Corrupt runner executes or worker failure becomes success</td></tr>
+    <tr><td>Request boundary</td><td>Validate wire version, fields, id, target and consent before loading the adapter</td><td>Invalid input reaches trusted product code</td></tr>
+    <tr><td>Ownership and policy</td><td>New upgrades respect installation owner, approved target and compatibility</td><td>Another manager's install is changed or the selected version changes after consent</td></tr>
+    <tr><td>Product acquisition</td><td>Verify exact target bytes; bound stalled transfers and validate resumed content</td><td>Corrupt, truncated or mismatched bytes reach staging</td></tr>
+    <tr><td>Transaction</td><td>Journal intent before effects; serialize operations; retain a recoverable stable slot</td><td>Conflicting writers, illegal transitions or loss of the fallback</td></tr>
+    <tr><td>Service transition</td><td>Stop old instance, start candidate, check live identity/version and declared lifecycle surfaces</td><td>Cached evidence, stale instance or wrong target authorizes promotion</td></tr>
+    <tr><td>Failure recovery</td><td>Roll back before durable promote intent; replay commit after it</td><td>A live candidate alone is treated as a committed transaction</td></tr>
+    <tr><td>Retry and receipts</td><td>Same id/target replays the recorded result; different target is rejected</td><td>Retry repeats lifecycle effects or rewrites an earlier result</td></tr>
+    <tr><td>Controller boundary</td><td>Enforce call budgets and validate response shape</td><td>Hung/failed command or malformed probe reports success</td></tr>
+    <tr><td>Workloads and data</td><td>Test the product's promised quiesce/resume and migration behavior</td><td>Rollback restores bytes but loses promised workload state</td></tr>
+    <tr><td>Observation</td><td>Preserve unreadable/absent/observed distinctions; report actual outcome</td><td>Missing data becomes success, or historical success is presented as current health</td></tr>
+  </tbody>
+</table>
+</div>
+<p>The real-runner suite builds a runner and controls a separate service with no K import. It covers successful upgrade, wrong-version rollback, concurrent-worker refusal, worker death between stop and start, offline recovery and receipt replay. Generated crash cases and seeded simulation cover mechanism-level interleavings. Neither establishes exhaustive OS failure or physical power-cut coverage.</p>
+
+<h2 id="transaction-completion-release-gate">Transaction completion release gate</h2>
+<p>The Linux process tests in <a href="https://github.com/botiverse/k-carrier/blob/main/core/src/launcher/supervise.test.ts"><code>core/src/launcher/supervise.test.ts</code></a> exercise these cases with a built worker and live service. <a href="https://github.com/botiverse/k-carrier/blob/main/core/src/txn/lock.test.ts"><code>core/src/txn/lock.test.ts</code></a> races eight real processes against a stale lock; engine tests cover every recovery call budget. Whole-invocation loss is simulated by killing supervisor and worker, not by a physical power cut. Product OS startup triggers remain separate acceptance.</p>
+<div class="table-scroll wide">
+<table class="grid">
+  <thead><tr><th>Scenario</th><th>Required result</th></tr></thead>
+  <tbody>
+    <tr><td>Worker exits without a durable outcome</td><td>Supervisor invokes recovery and returns the settled result, not launch success</td></tr>
+    <tr><td>Upgrade or recovery call hangs</td><td>Bounded execution; fence outstanding effects before any replacement worker</td></tr>
+    <tr><td>Worker dies but a controller action survives</td><td>No takeover until the remaining writer is stopped or safely fenced</td></tr>
+    <tr><td>Another installer starts during recovery</td><td>One state writer; original operation stays bound across retries</td></tr>
+    <tr><td>A newer operation completes before the old supervisor resumes</td><td>Old supervisor reads/replays its own result and never recovers or mutates the newer operation</td></tr>
+    <tr><td>Recovery repeatedly fails</td><td>Finite attempts and elapsed time; explicit unresolved result, retained state and executable recovery path</td></tr>
+    <tr><td>Installer starts with unfinished work</td><td>Settle it before accepting new work; do not silently retry the failed target</td></tr>
+    <tr><td>Crash during terminal reporting or cleanup</td><td>Recorded result is replayable; cleanup cannot erase required recovery state</td></tr>
+    <tr><td>Whole machine or supervisor stops</td><td>Next installer invocation restores consistency; product OS startup trigger tested separately</td></tr>
+  </tbody>
+</table>
+</div>
+<div class="note"><p>Use real worker/controller processes for timeout and takeover cases, including late effects and competing invocations. Keep generated journal-fault tests for transaction ordering. Run both successful settlement and deliberately failed recovery so an implementation that always returns success cannot pass.</p></div>
+
+<h2 id="maintaining-test-quality">Maintaining test quality</h2>
+<ul>
+  <li>Pair success cases with failures that exercise the intended boundary.</li>
+  <li>Keep check registrations and their known-green/known-red tests aligned.</li>
+  <li>Test process identity and termination using real processes where those are the claim.</li>
+  <li>Keep fixtures isolated and clean up servers, child processes and temporary state.</li>
+  <li>Use <code>pnpm ratchet</code> to check prohibited core shortcuts, assertion declarations, registered-check coverage and cited source paths.</li>
+</ul>
+<p>For larger deterministic runs:</p>
+<pre><code>node harness/src/cli.ts sim --start-seed 1 --seeds 50000</code></pre>
+<p>The <a href="https://github.com/botiverse/k-carrier/blob/main/.github/workflows/dst-nightly.yml">nightly workflow</a> runs an expanded seed set and retains failures in <code>.k-harness/sim-failures.json</code>. Replay the reported seed before turning a discovered failure into a fixed regression case.</p>
+
+<h2 id="product-and-platform-acceptance">Product and platform acceptance</h2>
+<p>The <a href="https://github.com/botiverse/k-carrier/blob/main/.github/workflows/ci.yml">CI workflow</a> gates Linux and macOS checks; Windows is informational while the harness port remains incomplete. A green framework suite does not certify a product's platform support.</p>
+<p>Before shipping an installer, test its actual packaging, installation ownership, first-install baseline, running-service upgrade, bad-candidate rollback, recovery while offline, workload/data preservation, and survival outside the application's service unit. Verify cloud reconnection separately if the product promises it.</p>
+<div class="note stop"><p>K does not supply a universal fresh-install procedure, a signed distribution service, reversible data migrations or automatic recovery after a machine reboot.</p></div>
+
+<footer class="page-foot"><a href="reference.html">Back: Reference</a><a href="harness-design.html">Next: Harness design</a></footer>
+</main>
+</body>
+</html>
