@@ -82,6 +82,16 @@
   <div><dt>Local lock only</dt><dd>The lock is a local filesystem protocol requiring atomic creation and coherent directory reads (<a href="reference.html#lock-protocol">details</a>). It is not a distributed or NFS lock. Operation ids, receipt archival and replay rules are in the <a href="reference.html#receipts-and-retries">reference</a>.</dd></div>
 </dl>
 
+<h2 id="entry-obligations">Entry obligations</h2>
+<p>K returns an outcome, an exit code and a receipt. The entry that launched the installer, whether a bootstrap script, an application command or a remote control path, owes these in return. The <a href="guide.html#next">guide</a> tabulates them by interaction mode.</p>
+<ul>
+  <li>A channel is never consent. A non-interactive entry names an exact target version; an interactive one resolves the channel, shows the version and asks.</li>
+  <li>A failed target is never retried by the entry on its own. A new attempt is a new id and a new decision by whoever may consent.</li>
+  <li>No new work is admitted while an operation is unresolved. The retained recovery file is run again first.</li>
+  <li>A repair needs explicit consent from a person present. A non-interactive entry reports broken and stops.</li>
+  <li>Success is reported from the live readback, never from acceptance of the request.</li>
+</ul>
+
 <h2 id="repair-boundary">Repair boundary</h2>
 <div class="note stop"><p>K's refusals forbid silent bypass: no part of K clears a live owner's lock, overwrites an incomplete stable slot, reconstructs missing history, or terminates a process by recorded pid.</p></div>
 <p>They do not forbid a product installer from repairing a machine K cannot, provided the repair stays outside K's transaction and keeps these obligations:</p>

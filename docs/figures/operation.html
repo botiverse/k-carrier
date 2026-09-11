@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One operation, from request to outcome</title>
+<style>
+:root {
+  --ink: #111; --paper: #fffdf7; --soft: #f7f7f3; --muted: rgba(17,17,17,.52);
+  --yellow: #ffe66b; --pink: #ff7aa2; --blue: #7bc8ff; --green: #98e59b;
+  --orange: #ffb25f; --purple: #b7a1ff; --red: #ff7b73;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body { color-scheme: light; color: var(--ink); background: var(--paper);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+.frame { position: relative; width: 1200px; height: 675px; overflow: hidden;
+  background: radial-gradient(circle at 1px 1px, rgba(17,17,17,.045) 1px, transparent 1.5px) 0 0 / 16px 16px, var(--paper); }
+.frame svg { position: absolute; inset: 0; width: 1200px; height: 675px; }
+text { font-family: inherit; fill: var(--ink); }
+.h1 { font-size: 26px; font-weight: 700; }
+.sub { font-size: 17px; fill: var(--muted); }
+.tb { font-size: 16px; font-weight: 700; }
+.t { font-size: 14px; }
+.d { font-size: 13.5px; fill: var(--muted); }
+.lbl { font-size: 13px; font-weight: 700; }
+.m { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 13px; }
+.box { stroke: var(--ink); stroke-width: 2.5; }
+.shadow { fill: var(--ink); }
+.line { stroke: var(--ink); stroke-width: 2.5; fill: none; }
+.dash { stroke: var(--ink); stroke-width: 2.5; fill: none; stroke-dasharray: 8 7; }
+.code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 22px; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="frame" id="frame" role="img" aria-label="One operation from request to outcome. A request with an id, a target and consent first settles any unfinished work, then passes policy checks, which can hold it with exit 2. K's transaction then ends promoted with exit 0 or rolled back with exit 1. If the worker dies, bounded recovery settles it to one of those, or ends unresolved with exit 3 and a kept recovery file; running recovery again settles it, and only if it cannot be settled is the machine broken, which a repair on explicit consent returns to the managed world.">
+<svg viewBox="0 0 1200 675">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#111"/></marker></defs>
+  <text x="40" y="44" class="h1">One operation, from request to outcome</text>
+  <text x="40" y="70" class="sub">Every path ends with an exit code and a receipt on the machine. The entry decides what to do next.</text>
+
+  <!-- request -->
+  <g transform="translate(40,120)"><rect x="5" y="5" width="190" height="80" class="shadow"/><rect width="190" height="80" class="box" fill="var(--soft)"/><text x="12" y="26" class="tb">Request</text><text x="12" y="48" class="m">id, targetVersion,</text><text x="12" y="66" class="m">consented</text></g>
+  <line x1="235" y1="160" x2="268" y2="160" class="line" marker-end="url(#a)"/>
+  <!-- settle -->
+  <g transform="translate(270,120)"><rect x="5" y="5" width="190" height="80" class="shadow"/><rect width="190" height="80" class="box" fill="var(--paper)"/><text x="12" y="26" class="tb">Settle leftovers</text><text x="12" y="48" class="t">an unfinished earlier</text><text x="12" y="66" class="t">operation is finished first</text></g>
+  <line x1="465" y1="160" x2="498" y2="160" class="line" marker-end="url(#a)"/>
+  <!-- policy -->
+  <g transform="translate(500,120)"><rect x="5" y="5" width="190" height="80" class="shadow"/><rect width="190" height="80" class="box" fill="var(--paper)"/><text x="12" y="26" class="tb">Policy</text><text x="12" y="48" class="t">owner, compatibility,</text><text x="12" y="66" class="t">consent, same id replays</text></g>
+  <line x1="695" y1="160" x2="728" y2="160" class="line" marker-end="url(#a)"/>
+  <!-- held -->
+  <line x1="595" y1="205" x2="595" y2="258" class="line" marker-end="url(#a)"/>
+  <g transform="translate(500,260)"><rect x="5" y="5" width="190" height="80" class="shadow"/><rect width="190" height="80" class="box" fill="var(--yellow)"/><text x="12" y="26" class="tb">Held</text><text x="12" y="50" class="t">nothing changed;</text><text x="12" y="68" class="t">a new attempt is a new id</text><text x="150" y="26" class="code">2</text></g>
+  <!-- transaction -->
+  <g transform="translate(730,120)"><rect x="5" y="5" width="190" height="80" class="shadow"/><rect width="190" height="80" class="box" fill="var(--yellow)" stroke-width="4"/><text x="12" y="26" class="tb">K transaction</text><text x="12" y="48" class="t">stage, stop, start,</text><text x="12" y="66" class="t">probe, promote</text></g>
+  <!-- promoted / rolled back -->
+  <line x1="925" y1="145" x2="978" y2="145" class="line" marker-end="url(#a)"/>
+  <g transform="translate(980,100)"><rect x="5" y="5" width="180" height="64" class="shadow"/><rect width="180" height="64" class="box" fill="var(--green)"/><text x="12" y="26" class="tb">Promoted</text><text x="12" y="50" class="t">live readback confirmed</text><text x="145" y="26" class="code">0</text></g>
+  <line x1="925" y1="175" x2="978" y2="205" class="line" marker-end="url(#a)"/>
+  <g transform="translate(980,180)"><rect x="5" y="5" width="180" height="64" class="shadow"/><rect width="180" height="64" class="box" fill="var(--red)"/><text x="12" y="26" class="tb">Rolled back</text><text x="12" y="50" class="t">stable running again</text><text x="145" y="26" class="code">1</text></g>
+  <!-- worker dies -->
+  <line x1="825" y1="205" x2="825" y2="258" class="line" marker-end="url(#a)"/><text x="835" y="238" class="lbl">worker dies</text>
+  <g transform="translate(730,260)"><rect x="5" y="5" width="190" height="64" class="shadow"/><rect width="190" height="64" class="box" fill="var(--paper)"/><text x="12" y="26" class="tb">Bounded recovery</text><text x="12" y="50" class="t">fence; restore or replay</text></g>
+  <path d="M925 292 L950 292 L950 250" class="line" marker-end="url(#a)"/><text x="958" y="280" class="d">settled</text>
+  <line x1="825" y1="329" x2="825" y2="382" class="line" marker-end="url(#a)"/><text x="835" y="362" class="lbl">budget exhausted</text>
+  <!-- unresolved -->
+  <g transform="translate(730,385)"><rect x="5" y="5" width="190" height="64" class="shadow"/><rect width="190" height="64" class="box" fill="var(--orange)"/><text x="12" y="26" class="tb">Unresolved</text><text x="12" y="50" class="t">recovery.json kept</text><text x="150" y="26" class="code">3</text></g>
+  <path d="M730 417 L712 417 L712 292 L728 292" class="dash" marker-end="url(#a)"/>
+  <text x="700" y="372" text-anchor="end" class="d">run recovery again:</text><text x="700" y="390" text-anchor="end" class="d">a person, or the next invocation</text>
+  <text x="700" y="408" text-anchor="end" class="d">no new work until then</text>
+  <line x1="825" y1="454" x2="825" y2="507" class="line" marker-end="url(#a)"/><text x="835" y="487" class="lbl">cannot be settled</text>
+  <!-- broken -->
+  <g transform="translate(730,510)"><rect x="5" y="5" width="190" height="64" class="shadow"/><rect width="190" height="64" class="box" fill="var(--red)"/><text x="12" y="26" class="tb">Broken</text><text x="12" y="50" class="t">K refuses to guess</text></g>
+  <line x1="925" y1="542" x2="978" y2="542" class="line" marker-end="url(#a)"/>
+  <g transform="translate(980,510)"><rect x="5" y="5" width="180" height="76" class="shadow"/><rect width="180" height="76" class="box" fill="var(--paper)"/><text x="12" y="26" class="tb">Repair</text><text x="12" y="48" class="t">explicit consent only:</text><text x="12" y="66" class="t">quarantine, fresh install</text></g>
+  <path d="M1170 548 L1188 548 L1188 90 L825 90 L825 118" class="dash" marker-end="url(#a)"/>
+  <text x="840" y="82" class="d">managed again; the next upgrade is a normal one</text>
+
+  <!-- legend -->
+  <text x="40" y="300" class="d">Exit codes are K's. What to say, whether to ask,</text>
+  <text x="40" y="318" class="d">and whether to try again belong to the entry;</text>
+  <text x="40" y="336" class="d">see the table below.</text>
+</svg>
+</div>
+<script>
+const frame = document.getElementById('frame');
+function fitFrame() {
+  const scale = Math.min(1, window.innerWidth / 1200, window.innerHeight / 675);
+  frame.style.transform = `scale(${scale})`;
+  frame.style.transformOrigin = "top left";
+}
+fitFrame();
+window.addEventListener("resize", fitFrame);
+</script>
+</body>
+</html>

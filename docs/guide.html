@@ -36,7 +36,7 @@
   </tbody>
 </table>
 </div>
-<p><code>self upgrade</code> is a convenience over <code>install.sh</code>: it resolves a channel to a version and asks for consent, then runs the same bootstrap with a pinned installer, launched outside the application's service unit because the installer is about to stop that application. The farther the approver is from the machine, the narrower the action, and in every cell success is claimed only after a live probe, never when the request was accepted.</p>
+<p>What each requester must do with each outcome is <a href="#next">at the end of this page</a>. <code>self upgrade</code> is a convenience over <code>install.sh</code>: it resolves a channel to a version and asks for consent, then runs the same bootstrap with a pinned installer, launched outside the application's service unit because the installer is about to stop that application. The farther the approver is from the machine, the narrower the action, and in every cell success is claimed only after a live probe, never when the request was accepted.</p>
 
 <h2 id="worlds">What is already on the machine</h2>
 <p>The second constraint: the same request means something different depending on what is already there. There are four starting worlds. K's transaction covers one; the installer decides the rest.</p>
@@ -118,6 +118,29 @@
 </table>
 <div class="note"><p><strong>Two things surprise people.</strong> A <code>recover</code> that successfully restored stable after a bad candidate exits <strong>1</strong>, because the recorded outcome is a rolled-back upgrade. That is the honest answer. And <code>status</code> reads the last receipt, not the live service; it can say <code>genesis</code> on a machine that is running fine.</p></div>
 <p>The exact response shape and every exit code are in the <a href="reference.html#protocol-v1">reference</a>. What each step asks of your controller, and how to package and ship the result, is the <a href="integration.html">integration guide</a>.</p>
+
+<h2 id="next">What the entry must do with each outcome</h2>
+<p>K gives every operation an exit code and a receipt. What to say, whether to ask, and whether to try again are the entry's job, and the answer differs by whether a person is present. <strong>Interactive</strong> means a person at the shell who can be asked and can see the result. <strong>Non-interactive</strong> means a remote request or a script, where nothing may prompt and nothing may be assumed.</p>
+<figure class="fig embed">
+<div class="stage"><iframe src="figures/operation.html" title="One operation from request to outcome, with exit codes and the paths back into the managed world" loading="lazy" scrolling="no"></iframe></div>
+<figcaption>Every path ends with an exit code and a receipt on the machine. Only a repair, on explicit consent, leaves K's transaction.</figcaption>
+</figure>
+<div class="table-scroll wide">
+<table class="grid">
+  <thead><tr><th>Event or outcome</th><th>Interactive</th><th>Non-interactive</th></tr></thead>
+  <tbody>
+    <tr><td>The request names a channel, not a version</td><td>Resolve it, show the version, ask. The consent goes into the request.</td><td><span class="tag no">refuse</span> An exact version must be named. Nothing changes.</td></tr>
+    <tr><td>An earlier operation is unfinished</td><td>Settle it first, say what was settled, then continue.</td><td>Same, without prompting. Report the earlier outcome alongside this one.</td></tr>
+    <tr><td>Held <span class="tag cond">exit 2</span>: owned elsewhere, incompatible, not consented</td><td>Explain the reason. Nothing changed; a new attempt needs a new id.</td><td>Return the code and reason. The caller decides. No retry.</td></tr>
+    <tr><td>Rolled back <span class="tag cond">exit 1</span></td><td>Say why the candidate failed. The old version is running.</td><td>Report rolled-back. Never retry the same target on its own.</td></tr>
+    <tr><td>Unresolved <span class="tag cond">exit 3</span></td><td>Print the recovery file and how to run recovery again.</td><td>Keep the recovery file. The next invocation settles it; no new work is admitted until then.</td></tr>
+    <tr><td>Broken: recovery cannot settle the machine</td><td>Offer a repair. Require explicit consent for this machine. Report what was quarantined.</td><td><span class="tag no">stop</span> Report broken. A repair is never started non-interactively.</td></tr>
+    <tr><td>The same id is sent again</td><td>Replay the receipt; no lifecycle effects.</td><td>Same.</td></tr>
+    <tr><td>Promoted <span class="tag yes">exit 0</span></td><td>Report the live version, pid and start id from the readback.</td><td>Same. Acceptance of the request was never success.</td></tr>
+  </tbody>
+</table>
+</div>
+<p>The normative form of these rules is the <a href="design.html#entry-obligations">entry obligations</a> in the design.</p>
 
 <footer class="page-foot"><a href="index.html">Back: Overview</a><a href="example.html">Next: Runnable example</a></footer>
 </main>
