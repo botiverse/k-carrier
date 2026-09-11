@@ -25,26 +25,7 @@
 </header>
 
 <h2 id="execution-and-trust">Execution and trust</h2>
-<figure class="fig">
-<svg viewBox="0 0 960 270" role="img" aria-labelledby="figx">
-  <title id="figx">Entry, supervisor, worker, state directory, controller and application, with the trust boundary</title>
-  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--line-strong)"/></marker></defs>
-  <rect x="200" y="14" width="540" height="246" class="k-dash"/>
-  <text x="212" y="36" class="k-muted">outside the application slots and service unit</text>
-  <g transform="translate(20,60)"><rect x="4" y="4" width="150" height="76" class="k-shadow"/><rect width="150" height="76" class="k-box"/><text x="75" y="28" text-anchor="middle" class="k-bold">Entry</text><text x="75" y="48" text-anchor="middle" class="k-mono">bootstrap, CLI,</text><text x="75" y="64" text-anchor="middle" class="k-mono">remote control</text></g>
-  <g transform="translate(215,60)"><rect x="4" y="4" width="150" height="76" class="k-shadow"/><rect width="150" height="76" class="k-box"/><text x="75" y="28" text-anchor="middle" class="k-bold">Supervisor</text><text x="75" y="48" text-anchor="middle" class="k-mono">verify and launch</text><text x="75" y="64" text-anchor="middle" class="k-mono">the runner</text></g>
-  <g transform="translate(410,60)"><rect x="4" y="4" width="150" height="76" class="k-shadow"/><rect width="150" height="76" class="k-hi"/><text x="75" y="28" text-anchor="middle" class="k-bold">Worker</text><text x="75" y="52" text-anchor="middle" class="k-mono">K + product adapter</text></g>
-  <g transform="translate(590,60)"><rect x="4" y="4" width="130" height="76" class="k-shadow"/><rect width="130" height="76" class="k-box"/><text x="65" y="28" text-anchor="middle" class="k-bold">Controller</text><text x="65" y="48" text-anchor="middle" class="k-mono">product lifecycle</text><text x="65" y="64" text-anchor="middle" class="k-mono">program</text></g>
-  <g transform="translate(790,60)"><rect x="4" y="4" width="150" height="76" class="k-shadow"/><rect width="150" height="76" class="k-box"/><text x="75" y="28" text-anchor="middle" class="k-bold">Application</text><text x="75" y="52" text-anchor="middle" class="k-mono">in its service unit</text></g>
-  <g transform="translate(410,170)"><rect x="4" y="4" width="150" height="76" class="k-shadow"/><rect width="150" height="76" class="k-inset"/><text x="75" y="26" text-anchor="middle" class="k-bold">State</text><text x="75" y="46" text-anchor="middle" class="k-mono">lock, journal, slots,</text><text x="75" y="64" text-anchor="middle" class="k-mono">receipts</text></g>
-  <line x1="172" y1="98" x2="213" y2="98" class="k-line" marker-end="url(#ah)"/>
-  <line x1="367" y1="98" x2="408" y2="98" class="k-line" marker-end="url(#ah)"/>
-  <line x1="562" y1="98" x2="588" y2="98" class="k-line" marker-end="url(#ah)"/>
-  <line x1="722" y1="98" x2="788" y2="98" class="k-line" marker-end="url(#ah)"/>
-  <line x1="485" y1="140" x2="485" y2="168" class="k-line" marker-end="url(#ah)"/>
-</svg>
-<figcaption>Requests select an action and a target version. Code, commands and download URLs are fixed at build time.</figcaption>
-</figure>
+<p>The processes are drawn and named in the <a href="guide.html#pieces">guide</a>: bootstrap, supervisor, worker, state directory, controller, application. The obligations on that layout:</p>
 <ul>
   <li>The runner and its runtime live outside the application slots and service unit. Stopping the application must leave the worker alive. A child process can still belong to a systemd cgroup or Windows job; the publisher must arrange isolation.</li>
   <li>The supervisor retains recovery code until settlement. Installation state persists. An OS hook or operator must restart installation after reboot.</li>
@@ -74,32 +55,11 @@
 </dl>
 
 <h2 id="transaction-and-recovery">Transaction and recovery</h2>
-<p>Each installation has one lock, stable and experiment executable slots, and a journal. K stages verified candidate bytes, quiesces work, stops the old service, starts the candidate and evaluates live readiness. Passing candidates are promoted; failed candidates restore stable. Application data belongs outside the slots.</p>
-<figure class="fig">
-<svg viewBox="0 0 960 190" role="img" aria-labelledby="figph">
-  <title id="figph">The seven journal phases and the two recovery rules around promote intent</title>
-  <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--line-strong)"/></marker></defs>
-  <rect x="784" y="14" width="8" height="120" class="k-hi"/>
-  <g transform="translate(20,50)"><rect x="3" y="3" width="80" height="44" class="k-shadow"/><rect width="80" height="44" class="k-box"/><text x="40" y="28" text-anchor="middle" class="k-mono">idle</text></g>
-  <g transform="translate(130,50)"><rect x="3" y="3" width="100" height="44" class="k-shadow"/><rect width="100" height="44" class="k-box"/><text x="50" y="28" text-anchor="middle" class="k-mono">staged</text></g>
-  <g transform="translate(260,50)"><rect x="3" y="3" width="130" height="44" class="k-shadow"/><rect width="130" height="44" class="k-box"/><text x="65" y="28" text-anchor="middle" class="k-mono">handing-over</text></g>
-  <g transform="translate(420,50)"><rect x="3" y="3" width="170" height="44" class="k-shadow"/><rect width="170" height="44" class="k-box"/><text x="85" y="28" text-anchor="middle" class="k-mono">running-experiment</text></g>
-  <g transform="translate(620,50)"><rect x="3" y="3" width="110" height="44" class="k-shadow"/><rect width="110" height="44" class="k-box"/><text x="55" y="28" text-anchor="middle" class="k-mono">readback</text></g>
-  <g transform="translate(820,20)"><rect x="3" y="3" width="120" height="44" class="k-shadow"/><rect width="120" height="44" class="k-ok"/><text x="60" y="28" text-anchor="middle" class="k-mono">promoted</text></g>
-  <g transform="translate(820,90)"><rect x="3" y="3" width="120" height="44" class="k-shadow"/><rect width="120" height="44" class="k-danger"/><text x="60" y="28" text-anchor="middle" class="k-mono">rolled-back</text></g>
-  <line x1="103" y1="72" x2="128" y2="72" class="k-line" marker-end="url(#ah2)"/>
-  <line x1="233" y1="72" x2="258" y2="72" class="k-line" marker-end="url(#ah2)"/>
-  <line x1="393" y1="72" x2="418" y2="72" class="k-line" marker-end="url(#ah2)"/>
-  <line x1="593" y1="72" x2="618" y2="72" class="k-line" marker-end="url(#ah2)"/>
-  <path d="M733 72 L760 72 L760 42 L818 42" class="k-line" marker-end="url(#ah2)"/>
-  <path d="M733 72 L760 72 L760 112 L818 112" class="k-dash" marker-end="url(#ah2)"/>
-  <path d="M130 150 L130 160 L730 160 L730 150" class="k-hair"/>
-  <text x="430" y="180" text-anchor="middle" class="k-text">before durable promote intent: restore stable</text>
-  <path d="M820 150 L820 160 L940 160 L940 150" class="k-hair"/>
-  <text x="880" y="180" text-anchor="middle" class="k-text">after it: replay commit</text>
-</svg>
-<figcaption>Intent is journaled before effects. Recovery takes the same lock and uses existing slot bytes without release lookup.</figcaption>
-</figure>
+<p>Each installation has one lock, stable and experiment executable slots, and a journal. Application data belongs outside the slots. The walkthrough is in the guide, <a href="guide.html#one-upgrade">one upgrade start to finish</a> and <a href="guide.html#failures">when something goes wrong</a>; the obligations:</p>
+<ul>
+  <li>The phases are, in order, <code>idle</code>, <code>staged</code>, <code>handing-over</code>, <code>running-experiment</code>, <code>readback</code>, then <code>promoted</code> or <code>rolled-back</code>. Intent is journaled before effects.</li>
+  <li>Recovery takes the same lock and uses existing slot bytes without release lookup. Before durable promote intent it restores stable; after it, it replays commit idempotently.</li>
+</ul>
 <p>A running candidate alone does not authorize commit. Corrupt or unknown state, and another live lock owner, prevent conflicting operations. Filesystem durability and controller behavior determine the real platform guarantees.</p>
 
 <h2 id="transaction-completion">Transaction completion</h2>
