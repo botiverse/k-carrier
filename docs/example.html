@@ -105,7 +105,7 @@ printf '%s' '{"protocolVersion":1,"action":"status"}' | node "$K_EXAMPLE_HOME/ru
 </table>
 <p>Probe separately for a live observation:</p>
 <pre><code>printf '%s' '{"protocolVersion":1,"action":"probe"}' | node "$K_EXAMPLE_HOME/controller.mjs" "$K_EXAMPLE_HOME"</code></pre>
-<p>The probe should report version 2.0.0 with a different pid and startId from setup. These are <strong>different protocols</strong>: upgrade, recover and status go to the runner; fence, probe, start, stop, quiesce and resume go to the application controller.</p>
+<p>The probe should report version 2.0.0 with a different pid and startId from setup.</p>
 
 <h2 id="recovery-and-cleanup">Recovery and cleanup</h2>
 <p>The installer supervises its worker and recovers automatically. If it exits 3, keep the reported recovery file and run:</p>
@@ -127,7 +127,7 @@ unset K_EXAMPLE_HOME</code></pre>
 
 <h2 id="what-this-proves">What this proves</h2>
 <p><code>pnpm test:runner</code> automates upgrade, wrong-version rollback, current and archive replay, concurrent lock rejection, killing the runner between stop and start, recovery with the release source removed, bounded failed recovery, a controller surviving its worker, and restarting after the whole invocation is lost. The test owns and cleans its own home; it does not reuse the walkthrough's directory.</p>
-<div class="note stop"><p>This adapter and controller spawn Node via <code>process.execPath</code>, which is only correct under an external Node interpreter. Inside a single executable (SEA), <code>process.execPath</code> is the SEA itself; see the <a href="integration.html#build-a-single-executable">integration guide</a> before packaging this pattern.</p></div>
+<div class="note stop"><p>This adapter spawns its controller with <code>process.execPath</code>, which is only correct under an external Node. See the <a href="integration.html#build-a-single-executable">SEA pitfall</a> before packaging this pattern.</p></div>
 <p>This controller is a demo, not a production supervisor. Its service implements cooperative shutdown and a loopback health protocol; an unreachable endpoint is not generally proof that an arbitrary production process has died. A product controller must establish process ownership and termination through its service manager, authenticate control access, and implement workload preservation. The demo copies selected slot bytes to <code>active.mjs</code> so Node treats them as ESM and so the running file is never inside a slot directory that promotion will rename; that runtime copy is not a third rollback slot. Localhost is not authentication.</p>
 <p>Source: <a href="https://github.com/botiverse/k-carrier/blob/main/examples/external-service/adapter.ts">adapter.ts</a>, <a href="https://github.com/botiverse/k-carrier/blob/main/examples/external-service/controller.mjs">controller.mjs</a>, <a href="https://github.com/botiverse/k-carrier/blob/main/examples/external-service/install.mjs">install.mjs</a>, <a href="https://github.com/botiverse/k-carrier/blob/main/examples/external-service/service.mjs">service.mjs</a>.</p>
 

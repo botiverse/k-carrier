@@ -91,7 +91,7 @@
 node scripts/build-runner.mjs examples/external-service/adapter.ts /tmp/k-runner.mjs</code></pre>
 <p>Follow the <a href="example.html">example setup</a> before invoking that example runner. After authenticating the caller and obtaining approval for the target, submit a request from an operator shell or independent supervisor:</p>
 <pre><code>printf '%s' '{"protocolVersion":1,"action":"upgrade","id":"install-2","targetVersion":"2.0.0","consented":true}' | node /tmp/k-runner.mjs</code></pre>
-<p><code>consented</code> records approval; it is not authorization supplied by an untrusted network client. Requests cannot select adapter modules, commands or release URLs. Logs go to stderr and the response to stdout. Web entrypoints need an external launch facility and a way to retrieve the result after reconnection.</p>
+<p><code>consented</code> records approval; it is not authorization supplied by an untrusted network client. Requests cannot select adapter modules, commands or release URLs. Logs go to stderr and the response to stdout. Web entries need an external launch facility and a way to retrieve the result after reconnection.</p>
 <div class="note stop"><p>Directly invoking a worker does not supervise it. Use <code>launchRunner</code> for a supervised install, or <code>superviseRunner</code> when the caller needs a structured result. Both enforce execution and recovery deadlines and recover only the original operation. The <a href="https://github.com/botiverse/k-carrier/blob/main/examples/external-service/install.mjs">example installer</a> wires this flow; see <a href="#package-the-installer">packaging</a> for shipping the runner as a single executable.</p></div>
 
 <h2 id="4-observe-and-recover">4. Observe and recover</h2>
@@ -108,7 +108,7 @@ node scripts/build-runner.mjs examples/external-service/adapter.ts /tmp/k-runner
 <h3 id="repair-beyond-k">Repair beyond K</h3>
 <p>Of the <a href="guide.html#worlds">five worlds</a>, K's transaction owns the managed and the upgrading ones. Fresh and adopted are <code>bootstrapStable</code>, start and probe, as in <a href="#2-establish-the-initial-installation">step 2</a>. Broken needs repair. The <a href="design.html#repair-boundary">design</a> states its obligations; building it:</p>
 <ul>
-  <li>Give repair its own entrypoint and request shape, so a request that only names a version cannot reach it, and run <code>recover</code> first.</li>
+  <li>Give repair its own entry and request shape, so a request that only names a version cannot reach it, and run <code>recover</code> first.</li>
   <li>Quarantine by renaming the whole state directory under the installer's own state in one atomic move. Keep it until an operator removes it.</li>
   <li>Stop an unresponsive service only by an identity you recorded, such as executable path and start time, never by a bare pid.</li>
   <li>Acquire and verify the release exactly as an upgrade would, install to the runtime path, start, probe, then <code>bootstrapStable</code>.</li>
@@ -153,7 +153,7 @@ node scripts/build-runner.mjs examples/external-service/adapter.ts /tmp/k-runner
   <text x="520" y="230" class="k-text">interpreter path baked in at build time.</text>
 </svg>
 </figure>
-<div class="note stop"><p><strong>The SEA pitfall.</strong> Inside a SEA, <code>process.execPath</code> is the SEA itself. An adapter or controller that spawns <code>process.execPath some-script.mjs</code> re-runs the embedded runner instead of the script, and the upgrade fails at the first controller call. Make the controller a native executable or its own SEA, or pass an explicit interpreter path into the adapter at build time. The example adapter spawns its controller with <code>process.execPath</code>, so as published it only works under an external Node; the recipe below was verified end to end (a SEA runner promoted the example service under <code>launchRunner</code>) with the adapter's controller command changed to an explicit Node path.</p></div>
+<div class="note stop"><p><strong>The SEA pitfall.</strong> Inside a SEA, <code>process.execPath</code> is the SEA itself, so spawning it with a script re-runs the runner. Make the controller a native executable or its own SEA, or bake an explicit interpreter path into the adapter. The example adapter spawns its controller with <code>process.execPath</code>, so as published it only works under an external Node; the recipe below was verified end to end with that command changed to an explicit Node path.</p></div>
 <pre><code># 1. CommonJS entry. Point the adapter's controller command at an explicit
 #    Node path first (see the SEA pitfall above).
 node scripts/build-runner.mjs --cjs examples/external-service/adapter.ts dist/runner.cjs
@@ -171,7 +171,7 @@ npx postject@1.0.0-alpha.6 dist/runner NODE_SEA_BLOB dist/sea-prep.blob \
 # macOS only: codesign --sign - dist/runner   (use your release identity)
 
 # 4. Publish dist/runner with its sha256 and size; launch it with no interpreter.</code></pre>
-<p>Build one SEA per target OS and architecture with that platform's Node binary. Binary size depends on the target Node build. Installer and product release metadata can include optional gzip transport; both paths use the same verified downloader.</p>
+<p>Build one SEA per target OS and architecture with that platform's Node binary. Binary size depends on the target Node build. Installer and product release metadata can include optional <a href="reference.html#release-metadata">gzip transport</a>; both paths use the same verified downloader.</p>
 <p>This packages the worker only. <code>launchRunner</code> is a Node API, and the demo controller also needs Node. To ship an installation chain that needs no preinstalled runtime, package the supervisor and controller dependencies too.</p>
 
 <h2 id="release-platforms">Release platforms</h2>
@@ -214,8 +214,6 @@ npx postject@1.0.0-alpha.6 dist/runner NODE_SEA_BLOB dist/sea-prep.blob \
 <p>Whatever the platform, the boundary is the same. K has no built-in connector or result uploader for any of them. Product authentication, channel and cohort policy and remote reporting belong to the integration. Forward the actual operation id and outcome; publication or process launch is not installation success, and local promotion does not prove cloud reconnection.</p>
 <p>Withdrawing a release affects future distribution. It does not roll back already installed machines. K can recover existing local slots offline; downloading an older release still depends on the source authorizing and serving it.</p>
 
-<h3 id="optional-gzip-release-transport">Optional gzip release transport</h3>
-<p>A <code>Release</code> may include a <code>gzip</code> URL, compressed size and SHA-256. K verifies compressed bytes, bounds decompression, then checks the canonical size and hash. Missing gzip metadata uses the canonical URL. Failure of a selected gzip object is terminal; K does not silently switch representations. Resume offsets refer to the compressed object.</p>
 
 <footer class="page-foot"><a href="example.html">Back: Runnable example</a><a href="design.html">Next: Design</a></footer>
 </main>

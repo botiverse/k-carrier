@@ -46,7 +46,7 @@
 
 <h2 id="installer">What the installer adds</h2>
 <p><code>install.sh</code> and your application's <code>self upgrade</code> launch the same external installer, built from K and your product adapter. It owns the transaction, outlives the application it replaces, runs when the application cannot start, and ships on its own schedule. If a worker crashes, its temporary supervisor runs bounded recovery. After a reboot, an operator or OS startup hook has to start it again.</p>
-<p>K's transaction covers two of the <a href="guide.html#worlds">five worlds</a> an installer meets: a machine K already manages, and one whose upgrade was interrupted. The installer decides what happens on a fresh machine, on an installation that predates K, and on one K cannot settle. For that last world it may, on explicit consent, do what an operator with a shell would: quarantine K's state, reinstall from a trusted release, and hand the result back to K.</p>
+<p>K's transaction covers two of the <a href="guide.html#worlds">five worlds</a> an installer meets: a machine K already manages, and one whose upgrade was interrupted. The installer decides the rest, and may repair a machine K cannot settle, on explicit consent.</p>
 <div class="note"><p>K's refusals forbid silent bypass, not people. The <a href="design.html#repair-boundary">repair boundary</a> says what such a repair must keep. Whether to offer one is a product choice.</p></div>
 
 <h2 id="ship">What you ship</h2>

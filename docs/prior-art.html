@@ -53,7 +53,6 @@
   <g transform="translate(330,180)"><rect x="4" y="4" width="300" height="50" class="k-shadow"/><rect width="300" height="50" class="k-hi"/>
     <text x="150" y="31" text-anchor="middle" class="k-bold">K: conceptual influences only</text>
   </g>
-  <text x="480" y="246" text-anchor="middle" class="k-muted">No upstream implementation code was copied.</text>
 </svg>
 </figure>
 <div class="table-scroll wide">
@@ -77,17 +76,14 @@
 <h3 id="rustup">Rustup: a thin bootstrap and replaceable installer</h3>
 <p><a href="https://github.com/rust-lang/rustup/blob/main/rustup-init.sh">rustup-init.sh</a> selects a platform download and runs the installer. The shell does not implement Rust installation. <a href="https://github.com/rust-lang/rustup/blob/main/src/cli/self_update.rs">Self-update</a> also obtains an installer executable; the helper has a release version and may remain until a later invocation cleans it up.</p>
 <p><a href="https://github.com/rust-lang/rustup/blob/main/src/cli/self_update/unix.rs">Unix replacement</a> and <a href="https://github.com/rust-lang/rustup/blob/main/src/cli/self_update/windows.rs">Windows replacement</a> handle different execution/deletion constraints. A different PID alone does not prove that an updater can survive stopping a service or replace a running Windows executable safely.</p>
-<div class="note"><p><strong>K decision:</strong> share an independently runnable installer across entrypoints. Keep its persistent state, runtime, trust and recovery ownership explicit.</p></div>
 
 <h3 id="tailscale">Tailscale: installation and service readiness are separate</h3>
 <p>The surveyed Linux binary path in <a href="https://github.com/tailscale/tailscale/blob/main/clientupdate/clientupdate.go">clientupdate.go</a> attempts a service restart separately and reports when bytes were updated but restart failed. Platform/package-specific paths respect the installation owner. This observation does not establish whether other paths have rollback.</p>
-<div class="note"><p><strong>K decision:</strong> successful installation is insufficient for service promotion. Probe the live process and defer installations owned by another manager.</p></div>
 
 <h3 id="datadog">Datadog: reuse slots, not a second control plane</h3>
 <p>The <a href="#design-influences">earlier survey</a> informed K's stable/experiment slots. The published <a href="https://pkg.go.dev/github.com/DataDog/datadog-agent/test/new-e2e/tests/installer/windows">Windows installer test interface</a> distinguishes direct install from starting, promoting and stopping experiments. The follow-up did not verify all current installer internals.</p>
-<div class="note"><p><strong>K decision:</strong> retain the existing transaction, lock, journal and host adapter. A disposable runner can use them without a permanent installer service or a parallel remote-job database. Recovery and archived receipts remain local.</p></div>
 
-<p>The resulting <a href="design.html">design</a> specifies a built installer, a bounded request protocol and an external controller. Product data compatibility, platform packaging and remote authorization remain product responsibilities.</p>
+<p>What K took from each is in the <a href="#design-influences">table above</a>. The resulting <a href="design.html">design</a> specifies a built installer, a bounded request protocol and an external controller. Product data compatibility, platform packaging and remote authorization remain product responsibilities.</p>
 
 <footer class="page-foot"><span></span><a href="formal.html">Back: Formal model</a></footer>
 </main>

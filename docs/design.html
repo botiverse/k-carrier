@@ -25,7 +25,7 @@
 </header>
 
 <h2 id="execution-and-trust">Execution and trust</h2>
-<p>The processes are drawn and named in the <a href="guide.html#pieces">guide</a>: bootstrap, supervisor, worker, state directory, controller, application. The obligations on that layout:</p>
+<p>The processes are drawn and named in the <a href="guide.html#pieces">guide</a>. The obligations on that layout:</p>
 <ul>
   <li>The runner and its runtime live outside the application slots and service unit. Stopping the application must leave the worker alive. A child process can still belong to a systemd cgroup or Windows job; the publisher must arrange isolation.</li>
   <li>The supervisor retains recovery code until settlement. Installation state persists. An OS hook or operator must restart installation after reboot.</li>
@@ -59,12 +59,11 @@
 <ul>
   <li>The phases are, in order, <code>idle</code>, <code>staged</code>, <code>handing-over</code>, <code>running-experiment</code>, <code>readback</code>, then <code>promoted</code> or <code>rolled-back</code>. Intent is journaled before effects.</li>
   <li>Recovery takes the same lock and uses existing slot bytes without release lookup. Before durable promote intent it restores stable; after it, it replays commit idempotently.</li>
+  <li>Every started operation has an owner that waits for a durable terminal result or explicitly reports unresolved recovery. An installer invocation settles unfinished work before admitting a new upgrade; recovering an interrupted operation does not retry its requested upgrade.</li>
 </ul>
 <p>A running candidate alone does not authorize commit. Corrupt or unknown state, and another live lock owner, prevent conflicting operations. Filesystem durability and controller behavior determine the real platform guarantees.</p>
 
-<h2 id="transaction-completion">Transaction completion</h2>
-<div class="note"><p><strong>Required for the initial release.</strong> Every started operation has an owner that waits for a durable terminal result or explicitly reports unresolved recovery. An installer invocation must first settle unfinished work before admitting a new upgrade. Recovering an interrupted operation does not retry its requested upgrade.</p></div>
-<h3 id="the-supervisor">The supervisor</h3>
+<h2 id="the-supervisor">The supervisor</h2>
 <ul>
   <li>runs outside the application service unit;</li>
   <li>retains the verified runner while the operation is active;</li>
@@ -73,11 +72,11 @@
   <li>stops supervising after completion or an explicit unresolved result.</li>
 </ul>
 <p>Recovery attempts and total elapsed time are bounded. Exhaustion preserves state and provides a recovery command rather than reporting success.</p>
-<h3 id="takeover">Takeover and binding</h3>
+<h2 id="takeover">Takeover and binding</h2>
 <dl class="defs">
   <div><dt>Observe exit first</dt><dd>Before starting a successor, the supervisor must observe the prior worker exit. The recovery worker then takes the lock and fences outstanding controller effects before replaying lifecycle actions. An expired deadline alone is insufficient; an unconfirmed exit forbids takeover.</dd></div>
   <div><dt>Bind to the original id</dt><dd>Recovery must bind to the original operation id under K's transaction lock. If another operation has since run, recovery inspects or replays the original result without modifying the newer operation. Recovery reuses the existing journal and receipts; supervision does not create another transaction log.</dd></div>
-  <div><dt>Clean up after settlement</dt><dd>Persist the outcome, release owned resources, then remove disposable code. Never delete slots, a live owner's lock, or recovery logs to make an interrupted operation appear complete. If recovery remains unresolved, preserve the evidence and a verified means to invoke it again. Installer startup handles leftover work; machine reboot still requires an OS hook or operator to start the installer.</dd></div>
+  <div><dt>Clean up after settlement</dt><dd>Persist the outcome, release owned resources, then remove disposable code. Never delete slots, a live owner's lock, or recovery logs to make an interrupted operation appear complete. If recovery remains unresolved, preserve the evidence and a verified means to invoke it again.</dd></div>
   <div><dt>Budget every host call</dt><dd>Every engine host call has a positive budget. Uncertain effects retain the worker's lock until it exits. Bundled workers exit after flushing their response; custom in-process callers must also exit on <code>HostCallUncertain</code> rather than reuse that worker.</dd></div>
   <div><dt>Local lock only</dt><dd>The lock is a local filesystem protocol requiring atomic creation and coherent directory reads (<a href="reference.html#lock-protocol">details</a>). It is not a distributed or NFS lock. Operation ids, receipt archival and replay rules are in the <a href="reference.html#receipts-and-retries">reference</a>.</dd></div>
 </dl>
@@ -100,13 +99,6 @@
 </table>
 </div>
 
-<ul>
-  <li>A channel is never consent. A non-interactive entry names an exact target version; an interactive one resolves the channel, shows the version and asks.</li>
-  <li>A failed target is never retried by the entry on its own. A new attempt is a new id and a new decision by whoever may consent.</li>
-  <li>No new work is admitted while an operation is unresolved. The retained recovery file is run again first.</li>
-  <li>A repair needs explicit consent from a person present. A non-interactive entry reports broken and stops.</li>
-  <li>Success is reported from the live readback, never from acceptance of the request.</li>
-</ul>
 
 <h2 id="repair-boundary">Repair boundary</h2>
 <div class="note stop"><p>K's refusals forbid silent bypass: no part of K clears a live owner's lock, overwrites an incomplete stable slot, reconstructs missing history, or terminates a process by recorded pid.</p></div>

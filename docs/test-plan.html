@@ -35,7 +35,7 @@ node harness/src/cli.ts sim --seed 42 --json</code></pre>
 <p><code>pnpm check</code> includes typechecking, lint, ratchets and all Node tests. <code>test:runner</code> is a focused alternative when iterating on the external boundary, not an extra requirement after the full suite. <code>--list</code> lists registered harness checks; protocol and real-runner Node tests also contribute coverage.</p>
 
 <figure class="fig">
-<svg viewBox="0 0 960 250" role="img" aria-labelledby="figgates">
+<svg viewBox="0 0 960 200" role="img" aria-labelledby="figgates">
   <title id="figgates">Two gates: the framework suite and the transaction completion release gate, followed by product acceptance</title>
   <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--line-strong)"/></marker></defs>
   <!-- gate 1 -->
@@ -64,8 +64,6 @@ node harness/src/cli.ts sim --seed 42 --json</code></pre>
   </g>
   <line x1="294" y1="105" x2="343" y2="105" class="k-line" marker-end="url(#ah)"/>
   <line x1="619" y1="105" x2="668" y2="105" class="k-line" marker-end="url(#ah)"/>
-  <text x="480" y="215" text-anchor="middle" class="k-muted">Whole-invocation loss is simulated by killing supervisor and worker, not by a physical power cut.</text>
-  <text x="480" y="235" text-anchor="middle" class="k-muted">Product OS startup triggers remain separate acceptance.</text>
 </svg>
 <figcaption>A green framework suite proves the mechanism. It does not certify a product's platform support.</figcaption>
 </figure>
@@ -124,7 +122,7 @@ node harness/src/cli.ts sim --seed 42 --json</code></pre>
 <p>The <a href="https://github.com/botiverse/k-carrier/blob/main/.github/workflows/dst-nightly.yml">nightly workflow</a> runs an expanded seed set and retains failures in <code>.k-harness/sim-failures.json</code>. Replay the reported seed before turning a discovered failure into a fixed regression case.</p>
 
 <h2 id="product-and-platform-acceptance">Product and platform acceptance</h2>
-<p>The <a href="https://github.com/botiverse/k-carrier/blob/main/.github/workflows/ci.yml">CI workflow</a> gates Linux and macOS checks; Windows is informational while the harness port remains incomplete. A green framework suite does not certify a product's platform support.</p>
+<p>The <a href="https://github.com/botiverse/k-carrier/blob/main/.github/workflows/ci.yml">CI workflow</a> gates Linux and macOS checks; Windows is informational while the harness port remains incomplete.</p>
 <p>Before shipping an installer, test its actual packaging, installation ownership, first-install baseline, running-service upgrade, bad-candidate rollback, recovery while offline, workload/data preservation, and survival outside the application's service unit. Verify cloud reconnection separately if the product promises it.</p>
 <div class="note stop"><p>K does not supply a universal fresh-install procedure, a signed distribution service, reversible data migrations or automatic recovery after a machine reboot.</p></div>
 

@@ -58,18 +58,7 @@
 </svg>
 <figcaption>Each layer produces different evidence. The harness starts at the bottom; the product finishes at the top.</figcaption>
 </figure>
-<div class="table-scroll wide">
-<table class="grid">
-  <thead><tr><th>Layer</th><th>Implementation</th><th>Evidence</th></tr></thead>
-  <tbody>
-    <tr><td>Mechanisms</td><td>Core unit tests, harness checks, injected effects</td><td>Locking, journal ordering, slots, policy, rollback and convergence</td></tr>
-    <tr><td>Execution boundary</td><td>Protocol, launcher, runner and command-controller tests</td><td>Input rejection, verified runner execution, bounded calls, receipt and exit-code binding</td></tr>
-    <tr><td>Real processes</td><td><a href="https://github.com/botiverse/k-carrier/blob/main/core/src/runner/process.test.ts"><code>core/src/runner/process.test.ts</code></a></td><td>A separate runner upgrades an application with no K dependency; another worker recovers after a crash</td></tr>
-    <tr><td>Product acceptance</td><td>Product repository and target machines</td><td>Real service isolation, packaging, workload restoration and data compatibility</td></tr>
-  </tbody>
-</table>
-</div>
-<p><code>pnpm test</code> runs the first three layers; <code>pnpm test:runner</code> selects the runner boundary and integration tests. Direct Node tests are not all registered harness checks, so <code>--list</code> is not the complete test inventory.</p>
+<p><code>pnpm test</code> runs the first three layers: mechanisms, the execution boundary and real processes. <code>pnpm test:runner</code> selects the runner boundary and integration tests. Direct Node tests are not all registered harness checks, so <code>--list</code> is not the complete test inventory.</p>
 
 <h2 id="components">Components</h2>
 <p>All paths below are under <a href="https://github.com/botiverse/k-carrier/tree/main/harness/src"><code>harness/src/</code></a>.</p>
@@ -115,9 +104,8 @@
 </svg>
 <figcaption>Three crash points per transition. Directed real-process tests separately kill a worker between stop and start.</figcaption>
 </figure>
-<p>The crash enumerator crosses the transaction transition table with three points: before journal write, after journal write and after the action. The matrix uses injected effects and simulated crashes. Directed real-process tests separately kill a worker between stop and start and verify recovery. The generated matrix is not a claim that every point was tested with OS kills or physical power loss.</p>
+<p>The matrix uses injected effects and simulated crashes. It is not a claim that every point was tested with OS kills or physical power loss.</p>
 <p>Seeded simulation explores additional effect interleavings. Its receipts preserve the seed and transcript hash; failing seeds are saved for replay. Regressions should become fixed cases. Simulation does not establish filesystem durability, service-manager isolation or platform-specific executable replacement.</p>
-<div class="note"><p>Recovery uses the same contract at every layer: before durable promote intent, restore stable; after it, replay commit. Product controllers must also isolate unfinished asynchronous effects before retrying a timed-out operation.</p></div>
 <p>See the <a href="test-plan.html">test plan</a> for commands and acceptance criteria, and the <a href="design.html">design</a> for the transaction and wire contracts.</p>
 
 <footer class="page-foot"><a href="test-plan.html">Back: Test plan</a><a href="formal.html">Next: Formal model</a></footer>

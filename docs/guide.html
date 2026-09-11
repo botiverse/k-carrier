@@ -38,7 +38,7 @@
 </div>
 <p><code>self upgrade</code> is a convenience over <code>install.sh</code>: it resolves a channel to a version and asks for consent, then runs the same bootstrap with a pinned installer, launched outside the application's service unit because the installer is about to stop that application. The farther the approver is from the machine, the narrower the action, and in every cell success is claimed only after a live probe, never when the request was accepted.</p>
 
-<h3 id="next">What each requester must do with each outcome</h3>
+<h3 id="next">What the entry does with each outcome</h3>
 <p>K gives every operation an exit code and a receipt. What to say, whether to ask, and whether to try again are the entry's job, and the answer differs by whether a person is present. <strong>Interactive</strong> means a person at the shell who can be asked and can see the result. <strong>Non-interactive</strong> means a remote request or a script, where nothing may prompt and nothing may be assumed.</p>
 <figure class="fig embed">
 <div class="stage"><iframe src="figures/operation.html" title="One operation from request to outcome, with exit codes and the paths back into the managed world" loading="lazy" scrolling="no"></iframe></div>
@@ -46,7 +46,7 @@
 </figure>
 <figure class="fig embed">
 <div class="stage"><iframe src="figures/entry.html" title="What the entry does next after each outcome, in an interactive lane and a non-interactive lane" loading="lazy" scrolling="no"></iframe></div>
-<figcaption>Interactive entries can ask and go again; non-interactive ones report and stop. Only the two loops on the left, a pinned new request and recovery, return to K.</figcaption>
+<figcaption>Interactive entries can ask and go again; non-interactive ones report and stop. Only two paths return to K: a new request pinned to an exact version, and running recovery again.</figcaption>
 </figure>
 <p>The same rules as a normative matrix are the <a href="design.html#entry-obligations">entry obligations</a> in the design.</p>
 
@@ -56,11 +56,11 @@
 <div class="stage"><iframe src="figures/worlds.html" title="What the installer does when it arrives: five starting worlds, one destination" loading="lazy" scrolling="no"></iframe></div>
 <figcaption>Every path ends in the managed world. K owns that world; the installer owns the way in, and the broken way in only on consent.</figcaption>
 </figure>
-<div class="note"><p>An upgrading machine, one with an unfinished operation in its journal, is finished first, whatever was asked; that recovery is mandatory and is not repair. Only the managed and upgrading worlds have rollback. Fresh and adopted have verification and a probe; broken has consent and a receipt.</p></div>
+<div class="note"><p>An upgrading machine, one with an unfinished operation in its journal, is finished first, whatever was asked; that recovery is mandatory and is not repair. Only the managed and upgrading worlds have rollback. A fresh or adopted machine gets verified bytes, a start and a probe, then <code>bootstrapStable</code>. A broken machine gets a repair only on consent, with a receipt in place of a rollback.</p></div>
 
 
 <h2 id="pieces">K's answer: the pieces</h2>
-<p>One external installer, launched from every entrypoint, that owns the transaction and outlives the application it replaces. It has a small number of parts.</p>
+<p>One external installer, launched from every entry, that owns the transaction and outlives the application it replaces. It has a small number of parts.</p>
 <figure class="fig embed">
 <div class="stage"><iframe src="figures/pieces.html" title="The pieces of a K upgrade: bootstrap, supervisor, worker, state directory, controller, application" loading="lazy" scrolling="no"></iframe></div>
 <figcaption>Stopping the application must not stop the thing that is upgrading it. That is the whole point of the layout.</figcaption>
