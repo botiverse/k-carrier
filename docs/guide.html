@@ -30,13 +30,13 @@
 <table class="grid">
   <thead><tr><th>Entrypoint</th><th>Present</th><th>Safe</th><th>Forceful</th></tr></thead>
   <tbody>
-    <tr><td><code>install.sh</code>, run by a person</td><td><span class="tag who">person at the shell</span></td><td><span class="tag yes">anything</span><br>Including a machine where the application cannot start.</td><td><span class="tag cond">explicit request</span><br>The only entrypoint that reaches an application that cannot start.</td></tr>
-    <tr><td><code>self upgrade</code> from the application</td><td><span class="tag who">person at the shell</span><br>The application launches the installer and is then replaced.</td><td><span class="tag yes">an upgrade</span><br>Of the running application only.</td><td><span class="tag cond">explicit flag</span><br>A broken application never gets this far.</td></tr>
+    <tr><td>A person at the shell, through <code>install.sh</code> or the application's <code>self upgrade</code></td><td><span class="tag who">person at the shell</span><br>Both run the same bootstrap; <code>self upgrade</code> only resolves a channel to a version and asks for consent first.</td><td><span class="tag yes">anything</span><br>Including, through <code>install.sh</code>, a machine where the application cannot start.</td><td><span class="tag cond">explicit request</span><br>The only entrypoint that reaches an application that cannot start.</td></tr>
     <tr><td>Remote control from a server</td><td><span class="tag who">nobody at the machine</span><br>An authenticated remote authority.</td><td><span class="tag yes">a reversible upgrade</span><br>To an exact version, with the consent recorded in the request.</td><td><span class="tag no">never from a failed upgrade</span><br>A remote repair, if offered, is its own attributed action.</td></tr>
     <tr><td>OS startup hook after reboot</td><td><span class="tag who">nobody</span></td><td><span class="tag cond">settle only</span></td><td><span class="tag no">no</span></td></tr>
   </tbody>
 </table>
 </div>
+<p><code>self upgrade</code> adds nothing the bootstrap cannot do. It must pin the installer it downloads, and it must launch the installer outside the application's service unit, because the installer is about to stop that application. A request that originates inside the running service is the remote row, whoever typed it.</p>
 <p>The farther the approver is from the machine, the narrower the action. In every cell the outcome must be a receipt on the machine, and success may be claimed only after a live probe, never when the request was accepted. Everything below exists to make that rule hold.</p>
 
 
