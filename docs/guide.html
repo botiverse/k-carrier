@@ -37,16 +37,10 @@
 </table>
 </div>
 <p><code>self upgrade</code> is a convenience over <code>install.sh</code>: it resolves a channel to a version and asks for consent, then runs the same bootstrap with a pinned installer, launched outside the application's service unit because the installer is about to stop that application. The farther the approver is from the machine, the narrower the action, and in every cell success is claimed only after a live probe, never when the request was accepted.</p>
-
-<h3 id="next">What the entry does with each outcome</h3>
-<p>What the entry does next differs by whether a person is present. <strong>Interactive</strong> means a person at the shell who can be asked and can see the result. <strong>Non-interactive</strong> means a remote request or a script, where nothing may prompt and nothing may be assumed.</p>
 <figure class="fig embed">
-<div class="stage"><iframe src="figures/operation.html" title="One operation from request to outcome, with exit codes and the paths back into the managed world" loading="lazy" scrolling="no"></iframe></div>
+<div class="stage"><iframe src="figures/entries.html" title="What running install.sh, self upgrade or a remote upgrade means in each machine condition" loading="lazy" scrolling="no"></iframe></div>
 </figure>
-<figure class="fig embed">
-<div class="stage"><iframe src="figures/entry.html" title="What the entry does next after each outcome, in an interactive lane and a non-interactive lane" loading="lazy" scrolling="no"></iframe></div>
-</figure>
-<p>The same rules as a normative matrix are the <a href="design.html#entry-obligations">entry obligations</a> in the design.</p>
+<p>What the entry owes for each outcome (held, rolled back, unresolved, broken, promoted) is the normative matrix of <a href="design.html#entry-obligations">entry obligations</a> in the design.</p>
 
 <h2 id="worlds">What is already on the machine</h2>
 <p>The second constraint: the same request means something different depending on what is already there. K's transaction covers two of the five starting worlds, the managed machine and the one still upgrading; the installer decides the rest.</p>
