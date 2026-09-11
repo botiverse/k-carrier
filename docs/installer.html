@@ -99,7 +99,7 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
 <ol class="steps">
   <li><div>Whether a person is present is decided once, before anything else: an explicit <code>CI</code> or <code>*_NON_INTERACTIVE=1</code> wins; otherwise a tty on stdin or <code>/dev/tty</code>.</div></li>
   <li><div>An entry may collect consent attended and then run the installer unattended. <code>self upgrade</code> does exactly this: it asks in the application, then launches the same bootstrap non-interactively with the version and the consent in the request.</div></li>
-  <li><div>Unattended, nothing prompts. Running the installer is the consent to whatever the machine needs, repair included, and the receipt records who ran it and what was done; <code>--yes</code> only matters attended, where it skips the question. Optional side effects, such as removing another manager's copy or adding to <code>PATH</code>, default to no.</div></li>
+  <li><div>Unattended, nothing prompts. Running the installer is the consent to whatever the machine needs, repair included, and the receipt records who ran it and what was done; <code>--yes</code> only matters attended, where it skips the question. Putting the install directory on <code>PATH</code> is part of installing and happens either way; the line says so. Another manager's copy is never removed.</div></li>
 </ol>
 <h3 id="lock-settle">Lock and settle</h3>
 <ol class="steps">
@@ -111,7 +111,7 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
   <li><div>After settling, the installer reads the machine once: a readable stable slot is <strong>managed</strong>; a service installed before K is <strong>adopted</strong> by seeding stable from its running executable; unresolved recovery, a corrupt slot or a dead lock owner is <strong>broken</strong>; nothing is <strong>fresh</strong>.</div></li>
   <li><div>Managed and adopted are K's transaction, with rollback. Fresh is verify, seed stable, publish, self-check, then <strong>first setup</strong>: no transaction, no rollback, nothing to restore. Broken is repaired the same way, and the run says so.</div></li>
   <li><div>First setup is whatever the product needs before it can run: logging in, for instance. It is the product's step and the installer only runs it. Attended, it runs on the terminal and a successful setup is followed by start and a live readback. Unattended, there is nobody to set it up, so the installation is left usable and the line says what to do next. A declined or failed setup leaves a usable installation, not a failed one.</div></li>
-  <li><div>An installation owned by another manager, such as a package manager, is held, exit 2. The installer may say where it is and, attended, offer to remove it. It never removes it unattended.</div></li>
+  <li><div>An installation owned by another manager, such as a package manager, is held, exit 2. The line says where it is and how to remove it. The installer never removes it.</div></li>
   <li><div>A target older than what is installed is held, exit 2, unless the request says the downgrade is intended. Refusing to downgrade is not success.</div></li>
 </ol>
 <h3 id="product">What the product reports</h3>
@@ -130,7 +130,7 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
 <ol class="steps">
   <li><div>The release authority and the byte store are different trust domains. When both describe the target, their sha256 and size must agree before any download.</div></li>
   <li><div>Bytes are verified against the manifest, after decompression if compressed, and again after staging. The staged executable must match the host platform and must report the requested version when asked. Any mismatch fails before any change, exit 1.</div></li>
-  <li><div>Downloads fail before anything changes; recovery needs none. Credentials for a private source come from the environment unattended, and may be prompted for attended.</div></li>
+  <li><div>Downloads fail before anything changes; recovery needs none. Credentials for a private source come from the environment; attended, missing ones are asked for.</div></li>
 </ol>
 <h3 id="repair">Repair</h3>
 <ol class="steps">
@@ -144,7 +144,7 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
   <li><div>What the readback reaches depends on what was running. A service that was running is stopped and must come back as a live service reporting the requested version, a pid and a new start id. Where nothing runs, because nobody has set the product up yet, the candidate itself is run and must answer as the requested version; every run is a new process, so the start id is new. The line says which: <code>Upgraded 2.2.1 → 2.3.0. It is running.</code> against <code>Upgraded 2.2.1 → 2.3.0. Next: run app login.</code></div></li>
   <li><div>Installed means usable, not running: the bytes are in place and answer as the version. Running is claimed only when the service was started and read back, after first setup or because it was running before. The product names the next step when there is one, and the line repeats it.</div></li>
   <li><div>Every run ends in one printed line and one exit code: 0 upgraded, installed or up to date, 1 failed or rolled back, 2 not done, 3 unresolved. The line says what happened, what did not change, and what to do next, in the user's words.</div></li>
-  <li><div>Attended, the line explains and may point at a next command. Unattended, it is the same line plus the code, and the caller decides; the installer never retries the same target on its own.</div></li>
+  <li><div>The line is the same attended and unattended. Only who acts on it differs: a person, or the caller. The installer never retries the same target on its own.</div></li>
 </ol>
 
 <h2 id="obligations">What each outcome prints</h2>
@@ -156,7 +156,7 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
     <tr><td>Channel, not a version</td><td><code>Upgrade 2.2.1 → 2.3.0? [y/N]</code></td><td>Resolve, show, ask; the answer goes into the receipt.</td><td>Resolve and proceed. If the authority cannot be reached: exit 1 <code>Could not upgrade: the release server could not be reached. Nothing changed.</code></td></tr>
     <tr><td>Up to date <span class="tag yes">0</span></td><td><code>2.3.0 is already installed. Nothing to do.</code></td><td></td><td></td></tr>
     <tr><td>Installed <span class="tag yes">0</span></td><td><code>Installed 2.3.0. Set up and running.</code></td><td>First setup ran on the terminal, then start and readback.</td><td><code>Installed 2.3.0. Next: run app login.</code></td></tr>
-    <tr><td>Promoted <span class="tag yes">0</span></td><td><code>Upgraded 2.2.1 → 2.3.0. It is running.</code></td><td>Only after the live readback.</td><td>Same. Where nothing was running: <code>Upgraded 2.2.1 → 2.3.0.</code> plus the next step, if any.</td></tr>
+    <tr><td>Promoted <span class="tag yes">0</span></td><td><code>Upgraded 2.2.1 → 2.3.0. It is running.</code></td><td>Only after the live readback.</td><td>Same. Where nothing was running: <code>Upgraded 2.2.1 → 2.3.0.</code> and it stays stopped; the next step follows when the product is not set up.</td></tr>
     <tr><td>Failed before any change <span class="tag cond">1</span></td><td><code>Could not upgrade: &lt;reason&gt;. Nothing changed; 2.2.1 is still running.</code></td><td></td><td>Never retry the same target on its own.</td></tr>
     <tr><td>Rolled back <span class="tag cond">1</span></td><td><code>2.3.0 did not start correctly, so 2.2.1 was put back and is running.</code> Where nothing was running: <code>2.3.0 did not check out correctly, so 2.2.1 was put back.</code></td><td></td><td>Never retry the same target on its own.</td></tr>
     <tr><td>Held <span class="tag cond">2</span></td><td><code>Not done: &lt;reason&gt;. Nothing changed.</code> plus what to do, when there is something</td><td>Reasons in the user's words: installed by another manager, older than what is installed, declined, another installer running.</td><td>The caller decides. No retry.</td></tr>
