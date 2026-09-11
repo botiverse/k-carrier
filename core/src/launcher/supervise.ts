@@ -19,6 +19,8 @@ export interface RunnerLaunch {
   recoveryTimeoutMs?: number;
   totalTimeoutMs?: number;
   recoveryAttempts?: number;
+  /** How runner bytes are fetched; a supervisor shipping its runner beside itself can serve file: URLs. */
+  fetchImpl?: typeof fetch;
 }
 
 export interface RunnerLaunchResult {
@@ -104,7 +106,8 @@ export async function superviseRunner(input: RunnerLaunch): Promise<RunnerLaunch
   if (!Number.isSafeInteger(retries) || retries < 0 || retries > 10) throw new Error("invalid recovery attempts");
   const transfer = artifactTransferTimeouts(input.release.size);
   const bytes = await downloadVerified(input.release, { timeoutMs: transfer.overallTimeoutMs,
-    responseTimeoutMs: transfer.responseTimeoutMs, idleTimeoutMs: transfer.idleTimeoutMs });
+    responseTimeoutMs: transfer.responseTimeoutMs, idleTimeoutMs: transfer.idleTimeoutMs,
+    ...(input.fetchImpl ? { fetchImpl: input.fetchImpl } : {}) });
   await fs.mkdir(input.scratchDir, { recursive: true });
   const dir = await fs.mkdtemp(path.join(input.scratchDir, "k-runner-"));
   const file = path.join(dir, input.interpreter ? "runner.mjs" : "runner.bin");
