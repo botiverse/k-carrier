@@ -25,15 +25,14 @@
 </header>
 
 <h2 id="entrypoints">Who starts an upgrade, and what they may ask for</h2>
-<p>An upgrade is requested from four places, and in two of them nobody is at the machine. Before any mechanism, this is the constraint to design for: who is present to approve, and how far they are from the consequences. Two kinds of action exist. A <strong>safe</strong> one is verified and reversible. A <strong>forceful</strong> one is consented and has no rollback.</p>
+<p>An upgrade is requested from three places, and in one of them nobody is at the machine. Before any mechanism, this is the constraint to design for: who is present to approve, and how far they are from the consequences. Two kinds of action exist. A <strong>safe</strong> one is verified and reversible. A <strong>forceful</strong> one is consented and has no rollback.</p>
 <div class="table-scroll wide">
 <table class="grid">
   <thead><tr><th>Entrypoint</th><th>Present</th><th>Safe</th><th>Forceful</th></tr></thead>
   <tbody>
-    <tr><td>A person at the shell, through <code>install.sh</code> or the application's <code>self upgrade</code></td><td><span class="tag who">person at the shell</span><br>Both run the same bootstrap; <code>self upgrade</code> only resolves a channel to a version and asks for consent first.</td><td><span class="tag yes">anything</span><br>Including, through <code>install.sh</code>, a machine where the application cannot start.</td><td><span class="tag cond">explicit request</span><br>The only entrypoint that reaches an application that cannot start.</td></tr>
+    <tr><td>A person at the shell, through <code>install.sh</code> or the application's <code>self upgrade</code></td><td><span class="tag who">person at the shell</span><br>Both run the same bootstrap; <code>self upgrade</code> only resolves a channel to a version and asks for consent first.</td><td><span class="tag yes">anything</span><br><code>install.sh</code> alone also does a clean install: a fresh machine, or one whose application cannot start.</td><td><span class="tag cond">explicit request</span><br>Through <code>install.sh</code>, since a repair starts from nothing runnable.</td></tr>
     <tr><td>Remote control from a server</td><td><span class="tag who">nobody at the machine</span><br>An authenticated remote authority.</td><td><span class="tag yes">a reversible upgrade</span><br>To an exact version, with the consent recorded in the request.</td><td><span class="tag no">never from a failed upgrade</span><br>A remote repair, if offered, is its own attributed action.</td></tr>
-    <tr><td>OS startup hook after reboot</td><td><span class="tag who">nobody</span></td><td><span class="tag cond">settle only</span></td><td><span class="tag no">no</span></td></tr>
-  </tbody>
+      </tbody>
 </table>
 </div>
 <p><code>self upgrade</code> adds nothing the bootstrap cannot do. It must pin the installer it downloads, and it must launch the installer outside the application's service unit, because the installer is about to stop that application. A request that originates inside the running service is the remote row, whoever typed it.</p>
