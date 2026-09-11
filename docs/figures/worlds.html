@@ -13,82 +13,102 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; }
 body { color-scheme: light; color: var(--ink); background: var(--paper);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 17px; }
-.mono { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; }
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
 .frame { position: relative; width: 1200px; height: 675px; overflow: hidden;
   background: radial-gradient(circle at 1px 1px, rgba(17,17,17,.045) 1px, transparent 1.5px) 0 0 / 16px 16px, var(--paper); }
-.frame > * { position: absolute; }
-h1 { left: 40px; top: 28px; margin: 0; font-size: 26px; font-weight: 700; }
-.sub { left: 40px; top: 66px; font-size: 18px; color: var(--muted); }
-.world { top: 120px; width: 262px; height: 500px; border: 2px solid var(--ink); background: var(--paper); box-shadow: 6px 6px 0 var(--ink); padding: 18px 18px 16px; }
-.world.k { border-width: 4px; }
-.world h2 { margin: 0; font-size: 24px; display: flex; align-items: center; gap: 10px; }
-.world h2 i { width: 16px; height: 16px; border: 2px solid var(--ink); display: inline-block; }
-.machine { position: relative; height: 190px; margin: 16px 0 12px; border: 2px dashed rgba(17,17,17,.4); background: var(--soft); }
-.machine .lbl { position: absolute; left: 8px; top: 6px; font-size: 12px; color: var(--muted); }
-.item { position: absolute; border: 2px solid var(--ink); font-size: 13px; line-height: 1.2; padding: 4px 6px; background: var(--paper); }
-.item.exe { width: 100px; height: 54px; }
-.item.exe::after { content: ""; position: absolute; right: -2px; top: -2px; width: 14px; height: 14px; background: var(--soft); border-left: 2px solid var(--ink); border-bottom: 2px solid var(--ink); }
-.item.svc { width: 96px; height: 34px; padding-left: 26px; }
-.item.svc::before { content: ""; position: absolute; left: 8px; top: 10px; width: 10px; height: 10px; border: 2px solid var(--ink); border-radius: 50%; background: var(--green); }
-.item.svc.dead::before { background: var(--red); }
-.item.slot { width: 100px; height: 40px; }
-.item.slot.empty { background: repeating-linear-gradient(45deg, transparent 0 8px, rgba(17,17,17,.08) 8px 10px); color: var(--muted); }
-.item.journal { width: 100px; height: 54px; background: repeating-linear-gradient(180deg, transparent 0 10px, rgba(17,17,17,.15) 10px 12px), var(--paper); }
-.item.broken { background: var(--red); }
-.item.q { font-size: 20px; border: 0; background: none; color: var(--muted); }
-.act { font-size: 15px; line-height: 1.45; min-height: 118px; }
-.act code { font-family: ui-monospace, Menlo, monospace; font-size: 13.5px; }
-.owner { position: absolute; left: 18px; bottom: 14px; font-size: 13px; padding: 4px 8px; border: 2px solid var(--ink); }
-.promise { position: absolute; left: 18px; bottom: 50px; font-size: 13px; color: var(--muted); }
+.frame svg { position: absolute; inset: 0; width: 1200px; height: 675px; }
+text { font-family: inherit; fill: var(--ink); }
+.h1 { font-size: 26px; font-weight: 700; }
+.sub { font-size: 18px; fill: var(--muted); }
+.t { font-size: 22px; font-weight: 700; }
+.d { font-size: 14.5px; fill: var(--muted); }
+.a { font-size: 14.5px; }
+.ab { font-size: 14.5px; font-weight: 700; }
+.m { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 13px; }
+.box { stroke: var(--ink); stroke-width: 2.5; }
+.shadow { fill: var(--ink); }
+.line { stroke: var(--ink); stroke-width: 2.5; fill: none; }
+.dash { stroke: var(--ink); stroke-width: 2.5; fill: none; stroke-dasharray: 8 7; }
+.tag { stroke: var(--ink); stroke-width: 2; }
 </style>
 </head>
 <body>
-<div class="frame" id="frame" role="img" aria-label="Four worlds side by side. Fresh: nothing on the machine; the installer downloads, verifies, seeds stable, starts and probes. Adopted: an executable and service installed before K but no stable slot; the installer seeds stable from the running executable, then K upgrades. Managed: a complete stable slot and a settled journal; K runs the two-slot transaction. Broken: state K cannot settle; the installer repairs on consent by quarantining, reinstalling and returning to managed.">
-  <h1>The four worlds an installer meets</h1>
-  <div class="sub">Every invocation first settles unfinished K work. Only the managed world has rollback.</div>
+<div class="frame" id="frame" role="img" aria-label="A state diagram of the four worlds. Fresh, adopted and broken machines each enter the managed world through an installer action: download and bootstrap stable; bootstrap stable from the running executable; or, on consent, quarantine and reinstall. Inside the managed world K runs upgrades that end promoted or rolled back and stay managed. A machine leaves the managed world for broken only when recovery cannot settle it.">
+<svg viewBox="0 0 1200 675">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#111"/></marker></defs>
+  <text x="40" y="52" class="h1">The four worlds an installer meets</text>
+  <text x="40" y="82" class="sub">Three ways into the managed world, one way out of it. K owns only the loop inside.</text>
 
-  <div class="world" style="left:40px">
-    <h2><i style="background:var(--paper)"></i>Fresh</h2>
-    <div class="machine"><span class="lbl">on the machine</span><div class="item q" style="left:105px;top:70px">nothing</div></div>
-    <div class="act">Download and verify the release, <code>bootstrapStable</code> those bytes, start, probe.</div>
-    <div class="owner mono">installer</div><div class="promise">verified + probed</div>
-  </div>
+  <!-- Fresh -->
+  <g transform="translate(40,130)">
+    <rect x="6" y="6" width="330" height="110" class="shadow"/><rect width="330" height="110" class="box" fill="var(--paper)"/>
+    <text x="18" y="36" class="t">Fresh</text>
+    <text x="18" y="64" class="d">Nothing on the machine.</text>
+    <text x="18" y="92" class="m">owner: installer</text>
+  </g>
+  <!-- Adopted -->
+  <g transform="translate(40,290)">
+    <rect x="6" y="6" width="330" height="110" class="shadow"/><rect width="330" height="110" class="box" fill="var(--blue)"/>
+    <text x="18" y="36" class="t">Adopted</text>
+    <text x="18" y="64" class="d">An executable and service installed before K.</text>
+    <text x="18" y="84" class="d">No stable slot yet.</text>
+    <text x="18" y="104" class="m">owner: installer, then K</text>
+  </g>
+  <!-- Broken -->
+  <g transform="translate(40,480)">
+    <rect x="6" y="6" width="330" height="140" class="shadow"/><rect width="330" height="140" class="box" fill="var(--red)"/>
+    <text x="18" y="36" class="t">Broken</text>
+    <text x="18" y="64" class="d">State K cannot settle: unresolved recovery,</text>
+    <text x="18" y="84" class="d">a corrupt slot, a dead lock owner,</text>
+    <text x="18" y="104" class="d">a missing executable.</text>
+    <text x="18" y="128" class="m">owner: installer, on explicit consent</text>
+  </g>
 
-  <div class="world" style="left:326px">
-    <h2><i style="background:var(--blue)"></i>Adopted</h2>
-    <div class="machine"><span class="lbl">on the machine</span>
-      <div class="item exe mono" style="left:14px;top:30px">executable<br>v1.0.0</div>
-      <div class="item svc mono" style="left:120px;top:40px">running</div>
-      <div class="item slot empty mono" style="left:14px;top:120px">no stable slot</div>
-    </div>
-    <div class="act"><code>bootstrapStable</code> from the running executable and its reported version, then a normal upgrade.</div>
-    <div class="owner mono">installer, then K</div><div class="promise">verified + probed</div>
-  </div>
+  <!-- Managed -->
+  <g transform="translate(760,130)">
+    <rect x="8" y="8" width="400" height="480" class="shadow"/><rect width="400" height="480" class="box" fill="var(--yellow)" stroke-width="4"/>
+    <text x="22" y="40" class="t">Managed</text>
+    <text x="22" y="68" class="d">A complete stable slot and a settled journal.</text>
+    <text x="22" y="88" class="d">Every invocation settles unfinished work first.</text>
+    <text x="22" y="118" class="m">owner: K</text>
+    <!-- the K loop -->
+    <rect x="22" y="140" width="356" height="300" class="box" fill="var(--paper)"/>
+    <text x="40" y="170" class="ab">K's two-slot transaction</text>
+    <text x="40" y="192" class="d">stage, quiesce, stop, start, probe</text>
+    <g transform="translate(40,215)"><rect x="4" y="4" width="130" height="44" class="shadow"/><rect width="130" height="44" class="box" fill="var(--paper)"/><text x="65" y="28" text-anchor="middle" class="m">upgrade</text></g>
+    <g transform="translate(228,215)"><rect x="4" y="4" width="130" height="44" class="shadow"/><rect width="130" height="44" class="box" fill="var(--green)"/><text x="65" y="28" text-anchor="middle" class="m">promoted</text></g>
+    <g transform="translate(228,290)"><rect x="4" y="4" width="130" height="44" class="shadow"/><rect width="130" height="44" class="box" fill="var(--red)"/><text x="65" y="28" text-anchor="middle" class="m">rolled-back</text></g>
+    <line x1="174" y1="237" x2="224" y2="237" class="line" marker-end="url(#a)"/>
+    <path d="M174 237 L200 237 L200 312 L224 312" class="line" marker-end="url(#a)"/>
+    <!-- both return to managed -->
+    <path d="M293 344 L293 372 L105 372 L105 266" class="line" marker-end="url(#a)"/>
+    <text x="118" y="394" class="d">both outcomes stay managed</text>
+    <rect x="40" y="406" width="150" height="28" class="tag" fill="var(--green)"/><text x="115" y="425" text-anchor="middle" class="ab">rollback guaranteed</text>
+  </g>
 
-  <div class="world k" style="left:612px">
-    <h2><i style="background:var(--yellow)"></i>Managed</h2>
-    <div class="machine"><span class="lbl">on the machine</span>
-      <div class="item slot mono" style="left:14px;top:30px;background:var(--green)">stable v1.0.0</div>
-      <div class="item slot empty mono" style="left:14px;top:80px">experiment</div>
-      <div class="item journal mono" style="left:126px;top:30px">journal<br>settled</div>
-      <div class="item svc mono" style="left:126px;top:130px">running</div>
-    </div>
-    <div class="act">The two-slot transaction: stage, quiesce, stop, start, probe, then promote or roll back.</div>
-    <div class="owner mono" style="background:var(--yellow)">K</div><div class="promise">rollback</div>
-  </div>
+  <!-- arrows into managed -->
+  <line x1="376" y1="196" x2="754" y2="196" class="line" marker-end="url(#a)"/>
+  <text x="565" y="152" text-anchor="middle" class="ab">installer</text>
+  <text x="565" y="172" text-anchor="middle" class="a">download and verify the release,</text>
+  <text x="565" y="222" text-anchor="middle" class="a">bootstrapStable, start, probe</text>
+  <rect x="490" y="234" width="150" height="24" class="tag" fill="var(--paper)"/><text x="565" y="251" text-anchor="middle" class="m">verified + probed</text>
 
-  <div class="world" style="left:898px">
-    <h2><i style="background:var(--red)"></i>Broken</h2>
-    <div class="machine"><span class="lbl">on the machine</span>
-      <div class="item slot broken mono" style="left:14px;top:30px">corrupt slot</div>
-      <div class="item journal mono" style="left:126px;top:30px">unresolved<br>recovery</div>
-      <div class="item svc dead mono" style="left:14px;top:120px">dead</div>
-      <div class="item mono" style="left:126px;top:110px;width:100px;height:48px">dead lock owner</div>
-    </div>
-    <div class="act">State K cannot settle. Repair: quarantine the state directory, reinstall from a trusted release, return to managed.</div>
-    <div class="owner mono" style="background:var(--red)">installer, on consent</div><div class="promise">consent + receipt</div>
-  </div>
+  <line x1="376" y1="356" x2="754" y2="356" class="line" marker-end="url(#a)"/>
+  <text x="565" y="312" text-anchor="middle" class="ab">installer</text>
+  <text x="565" y="332" text-anchor="middle" class="a">bootstrapStable from the running</text>
+  <text x="565" y="382" text-anchor="middle" class="a">executable, then a normal upgrade</text>
+  <rect x="490" y="394" width="150" height="24" class="tag" fill="var(--paper)"/><text x="565" y="411" text-anchor="middle" class="m">verified + probed</text>
+
+  <line x1="376" y1="548" x2="754" y2="548" class="line" marker-end="url(#a)"/>
+  <text x="565" y="486" text-anchor="middle" class="ab">installer, on consent: repair</text>
+  <text x="565" y="506" text-anchor="middle" class="a">quarantine the state directory, reinstall</text>
+  <text x="565" y="524" text-anchor="middle" class="a">from a trusted release, bootstrapStable</text>
+  <rect x="440" y="560" width="250" height="24" class="tag" fill="var(--paper)"/><text x="565" y="577" text-anchor="middle" class="m">consent + receipt, no rollback</text>
+
+  <!-- managed -> broken -->
+  <path d="M900 619 L900 648 L205 648 L205 632" class="dash" marker-end="url(#a)"/>
+  <text x="560" y="668" text-anchor="middle" class="d">the only way out of managed: recovery cannot settle the machine</text>
+</svg>
 </div>
 <script>
 const frame = document.getElementById('frame');
