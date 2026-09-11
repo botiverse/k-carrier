@@ -27,7 +27,7 @@ flowchart LR
   version, never code, commands or download URLs.
 - The publisher authenticates distribution metadata and caller authority. K
   checks artifact SHA-256 and size; these checks do not establish publisher
-  identity. See [packaging](integration.md#distribute-a-built-installer).
+  identity. See [packaging](integration.md#package-the-installer).
 
 ## Components
 
