@@ -114,6 +114,18 @@ curl -fsSL https://example.com/install.sh | sh -s -- repair --version 2.3.0 --ye
   <li><div>An installation owned by another manager, such as a package manager, is held, exit 2. The installer may say where it is and, attended, offer to remove it. It never removes it unattended.</div></li>
   <li><div>A target older than what is installed is held, exit 2, unless the request says the downgrade is intended. Refusing to downgrade is not success.</div></li>
 </ol>
+<h3 id="product">What the product reports</h3>
+<p>Worlds describe the installation. Two more things describe the product, and only the product can answer them. The installer asks after reading the world and before stopping anything.</p>
+<figure class="fig embed">
+<div class="stage" style="aspect-ratio: 1200 / 460"><iframe src="figures/product-state.html" title="Running or not, set up or not: what install and upgrade do in each case" loading="lazy" scrolling="no"></iframe></div>
+<figcaption>Running decides how the readback is taken. Set up decides what happens after install and what the line says next.</figcaption>
+</figure>
+<ol class="steps">
+  <li><div><strong>Is a service running?</strong> Read before anything is stopped, and remembered for recovery. A running service is stopped and must come back as a live service. A service that was not running is not started by an upgrade; the candidate is run for its version instead. The user's choice to have it stopped is kept.</div></li>
+  <li><div><strong>Is the product set up?</strong> Logged in, configured, licensed: whatever it needs before it can run. Not set up and attended, a fresh install runs first setup and then starts. Not set up and unattended, nothing is started and the line names the next step. An upgrade never runs first setup; it repeats the next step if the product still names one.</div></li>
+  <li><div>Neither answer changes what is verified: bytes, platform, self-reported version, then a process of the new bytes. They change only which process answers, and what the line says.</div></li>
+</ol>
+
 <h3 id="verify">Verify</h3>
 <ol class="steps">
   <li><div>The release authority and the byte store are different trust domains. When both describe the target, their sha256 and size must agree before any download.</div></li>

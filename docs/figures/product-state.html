@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What the product reports</title>
+<style>
+:root { --ink: #111; --paper: #fffdf7; --muted: rgba(17,17,17,.55); }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body { color-scheme: light; color: var(--ink); background: var(--paper);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+.frame { position: relative; width: 1200px; height: 460px; overflow: hidden;
+  background: radial-gradient(circle at 1px 1px, rgba(17,17,17,.045) 1px, transparent 1.5px) 0 0 / 16px 16px, var(--paper); }
+.frame svg { position: absolute; inset: 0; width: 1200px; height: 460px; }
+text { font-family: inherit; fill: var(--ink); }
+.h1 { font-size: 26px; font-weight: 700; }
+.sub { font-size: 17px; fill: var(--muted); }
+.t { font-size: 16px; font-weight: 700; }
+.tb { font-size: 17px; font-weight: 700; }
+.d { font-size: 13px; fill: var(--muted); }
+.box { stroke: var(--ink); stroke-width: 2.5; }
+.shadow { fill: var(--ink); }
+</style>
+</head>
+<body>
+<div class="frame" id="frame" role="img" aria-label="A two by two grid: running or not, set up or not. Running and set up: upgrade stops, starts and reads back the live service. Running but not set up: the same, and the next step is printed. Not running and set up: the candidate answers for itself and nothing is started; attended may offer to start. Not running and not set up: install runs first setup when attended, then starts; unattended it says the next step.">
+<svg viewBox="0 0 1200 460">
+  <text x="510.0" y="52" text-anchor="middle" class="tb">Set up</text><text x="510.0" y="70" text-anchor="middle" class="d">the product can run</text>
+  <text x="930.0" y="52" text-anchor="middle" class="tb">Not set up</text><text x="930.0" y="70" text-anchor="middle" class="d">needs login, config, a licence</text>
+  <text x="40" y="142" class="tb">Running</text><text x="40" y="164" class="d">a live service answers</text>
+  <rect x="308" y="88" width="412" height="142" class="shadow"/><rect x="304" y="84" width="412" height="142" fill="#98e59b" class="box"/>
+  <text x="324" y="138" class="t">Upgrade: stop, start, live readback.</text><text x="324" y="168" class="d">"Upgraded 2.2.1 → 2.3.0. It is running."</text>
+  <rect x="728" y="88" width="412" height="142" class="shadow"/><rect x="724" y="84" width="412" height="142" fill="#98e59b" class="box"/>
+  <text x="744" y="138" class="t">Same: what was running comes back.</text><text x="744" y="168" class="d">The next step is still printed.</text>
+  <text x="40" y="292" class="tb">Not running</text><text x="40" y="314" class="d">nobody started it, or someone stopped it</text>
+  <rect x="308" y="238" width="412" height="142" class="shadow"/><rect x="304" y="234" width="412" height="142" fill="#7bc8ff" class="box"/>
+  <text x="324" y="288" class="t">Upgrade: the candidate answers for itself.</text><text x="324" y="318" class="d">Nothing is started. "Upgraded 2.2.1 → 2.3.0."</text>
+  <rect x="728" y="238" width="412" height="142" class="shadow"/><rect x="724" y="234" width="412" height="142" fill="#ffe66b" class="box"/>
+  <text x="744" y="288" class="t">Install: first setup if attended, then start.</text><text x="744" y="318" class="d">Unattended: "Installed 2.3.0. Next: run app login."</text>
+  <text x="40" y="430" class="d">Both answers come from the product, after the world is read and before anything is stopped. What was running comes back; what was not is not started.</text>
+</svg>
+</div>
+<script>
+const frame = document.getElementById('frame');
+function fitFrame() {
+  const scale = Math.min(1, window.innerWidth / 1200, window.innerHeight / 460);
+  frame.style.transform = `scale(${scale})`;
+  frame.style.transformOrigin = "top left";
+}
+fitFrame();
+window.addEventListener("resize", fitFrame);
+</script>
+</body>
+</html>
