@@ -70,6 +70,7 @@
 <ul>
   <li>The bootstrap must not contain another swap/rollback algorithm. K provides <code>launchRunner</code> for Node callers; there is not yet a product-ready shell bootstrap template.</li>
   <li><code>install.sh</code> and <code>self upgrade</code> use the same runner protocol and installation state. Keep versioned artifacts immutable.</li>
+  <li>What each entry does on each machine, and what it owes the caller for each outcome, is the <a href="installer.html">installer contract</a>.</li>
   <li>The controller is an execution role, not a fourth deliverable.</li>
 </ul>
 
@@ -90,29 +91,20 @@
 node scripts/build-runner.mjs examples/external-service/adapter.ts /tmp/k-runner.mjs</code></pre>
 <p>Follow the <a href="example.html">example setup</a> before invoking that example runner. After authenticating the caller and obtaining approval for the target, submit a request from an operator shell or independent supervisor:</p>
 <pre><code>printf '%s' '{"protocolVersion":1,"action":"upgrade","id":"install-2","targetVersion":"2.0.0","consented":true}' | node /tmp/k-runner.mjs</code></pre>
-<p><code>consented</code> records approval; it is not authorization supplied by an untrusted network client. Requests cannot select adapter modules, commands or release URLs. Logs go to stderr and the response to stdout. Web entries need an external launch facility and a way to retrieve the result after reconnection.</p>
+<p><code>consented</code> records approval; it is not authorization supplied by an untrusted network client. Requests cannot select adapter modules, commands or release URLs. Logs go to stderr and the response to stdout.</p>
 <div class="note stop"><p>Directly invoking a worker does not supervise it. Use <code>launchRunner</code> for a supervised install, or <code>superviseRunner</code> when the caller needs a structured result. Both enforce execution and recovery deadlines and recover only the original operation. The <a href="https://github.com/botiverse/k-carrier/blob/main/examples/external-service/install.mjs">example installer</a> wires this flow; see <a href="#package-the-installer">packaging</a> for shipping the runner as a single executable.</p></div>
 
 <h2 id="4-observe-and-recover">4. Observe and recover</h2>
-<p>Inspect both the operation outcome and exit code; the <a href="guide.html#result">walkthrough</a> explains the two results that surprise people, and the <a href="reference.html#protocol-v1">reference</a> lists every code.</p>
-<p>Retry the same id and target to replay a terminal result. Use a new id for a new attempt; there is no by-id status or archive-list action. Terminal receipts are archived without an acknowledgement gate. Active work, corrupt state and a live lock owner still prevent conflicting transactions. See <a href="reference.html#receipts-and-retries">receipts and retries</a>.</p>
-<p>Recovery is described in the walkthrough under <a href="guide.html#failures">when something goes wrong</a>. What the integration has to provide:</p>
+<p>Inspect both the operation outcome and the exit code; the <a href="reference.html#protocol-v1">reference</a> lists every code. Retry the same id and target to replay a terminal result; use a new id for a new attempt. Recovery itself is described in the guide under <a href="guide.html#failures">when something goes wrong</a>. What the integration has to provide:</p>
 <ul>
   <li>Exit 3 from the supervisor leaves a verified runner and <code>recovery.json</code>. Keep that directory and call <code>resumeRunner(path)</code> to retry offline.</li>
-  <li>If the whole invocation dies, something must run a compatible installer against the same state again: your product's OS startup hook or an operator. K does not install a watchdog. That installer settles unfinished work before accepting a new request; a live earlier worker still blocks takeover.</li>
-  <li>If a request died before its operation was recorded, recovery refuses rather than guessing which earlier operation it owns. Inspect <code>status</code> and explicitly run <code>recover</code> on the retained runner.</li>
+  <li>If the whole invocation dies, something must run a compatible installer against the same state again: your product's OS startup hook or an operator. K does not install a watchdog.</li>
+  <li>If a request died before its operation was recorded, recovery refuses rather than guessing. Inspect <code>status</code> and explicitly run <code>recover</code> on the retained runner.</li>
   <li>Never clear a lock or receipt merely to bypass unresolved work.</li>
 </ul>
 
 <h3 id="repair-beyond-k">Repair beyond K</h3>
-<p>Of the <a href="guide.html#worlds">five worlds</a>, K's transaction owns the managed and the upgrading ones. Fresh and adopted are <code>bootstrapStable</code>, start and probe, as in <a href="#2-establish-the-initial-installation">step 2</a>. Broken needs repair. The <a href="design.html#repair-boundary">design</a> states its obligations; building it:</p>
-<ul>
-  <li>Give repair its own entry and request shape, so a request that only names a version cannot reach it, and run <code>recover</code> first.</li>
-  <li>Quarantine by renaming the whole state directory under the installer's own state in one atomic move. Keep it until an operator removes it.</li>
-  <li>Stop an unresponsive service only by an identity you recorded, such as executable path and start time, never by a bare pid.</li>
-  <li>Acquire and verify the release exactly as an upgrade would, install to the runtime path, start, probe, then <code>bootstrapStable</code>.</li>
-  <li>Write a receipt naming the quarantine path, the installed version and the approver.</li>
-</ul>
+<p>Of the five worlds, K's transaction owns the managed and the upgrading ones. Fresh and adopted are <code>bootstrapStable</code>, start and probe, as in step 2. Broken needs repair, which is installer work: the <a href="installer.html#repair">installer contract</a> describes it and the <a href="design.html#repair-boundary">repair boundary</a> states what it must keep.</p>
 
 <h2 id="5-validate-the-product">5. Validate the product</h2>
 <p>Use the <a href="test-plan.html">test plan</a>, then test your real installer and controller on each target platform. Cover baseline setup, running-service upgrade, bad-candidate rollback, installer death, offline recovery, workload and data retention, and service isolation. Observe declared OS lifecycle surfaces before retiring their previous manager. A green framework test is not product acceptance.</p>
@@ -205,12 +197,11 @@ npx postject@1.0.0-alpha.6 dist/runner NODE_SEA_BLOB dist/sea-prep.blob \
   <tbody>
     <tr><td>Static manifest on a CDN</td><td><code>staticManifestSource({ baseUrl })</code> reads a JSON manifest you publish with each release</td><td>No server; rollout policy is whatever you write into the manifest</td></tr>
     <tr><td>Your own release API</td><td>A small adapter mapping your API's response to a <code>Release</code></td><td>Authentication, cohort selection and reporting are yours to build</td></tr>
-    <tr><td><a href="https://hands.build">Hands</a></td><td>K's sibling project, the publishing side of the same loop: draft-first releases, channels and staged rollouts, share pages, in-app update metadata, feedback and crash tickets (<a href="https://github.com/botiverse/hands">source</a>)</td><td>The adapter maps a Hands response to a <code>Release</code>; a launcher may obtain the installer from Hands too. Hands is a product-release control plane, not a requirement for publishing or bootstrapping the installer</td></tr>
+    <tr><td><a href="https://hands.build">Hands</a></td><td>K's sibling project: channels, staged rollouts and in-app update metadata (<a href="https://github.com/botiverse/hands">source</a>)</td><td>The adapter maps a Hands response to a <code>Release</code>. Not a requirement for publishing or bootstrapping the installer</td></tr>
   </tbody>
 </table>
 </div>
-<p>Whatever the platform, the boundary is the same. K has no built-in connector or result uploader for any of them. Product authentication, channel and cohort policy and remote reporting belong to the integration. Forward the actual operation id and outcome; publication or process launch is not installation success, and local promotion does not prove cloud reconnection.</p>
-<p>Withdrawing a release affects future distribution. It does not roll back already installed machines. K can recover existing local slots offline; downloading an older release still depends on the source authorizing and serving it.</p>
+<p>Whatever the platform, K has no built-in connector or result uploader for it. Authentication, channel policy and remote reporting belong to the integration; forward the actual operation id and outcome, since publication is not installation success. Withdrawing a release affects future distribution only; it does not roll back installed machines.</p>
 
 
 <footer class="page-foot"><a href="example.html">Back: Runnable example</a><a href="design.html">Next: Design</a></footer>

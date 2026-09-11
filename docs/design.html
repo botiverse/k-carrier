@@ -81,25 +81,6 @@
   <div><dt>Local lock only</dt><dd>The lock is a local filesystem protocol requiring atomic creation and coherent directory reads (<a href="reference.html#lock-protocol">details</a>). It is not a distributed or NFS lock. Operation ids, receipt archival and replay rules are in the <a href="reference.html#receipts-and-retries">reference</a>.</dd></div>
 </dl>
 
-<h2 id="entry-obligations">Entry obligations</h2>
-<p>K returns an outcome, an exit code and a receipt. The entry that launched the installer, whether a bootstrap script, an application command or a remote control path, owes these in return. <em>Interactive</em> means a person at the shell who can be asked and can see the result; <em>non-interactive</em> means a remote request or a script, where nothing may prompt and nothing may be assumed. The <a href="guide.html#entrypoints">guide</a> draws what each entry means by machine condition.</p>
-<div class="table-scroll wide">
-<table class="grid">
-  <thead><tr><th>Event or outcome</th><th>Interactive</th><th>Non-interactive</th></tr></thead>
-  <tbody>
-    <tr><td>The request names a channel, not a version</td><td>Resolve it, show the version, ask. The consent goes into the request.</td><td><span class="tag no">refuse</span> An exact version must be named. Nothing changes.</td></tr>
-    <tr><td>An earlier operation is unfinished</td><td>Settle it first, say what was settled, then continue.</td><td>Same, without prompting. Report the earlier outcome alongside this one.</td></tr>
-    <tr><td>Held <span class="tag cond">exit 2</span>: owned elsewhere, incompatible, not consented</td><td>Explain the reason. Nothing changed; a new attempt needs a new id.</td><td>Return the code and reason. The caller decides. No retry.</td></tr>
-    <tr><td>Rolled back <span class="tag cond">exit 1</span></td><td>Say why the candidate failed. The old version is running.</td><td>Report rolled-back. Never retry the same target on its own.</td></tr>
-    <tr><td>Unresolved <span class="tag cond">exit 3</span></td><td>Print the recovery file and how to run recovery again.</td><td>Keep the recovery file. The next invocation settles it; no new work is admitted until then.</td></tr>
-    <tr><td>Broken: recovery cannot settle the machine</td><td>Offer a repair. Require explicit consent for this machine. Report what was quarantined.</td><td><span class="tag no">stop</span> Report broken. A repair is never started non-interactively.</td></tr>
-    <tr><td>The same id is sent again</td><td>Replay the receipt; no lifecycle effects.</td><td>Same.</td></tr>
-    <tr><td>Promoted <span class="tag yes">exit 0</span></td><td>Report the live version, pid and start id from the readback.</td><td>Same. Acceptance of the request was never success.</td></tr>
-  </tbody>
-</table>
-</div>
-
-
 <h2 id="repair-boundary">Repair boundary</h2>
 <div class="note stop"><p>K's refusals forbid silent bypass: no part of K clears a live owner's lock, overwrites an incomplete stable slot, reconstructs missing history, or terminates a process by recorded pid.</p></div>
 <p>They do not forbid a product installer from repairing a machine K cannot, provided the repair stays outside K's transaction and keeps these obligations:</p>
@@ -138,8 +119,7 @@
 <p><code>createCommandHost</code> runs an external controller via argv without a shell, records the controller pid durably before each call, and drains recorded controllers before <code>fence</code> during recovery. Wire format, bounds and pid handling are in the <a href="reference.html#command-controller-protocol">reference</a>. The recorded pid is never used to kill an arbitrary process. <code>fence</code> acknowledgement is a product contract, not something K infers from process exit. Fire-and-forget stop cannot establish termination.</p>
 
 <h2 id="product-responsibilities">Product responsibilities</h2>
-<p>The adapter defines release lookup, installation ownership, consent, notification and compatibility policy. Package-manager-owned installations defer to their owner. K restores executables; products provide data-migration compatibility, backup and restore, and any promised workload continuity. Service upgrades can interrupt availability. Remote authorization, distribution channels and cloud reconnection belong to the product integration.</p>
-<p>Use the <a href="integration.html">integration guide</a> and <a href="example.html">service example</a> to build an installer. The <a href="test-plan.html">test plan</a> describes framework and product acceptance; <a href="prior-art.html">prior art</a> records design influences.</p>
+<p>The adapter defines release lookup, installation ownership, consent and compatibility policy. K restores executables; products provide data-migration compatibility, backup and restore, and any promised workload continuity. What the installer around K should do for each entry and outcome is the advisory <a href="installer.html">installer contract</a>.</p>
 
 <footer class="page-foot"><a href="integration.html">Back: Integration</a><a href="reference.html">Next: Reference</a></footer>
 </main>

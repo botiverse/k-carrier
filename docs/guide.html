@@ -21,40 +21,27 @@
 <main id="main" class="page">
 <header class="page-head">
   <h1>How an upgrade works</h1>
-  <p class="lede">How K upgrades a machine nobody operates: one external installer, one journaled transaction, one receipt, and a defined answer for every way it can go wrong.</p>
+  <p class="lede">One external installer, one journaled transaction, one receipt, and a defined answer for every way it can go wrong.</p>
 </header>
 
-<h2 id="entrypoints">Who can ask for what</h2>
-<p>Nothing in this section is specific to K; it is the shape of the problem any installer has. A request can come from a person at the shell, from the application itself, or from a remote authority, and it can meet a machine with nothing installed, a running application, or one that cannot start. Who can reach the machine turns on whether the application is running; who may approve turns on whether the action can be undone. An upgrade can be rolled back. A repair cannot, so it needs explicit consent from someone who can see the result. Combined, the space of behaviors is larger than it looks.</p>
-<p>K pins it down with one model. Every entry launches the same external installer, which owns the transaction and outlives the application it replaces. A request is an id, an exact version and recorded consent; every operation ends with an exit code and a receipt, and success is claimed only after a live probe, never when the request was accepted. What is left to the entry is presentation: what to say, whether to ask, whether to try again. That is decided by whether a person is present.</p>
-<figure class="fig embed">
-<div class="stage"><iframe src="figures/entries.html" title="What running install.sh, self upgrade or a remote upgrade means in each machine condition" loading="lazy" scrolling="no"></iframe></div>
-</figure>
-<p><code>self upgrade</code> is a convenience over <code>install.sh</code>: it resolves a channel to a version and asks for consent, then runs the same bootstrap with a pinned installer, launched outside the application's service unit because the installer is about to stop that application.</p>
-<p>What the entry owes for each outcome (held, rolled back, unresolved, broken, promoted) is the normative matrix of <a href="design.html#entry-obligations">entry obligations</a> in the design.</p>
+<h2 id="entrypoints">Where K stops</h2>
+<p>Downloading a new executable is the easy part. The application may still be running. Power may fail halfway through replacement. The new version may fail to start on this one machine. Replacing the file proves nothing about whether the service came back. K's answer to all of that is one journaled transaction with a defined result, and this page is about that transaction.</p>
+<p id="worlds">What K does not decide is everything around it: who may ask, whether anyone is present to consent, and what is already on the machine. K's transaction covers a machine it already manages and one whose upgrade was interrupted; the installer built on K decides the rest. That behavior is the <a href="installer.html">installer contract</a>, a separate and advisory page.</p>
 
-<h2 id="worlds">What is already on the machine</h2>
-<p>The second constraint: the same request means something different depending on what is already there. K's transaction covers two of the five starting worlds, the managed machine and the one still upgrading; the installer decides the rest.</p>
-<figure class="fig embed">
-<div class="stage"><iframe src="figures/worlds.html" title="What the installer does when it arrives: five starting worlds, one destination" loading="lazy" scrolling="no"></iframe></div>
-</figure>
-<div class="note"><p>An upgrading machine, one with an unfinished operation in its journal, is finished first, whatever was asked; that recovery is mandatory and is not repair. Only the managed and upgrading worlds have rollback.</p></div>
-
-
-<h2 id="pieces">K's answer: the pieces</h2>
-<p>One external installer, launched from every entry, that owns the transaction and outlives the application it replaces. It has a small number of parts.</p>
+<h2 id="pieces">The pieces</h2>
+<p>One external installer, launched from every entry, owns the transaction and outlives the application it replaces. It has a small number of parts.</p>
 <figure class="fig embed">
 <div class="stage"><iframe src="figures/pieces.html" title="The pieces of a K upgrade: bootstrap, supervisor, worker, state directory, controller, application" loading="lazy" scrolling="no"></iframe></div>
 <figcaption>Stopping the application must not stop the thing that is upgrading it. That is the whole point of the layout.</figcaption>
 </figure>
 <dl class="defs">
   <div><dt>Bootstrap</dt><dd>Your <code>install.sh</code>, or the <code>self upgrade</code> command inside your application. Downloads and verifies the installer, launches it, relays the exit code. Contains no upgrade logic.</dd></div>
-  <div><dt>Installer</dt><dd>What you ship, in two halves. The <strong>supervisor</strong> is a temporary process that acquires and verifies the runner, executes it and, if it dies, runs bounded recovery. The <strong>runner</strong> is K plus your adapter bundled into one executable; it serves one request and exits. A running runner is a <strong>worker</strong>.</dd></div>
+  <div><dt>Installer</dt><dd>What you ship, in two parts. The <strong>supervisor</strong> is a temporary process that acquires and verifies the runner, executes it and, if it dies, runs bounded recovery. The <strong>runner</strong> is K plus your adapter bundled into one executable; it serves one request and exits. A running runner is a <strong>worker</strong>.</dd></div>
   <div><dt>Adapter</dt><dd>Your trusted code, fixed at build time: where releases come from, whether an upgrade may proceed, how to reach the controller.</dd></div>
   <div><dt>Controller</dt><dd>Your program that actually stops, starts and probes the application. The adapter calls it directly or through <code>createCommandHost</code>.</dd></div>
   <div><dt>State directory</dt><dd>The lock, the journal, two <strong>slots</strong> and the receipts. Recovery needs this state, a compatible runner, its runtime and the controller. It does not need release distribution.</dd></div>
 </dl>
-<p>The slots are <strong>stable</strong> and <strong>experiment</strong>. They are positions on disk, not release channels; a product channel also called "stable" is unrelated. <a href="https://hands.build">Hands</a> is K's sibling project for the publishing side; K works with it or with any manifest source.</p>
+<p>The slots are <strong>stable</strong> and <strong>experiment</strong>. They are positions on disk, not release channels; a product channel also called "stable" is unrelated.</p>
 
 <h2 id="one-upgrade">One upgrade, start to finish</h2>
 <figure class="fig embed">
@@ -65,14 +52,13 @@
 <ol class="steps">
   <li><div><span class="actor">bootstrap</span> Asks the supervisor for one operation: an id and a target version. The id is what everything else binds to.</div></li>
   <li><div><span class="actor">supervisor</span> Downloads the runner, checks its hash and size, writes it to scratch space and runs it with the request on stdin.</div></li>
-  <li><div><span class="actor">worker</span> Takes the installation lock. An unfinished earlier operation is settled first. The same id replays its result; a new id may proceed only after recovery succeeds. <span class="actor">controller</span> is asked to fence any effects of an earlier worker.</div></li>
-  <li><div><span class="actor">worker</span> Asks your release source for exactly the target version, verifies the bytes, writes them into the experiment slot. Nothing running has changed yet.<br><span class="journal">journal: staged</span></div></li>
+  <li><div><span class="actor">worker</span> Takes the installation lock. An unfinished earlier operation is settled first. The same id replays its result; a new id may proceed only after recovery succeeds. <span class="actor">controller</span> is asked to <strong>fence</strong> first: to confirm that nothing an earlier worker queued can still land.</div></li>
+  <li><div><span class="actor">adapter</span> Asks your release source for exactly the target version. <span class="actor">worker</span> verifies the bytes and writes them into the experiment slot. Nothing running has changed yet.<br><span class="journal">journal: staged</span></div></li>
   <li><div><span class="actor">controller</span> Quiesces, parking in-flight work, then stops the current service and confirms the old process is gone.<br><span class="journal">journal: handing-over, with the pre-stop startId</span></div></li>
   <li><div><span class="actor">controller</span> Starts the candidate from the experiment slot. <span class="actor">worker</span> probes it. The probe must come from one live process and report the expected version, a pid and a <strong>startId</strong>. If the startId journaled before the stop comes back now, the old process was never replaced and the upgrade rolls back.<br><span class="journal">journal: running-experiment, readback</span></div></li>
   <li class="hi"><div><span class="actor">worker</span> Writes <strong>promote intent</strong>. Before this line, the safe move is always to put the old version back; after it, the safe move is always to finish the promotion.<br><span class="journal">journal: promote intent</span></div></li>
   <li><div><span class="actor">worker</span> Experiment becomes stable. <span class="actor">controller</span> resumes parked work. The receipt is persisted in <code>operation.json</code> and archived before any later operation begins. The worker prints its response and exits 0; the supervisor relays it.</div></li>
 </ol>
-<p>Operation receipts also track stages such as <code>downloading</code> and policy outcomes such as <code>held</code>; those are not journal phases.</p>
 
 <h2 id="failures">When something goes wrong</h2>
 
@@ -94,26 +80,26 @@
 <p>Attempts and elapsed time are bounded. If recovery does not settle within them, the supervisor exits 3, leaves the verified runner and a <code>recovery.json</code> in scratch space, and prints where. <code>resumeRunner</code> on that file retries the same recovery offline.</p>
 
 <h3 id="everything-dies">Everything dies</h3>
-<p>Power loss, reboot, or the whole invocation killed. The state directory survives. The next installer invocation, from <code>install.sh</code>, from <code>self upgrade</code>, or from an operator, settles the unfinished operation before it accepts new work. K does not install a permanent watchdog, so <em>something</em> has to run the installer again: your product's OS startup hook, or a person.</p>
+<p>Power loss, reboot, or the whole invocation killed. The state directory survives, and the next installer invocation settles the unfinished operation before it accepts new work. K does not install a watchdog, so something has to run the installer again: your product's OS startup hook, or a person.</p>
 
 <h3 id="beyond-recovery">Beyond recovery</h3>
-<p>Recovery settles K's own work; it cannot help in the <a href="#worlds">broken world</a>, where K refuses rather than guesses. The installer, which runs when the application cannot, may then <strong>repair</strong> on explicit consent: quarantine K's state directory, reinstall verified bytes from a trusted release, start, probe, and <code>bootstrapStable</code> the result so the next upgrade is a normal transaction. A repair has no rollback and is reported as a repair. The <a href="design.html#repair-boundary">design</a> states the obligations; the <a href="integration.html#repair-beyond-k">integration guide</a> shows how to build one.</p>
+<p>Recovery settles K's own work. A machine it cannot settle is broken, and there K refuses rather than guesses. The installer may then repair it on explicit consent; what that looks like is in the <a href="installer.html#repair">installer contract</a>, and what it must keep is the <a href="design.html#repair-boundary">repair boundary</a>.</p>
 
 <h2 id="result">Reading the result</h2>
 <p>Every run prints one JSON response on stdout and returns an exit code. Inspect both.</p>
 <table class="grid">
   <thead><tr><th class="n">Exit</th><th>Meaning</th><th>What to do</th></tr></thead>
   <tbody>
-    <tr><td class="n">0</td><td>Successful upgrade outcome; readable status; recovery with no recorded outcome</td><td>Check the action and receipt</td></tr>
+    <tr><td class="n">0</td><td>Promoted or up-to-date; status readable; recovery that found nothing to settle</td><td>Check the action and receipt</td></tr>
     <tr><td class="n">1</td><td>Rolled back, or failed before any change</td><td>Read <code>operation.operation.outcome</code> and the reason</td></tr>
-    <tr><td class="n">2</td><td>Held by policy, ownership or compatibility</td><td>Nothing changed; a new attempt needs a new id</td></tr>
+    <tr><td class="n">2</td><td>Held: not consented, owned elsewhere, incompatible, or no exact version</td><td>Nothing changed; a new attempt needs a new id</td></tr>
     <tr><td class="n">3</td><td>Unresolved</td><td>Keep the recovery file and run recovery</td></tr>
   </tbody>
 </table>
 <div class="note"><p><strong>Two things surprise people.</strong> A <code>recover</code> that successfully restored stable after a bad candidate exits <strong>1</strong>, because the recorded outcome is a rolled-back upgrade. That is the honest answer. And <code>status</code> reads the last receipt, not the live service; it can say <code>genesis</code> on a machine that is running fine.</p></div>
-<p>The exact response shape and every exit code are in the <a href="reference.html#protocol-v1">reference</a>. What each step asks of your controller, and how to package and ship the result, is the <a href="integration.html">integration guide</a>.</p>
+<p>Response shapes and exit codes are in the <a href="reference.html#protocol-v1">reference</a>. What each entry owes the caller for each of these outcomes is in the <a href="installer.html#obligations">installer contract</a>.</p>
 
-<footer class="page-foot"><a href="index.html">Back: Overview</a><a href="example.html">Next: Runnable example</a></footer>
+<footer class="page-foot"><a href="index.html">Back: Overview</a><a href="installer.html">Next: Installer contract</a></footer>
 </main>
 </body>
 </html>

@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Three entries, one installer run: every decision, every line</title>
+<style>
+:root {
+  --ink: #111; --paper: #fffdf7; --soft: #f7f7f3; --muted: rgba(17,17,17,.52);
+  --yellow: #ffe66b; --pink: #ff7aa2; --blue: #7bc8ff; --green: #98e59b;
+  --orange: #ffb25f; --purple: #b7a1ff; --red: #ff7b73;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { color-scheme: light; color: var(--ink); background: var(--paper);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+.frame { width: 1200px; padding: 28px 40px 24px; transform-origin: top left;
+  background: radial-gradient(circle at 1px 1px, rgba(17,17,17,.045) 1px, transparent 1.5px) 0 0 / 16px 16px, var(--paper); }
+
+h1 { margin: 0; font-size: 26px; }
+.sub { margin: 6px 0 20px; font-size: 17px; color: var(--muted); }
+
+.card { border: 2.5px solid var(--ink); box-shadow: 4px 4px 0 var(--ink);
+  background: var(--paper); padding: 10px 14px; }
+.card.soft { background: var(--soft); }
+.card.blue { background: var(--blue); }
+.card.yellow { background: var(--yellow); }
+.card.ink { background: var(--ink); color: var(--paper); box-shadow: 4px 4px 0 var(--muted); }
+
+.mm { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 13px; overflow-wrap: anywhere; }
+.mmb { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+.mms { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; overflow-wrap: anywhere; }
+p.mm, p.mmb, p.mms { margin: 8px 0; }
+.ds { font-size: 12px; color: var(--muted); }
+.tb { font-size: 16px; font-weight: 700; }
+
+.chip { display: inline-block; border: 2px solid var(--ink); background: var(--paper);
+  font-size: 12px; font-weight: 700; line-height: 18px; padding: 0 7px; }
+.chip.green { background: var(--green); } .chip.red { background: var(--red); }
+.chip.orange { background: var(--orange); } .chip.purple { background: var(--purple); }
+
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; }
+.arrows3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; margin: 2px 0; }
+.arr { text-align: center; font-size: 18px; line-height: 1.3; }
+.arr .lab { font-size: 12px; color: var(--muted); }
+.merge { text-align: center; margin: 0 0 12px; }
+
+.cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; align-items: start; margin-top: 18px; }
+.stack { display: flex; flex-direction: column; gap: 10px; }
+.colhead { text-align: center; }
+.colhead .h { font-size: 15px; font-weight: 700; }
+.gate { text-align: center; }
+.branchlab { font-size: 12px; color: var(--muted); text-align: center; }
+.launch { text-align: center; font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+
+.zone { margin-top: 26px; }
+.zone .zhead { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.outcomes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; margin-top: 12px; }
+.outcome { display: flex; gap: 10px; align-items: flex-start; }
+.outcome .name { font-size: 12px; font-weight: 700; margin-bottom: 2px; }
+
+.foot { margin-top: 18px; }
+</style>
+</head>
+<body>
+<div class="frame" id="frame" role="img" aria-label="A flow diagram of one run of the shared external installer and every line it can print. Three entries converge on it: install.sh, a person at the shell; self upgrade, a command inside the app; and a remote authority, working through the running app with version and consent already in its request. All three become the same request: an id, an exact version, recorded consent. Every run first settles any unfinished operation in the journal and prints the settled result, then continues. Which entries can arrive depends on the machine: a machine with nothing installed or one whose app will not start can only be reached by install.sh; a running app admits all three. On a machine with nothing installed the run is installer work, not a K transaction: it prints 'Nothing installed. Installing 2.3.0.', then either exit 0 '2.3.0 installed and running (pid 1234).' or exit 1 'Install failed: reason. No prior version to restore.', and K enters only at the end, when bootstrapStable seeds the verified bytes so the next upgrade is a normal transaction. On a machine with a running app it checks whether someone is there to answer — an explicit CI or NON_INTERACTIVE environment variable decides, falling back to tty detection; a remote authority takes the no branch by default. If yes it prints 'Upgrade 2.2.1 to 2.3.0? [y/n]', resolving a channel to an exact version first; a no prints exit 2 'Declined. Nothing changed.' If no one is there, the request itself must carry an exact version and consented true; a missing one is refused with exit 2 'Unattended runs need an exact version and consented: true.' Consent launches the installer outside the app's service unit, and K's upgrade transaction — reached only from this column — prints exactly one of: exit 0 promoted '2.2.1 to 2.3.0 promoted. Running pid 1234. Receipt i_9f.', exit 0 up-to-date '2.3.0 already running. Nothing to do.', exit 1 failed 'Failed before any change: reason. 2.2.1 still running.', exit 1 rolled-back 'Candidate 2.3.0 failed probe. Rolled back; 2.2.1 running.', exit 2 held 'Held: reason. Nothing changed. Retry with a new id.', or exit 3 unresolved 'Cannot settle. Recover with: install.sh recover path.' On a machine whose app will not start, the run is again installer work: a person is offered a repair, 'Stable 2.2.1 won't start. Repair = quarantine + fresh 2.3.0. No rollback. Proceed? [y/n]', and a yes quarantines and takes the fresh-install path, reported as a repair. With no one to ask it stops with exit 2 'Stable won't start. Repair needs consent; no one here. Nothing changed.' Replay: the same id and target returns the archived receipt, with no side effects. Offline: downloads fail before anything changes; recovery needs no network. A private release source is no branch either: unattended runs read credentials from the environment, an attended run may prompt, and missing credentials fail before anything changes.">
+
+  <h1>Three entries, one installer run: every decision, every line</h1>
+  <p class="sub">All three entries launch the same external installer. They differ only in how the request gets its exact version and consent — then the run below is identical.</p>
+
+  <!-- the three entries converge -->
+  <div class="grid3">
+    <div class="card soft"><div class="mmb">install.sh</div><div class="ds">a person at the shell</div></div>
+    <div class="card soft"><div class="mmb">self upgrade</div><div class="ds">a command inside the app</div></div>
+    <div class="card soft"><div class="mmb">remote authority</div><div class="ds">through the running app; version + consent in the request</div></div>
+  </div>
+  <div class="arrows3"><div class="arr">↓</div><div class="arr">↓</div><div class="arr">↓</div></div>
+  <p class="merge mm">all three become the same request: an id, an exact version, recorded consent</p>
+
+  <!-- 0 · settle: applies to every run -->
+  <div class="card soft mm">0 · settle first — an unfinished operation in the journal is settled and reported: "Settled interrupted upgrade i_7: rolled-back."</div>
+
+  <div class="cols">
+    <!-- column A: fresh install (installer work, no K transaction) -->
+    <div class="stack">
+      <div class="colhead"><div class="h">Nothing installed</div><div class="ds">install.sh only</div></div>
+      <div class="card blue">
+        <span class="chip">FRESH INSTALL</span> <span class="ds">nothing to approve</span>
+        <p class="mmb">"Nothing installed. Installing 2.3.0."</p>
+        <div class="ds">download, verify, start, probe, then seed stable</div>
+        <div class="ds">installer work: no transaction, no rollback</div>
+      </div>
+      <div class="card outcome">
+        <span class="chip green">0</span>
+        <div class="mm">"2.3.0 installed and running (pid 1234)."</div>
+      </div>
+      <div class="card outcome">
+        <span class="chip red">1</span>
+        <div class="mm">"Install failed: &lt;reason&gt;. No prior version to restore."</div>
+      </div>
+    </div>
+
+    <!-- column B: running app -->
+    <div class="stack">
+      <div class="colhead"><div class="h">The app is running</div><div class="ds">all three entries</div></div>
+      <div class="card soft gate">
+        <div class="tb">Someone to ask?</div>
+        <div class="ds">CI / *_NON_INTERACTIVE=1 wins; else a tty</div>
+      </div>
+      <div class="branchlab">yes ↓</div>
+      <div class="card">
+        <div class="ds">a channel resolves to an exact version first — self upgrade</div>
+        <p class="mmb">"Upgrade 2.2.1 → 2.3.0? [y/n]"</p>
+        <div class="mms">n → exit 2 "Declined. Nothing changed."</div>
+      </div>
+      <div class="branchlab">no · remote authority's default ↓</div>
+      <div class="card">
+        <div class="ds">the request itself must carry</div>
+        <p class="mmb">exact version + consented: true</p>
+        <div class="mms">missing → exit 2 "Unattended runs need an exact version and consent."</div>
+      </div>
+      <div class="arr"><span class="lab">either way, consent rides in the request </span>↓</div>
+      <div class="card ink launch">LAUNCH · outside the app's service unit</div>
+      <div class="arr">↓</div>
+    </div>
+
+    <!-- column C: broken app (installer work, no K transaction) -->
+    <div class="stack">
+      <div class="colhead"><div class="h">The app won't start</div><div class="ds">install.sh only</div></div>
+      <div class="card soft gate">
+        <div class="tb">Someone to ask?</div>
+        <div class="ds">CI / *_NON_INTERACTIVE=1 wins; else a tty</div>
+      </div>
+      <div class="branchlab">yes ↓</div>
+      <div class="card yellow">
+        <span class="chip">REPAIR</span> <span class="ds">only on consent</span>
+        <p class="mm">"Stable 2.2.1 won't start. Repair = quarantine + fresh 2.3.0. No rollback. Proceed? [y/n]"</p>
+        <div class="ds">y → quarantine, then fresh install — installer work, reported as a repair</div>
+      </div>
+      <div class="branchlab">no ↓</div>
+      <div class="card">
+        <div class="mms">exit 2 "Stable won't start. Repair needs consent; no one here. Nothing changed."</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- the transaction's six answers -->
+  <div class="zone">
+    <div class="zhead">
+      <span class="tb">The upgrade transaction ends in exactly one of these</span>
+      <span class="ds">— K's part; reached only from the running-app column</span>
+    </div>
+    <div class="outcomes">
+      <div class="card outcome"><span class="chip green">0</span><div><div class="name">promoted</div><div class="mm">"2.2.1 → 2.3.0 promoted. Running pid 1234. Receipt i_9f."</div></div></div>
+      <div class="card outcome"><span class="chip green">0</span><div><div class="name">up-to-date</div><div class="mm">"2.3.0 already running. Nothing to do."</div></div></div>
+      <div class="card outcome"><span class="chip red">1</span><div><div class="name">failed</div><div class="mm">"Failed before any change: &lt;reason&gt;. 2.2.1 still running."</div></div></div>
+      <div class="card outcome"><span class="chip red">1</span><div><div class="name">rolled-back</div><div class="mm">"Candidate 2.3.0 failed probe. Rolled back; 2.2.1 running."</div></div></div>
+      <div class="card outcome"><span class="chip orange">2</span><div><div class="name">held</div><div class="mm">"Held: &lt;reason&gt;. Nothing changed. Retry with a new id."</div></div></div>
+      <div class="card outcome"><span class="chip purple">3</span><div><div class="name">unresolved</div><div class="mm">"Cannot settle. Recover with: install.sh recover &lt;path&gt;."</div></div></div>
+    </div>
+  </div>
+
+  <div class="foot ds">Replay: same id + target returns the archived receipt, no side effects. Offline: downloads fail before anything changes; recovery needs none.</div>
+  <div class="foot ds" style="margin-top:4px">Private release source: unattended runs read credentials from the environment; an attended run may prompt. Missing credentials fail before anything changes.</div>
+</div>
+<script>
+const frame = document.getElementById('frame');
+function fitFrame() {
+  frame.style.transform = 'none';
+  const h = frame.offsetHeight;
+  const scale = Math.min(1, window.innerWidth / 1200, window.innerHeight / h);
+  frame.style.transform = `scale(${scale})`;
+  document.body.style.height = (h * scale) + 'px';
+}
+fitFrame();
+window.addEventListener("resize", fitFrame);
+</script>
+</body>
+</html>

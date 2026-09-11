@@ -33,7 +33,6 @@
 
 <h2 id="why">Why upgrading is non-trivial</h2>
 <p>Downloading a new executable is only the beginning. The application may still be running. Power may fail halfway through replacement. The new version may fail to start on one particular machine. Replacing the file proves nothing about whether the service came back. And the installed updater may itself be too old or broken to help.</p>
-<p>Two more constraints shape the design, and the guide starts from them: <a href="guide.html#entrypoints">who can ask for what</a>, often from far away from the machine, and <a href="guide.html#worlds">what is already on the machine</a> when the request arrives.</p>
 
 <h2 id="promise">What K promises</h2>
 <p>K stages verified bytes in a second slot, stops the service, starts and probes the candidate, then commits or restores the previous executable. A durable journal lets a later installer recover interrupted work. An upgrade ends in exactly one of three states:</p>
@@ -45,16 +44,15 @@
 <div class="note stop"><p><strong>K refuses to guess.</strong> It never clears a live owner's lock, overwrites an incomplete stable slot, terminates a process by a recorded pid, or reconstructs missing history. It rolls back executables, not application data. Hashes check integrity; your distribution channel establishes trust.</p></div>
 
 <h2 id="installer">What the installer adds</h2>
-<p><code>install.sh</code> and your application's <code>self upgrade</code> launch the same external installer, built from K and your product adapter. It owns the transaction, outlives the application it replaces, runs when the application cannot start, and ships on its own schedule. If a worker crashes, its temporary supervisor runs bounded recovery. After a reboot, an operator or OS startup hook has to start it again.</p>
-<p>K's transaction covers two of the <a href="guide.html#worlds">five worlds</a> an installer meets: a machine K already manages, and one whose upgrade was interrupted. The installer decides the rest, and may repair a machine K cannot settle, on explicit consent.</p>
-<div class="note"><p>K's refusals forbid silent bypass, not people. The <a href="design.html#repair-boundary">repair boundary</a> says what such a repair must keep. Whether to offer one is a product choice.</p></div>
+<p>K is the transaction. The installer around it, built from K and your adapter, is what <code>install.sh</code>, your application's <code>self upgrade</code> and a remote request all launch. It outlives the application it replaces, runs when the application cannot start, and decides everything K does not: fresh installs, adopting an installation that predates K, repairing one K cannot settle, and what to say and ask in each case, attended or not.</p>
+<p>That behavior is written down as the <a href="installer.html">installer contract</a>: one model for every entry, every machine and every outcome. It is advisory and still settling; the first implementation is <a href="https://github.com/botiverse/raft-computer-installer">raft-computer-installer</a>.</p>
 
 <h2 id="ship">What you ship</h2>
 <figure class="fig embed">
 <div class="stage"><iframe src="figures/deliverables.html" title="Three independently versioned deliverables that can share one CDN" loading="lazy" scrolling="no"></iframe></div>
 <figcaption>The bootstrap verifies the installer; the installer verifies the product. Paths are illustrative, not a K schema.</figcaption>
 </figure>
-<p>You supply the release source and the service lifecycle operations; K supplies the transaction machinery. For channels, staged rollouts and in-app update metadata, K's sibling project <a href="https://hands.build">Hands</a> closes the loop; a static manifest on any CDN works too. The runner uses Node 24, either as an external runtime or bundled into a Node single executable. A fully runtime-independent installer must also package its supervisor and controller dependencies.</p>
+<p>You supply the release source and the service lifecycle operations; K supplies the transaction machinery. Releases can come from a static manifest on any CDN or from a release platform such as K's sibling project <a href="https://hands.build">Hands</a>. The runner uses Node 24, external or bundled into a single executable.</p>
 
 <h2 id="status">Status</h2>
 <div class="status">
@@ -74,9 +72,10 @@
 <h2 id="docs">Documentation</h2>
 <dl class="defs">
   <div><dt><a href="guide.html">How an upgrade works</a></dt><dd>The processes involved, one upgrade start to finish, what breaks, how to read the result. Read this first.</dd></div>
+  <div><dt><a href="installer.html">Installer contract</a></dt><dd>What the installer around K should do for every entry, machine and outcome. Advisory.</dd></div>
   <div><dt><a href="example.html">Runnable example</a></dt><dd>A service, a controller and a runner you can drive from a terminal.</dd></div>
   <div><dt><a href="integration.html">Integration</a></dt><dd>Build, launch, observe, recover, package and distribute your own installer.</dd></div>
-  <div><dt><a href="design.html">Design</a></dt><dd>The normative contract: execution model, transaction, supervision, controller obligations, repair boundary.</dd></div>
+  <div><dt><a href="design.html">Design</a></dt><dd>K's normative contract: execution model, transaction, supervision, controller obligations, repair boundary.</dd></div>
   <div><dt><a href="reference.html">Reference</a></dt><dd>Protocol, exit codes, budgets, on-disk layout.</dd></div>
   <div><dt><a href="test-plan.html">Test plan</a>, <a href="harness-design.html">harness</a>, <a href="formal.html">formal model</a></dt><dd>What is tested, how, and what the Lean proofs cover.</dd></div>
   <div><dt><a href="prior-art.html">Prior art</a></dt><dd>Rustup, Tailscale and Datadog, and what K took from each.</dd></div>

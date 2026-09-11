@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en" data-theme="brutal">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Installer contract · K</title>
+<meta name="description" content="What an installer built on K should do in every situation: by entry, by what is on the machine, and by whether anyone is present. Advisory; K's transaction is the part that is fixed.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;700&family=Geist+Mono:wght@400;700&display=swap">
+<link rel="stylesheet" href="assets/rui.css">
+<link rel="stylesheet" href="assets/site.css">
+<script defer src="assets/site.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="mark">K</span>k-carrier <small>docs</small></a>
+  <button class="menu-btn" type="button" aria-controls="nav" aria-expanded="false">Menu</button>
+</header>
+<nav id="nav" class="sidebar" aria-label="Documentation"></nav>
+
+<main id="main" class="page">
+<header class="page-head">
+  <h1>Installer contract</h1>
+  <p class="lede">What an installer built on K should do in every situation: install, upgrade, repair, attended or not, on any machine it may find. K's transaction is code and is fixed. This page is a contract around it, and it is advisory.</p>
+</header>
+
+<div class="note"><p>This contract is still being worked out. It is not part of K's code; K ships the transaction and the primitives the contract needs. The first implementation lands in <a href="https://github.com/botiverse/raft-computer-installer">raft-computer-installer</a>, the reference installer. Expect the wording here to change as that work settles.</p></div>
+
+<h2 id="problem">The problem</h2>
+<p>A request comes from one of three places: a person at the shell, the application itself, or a remote authority. It arrives with someone present to answer a question, or unattended. And it lands on a machine in one of five worlds: nothing installed, an installation K manages, one still mid-upgrade, one installed before K existed, or one that cannot start.</p>
+<p>Two facts couple these. The application and a remote authority can reach only a machine where the application runs; a machine that cannot start is reachable from the shell alone. And an upgrade can be rolled back, but a repair cannot, so a repair needs consent from someone who can see the result. The same request therefore means different things on different machines, and a request with nobody present must already carry its exact version and its consent.</p>
+<p>Most installers answer the common combinations and improvise the rest. The improvised ones are where machines get stuck: a retry that installs over a half-finished upgrade, a remote push that repairs without anyone consenting, a success printed before the new process was ever probed.</p>
+
+<h2 id="entrypoints">One model for the whole space</h2>
+<p>Every entry launches the same external installer and hands it the same request: an id, an exact version and recorded consent. Every combination of entry, world and presence gets one behavior, one printed line and one exit code. Success is claimed only after a live probe, never when the request was accepted. Whether a person is present is decided once: an explicit <code>CI</code> or <code>*_NON_INTERACTIVE=1</code> variable wins; otherwise a tty decides.</p>
+<figure class="fig embed">
+<div class="stage" style="aspect-ratio: 1200 / 1110"><iframe src="figures/entries-flow.html" title="Three entries, one installer run: every decision gate and the exact line each path prints" loading="lazy" scrolling="no"></iframe></div>
+<figcaption>Every decision gate, and the line each path prints. Each line says what happened, what did not change, and what to do next.</figcaption>
+</figure>
+
+<h2 id="worlds">Five worlds, not three</h2>
+<p>A caller sees three machines: empty, running, or not starting. The installer distinguishes five, because two of them look like one of those three from outside. An unfinished operation in the journal is finished first, whatever was asked; that recovery is mandatory and is not repair. An installation that predates K is adopted, not reinstalled. K's transaction covers the managed and upgrading worlds, the only two with rollback; the installer decides the other three.</p>
+<figure class="fig embed">
+<div class="stage"><iframe src="figures/worlds.html" title="What the installer does when it arrives: five starting worlds, one destination" loading="lazy" scrolling="no"></iframe></div>
+<figcaption>Five starting worlds, one destination: a machine K manages.</figcaption>
+</figure>
+
+<h2 id="obligations">What the entry owes for each outcome</h2>
+<p>K returns an outcome, an exit code and a receipt. The entry that launched it owes these in return. <em>Interactive</em> means a person at the shell who can be asked and can see the result; <em>non-interactive</em> means a remote request or a script, where nothing may prompt and nothing may be assumed.</p>
+<div class="table-scroll wide">
+<table class="grid">
+  <thead><tr><th>Event or outcome</th><th>Interactive</th><th>Non-interactive</th></tr></thead>
+  <tbody>
+    <tr><td>The request names a channel, not a version</td><td>Resolve it, show the version, ask. The consent goes into the request.</td><td><span class="tag no">refuse</span> An exact version must be named. Nothing changes.</td></tr>
+    <tr><td>An earlier operation is unfinished</td><td>Settle it first, say what was settled, then continue.</td><td>Same, without prompting. Report the earlier outcome alongside this one.</td></tr>
+    <tr><td>Held <span class="tag cond">exit 2</span>: owned elsewhere, incompatible, not consented</td><td>Explain the reason. Nothing changed; a new attempt needs a new id.</td><td>Return the code and reason. The caller decides. No retry.</td></tr>
+    <tr><td>Rolled back <span class="tag cond">exit 1</span></td><td>Say why the candidate failed. The old version is running.</td><td>Report rolled-back. Never retry the same target on its own.</td></tr>
+    <tr><td>Unresolved <span class="tag cond">exit 3</span></td><td>Print the recovery file and how to run recovery again.</td><td>Keep the recovery file. The next invocation settles it; no new work is admitted until then.</td></tr>
+    <tr><td>Broken: recovery cannot settle the machine</td><td>Offer a repair. Require explicit consent for this machine. Report what was quarantined.</td><td><span class="tag no">stop</span> Report broken. A repair is never started non-interactively.</td></tr>
+    <tr><td>The same id is sent again</td><td>Replay the receipt; no lifecycle effects.</td><td>Same.</td></tr>
+    <tr><td>Promoted <span class="tag yes">exit 0</span></td><td>Report the live version, pid and start id from the readback.</td><td>Same. Acceptance of the request was never success.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="repair">Repair</h2>
+<p>In the broken world K refuses rather than guesses. The installer, which runs when the application cannot, may then repair on explicit consent: run recovery first, quarantine K's state directory by one atomic rename, reinstall verified bytes, start, probe, and <code>bootstrapStable</code> the result so the next upgrade is a normal transaction. Give repair its own request shape, so a request that only names a version cannot reach it. Stop an unresponsive service only by an identity you recorded, never by a bare pid. A repair has no rollback and is reported as a repair, with what it displaced, what it installed and who approved it.</p>
+<p>What such a repair must keep so that K's state stays sound is the normative <a href="design.html#repair-boundary">repair boundary</a>. Whether to offer repair at all is a product choice.</p>
+
+<footer class="page-foot"><a href="guide.html">Back: How an upgrade works</a><a href="example.html">Next: Runnable example</a></footer>
+</main>
+</body>
+</html>

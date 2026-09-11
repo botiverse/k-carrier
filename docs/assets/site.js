@@ -5,6 +5,7 @@
     ['Read in order', [
       ['index.html', 'Overview'],
       ['guide.html', 'How an upgrade works'],
+      ['installer.html', 'Installer contract'],
       ['example.html', 'Runnable example'],
       ['integration.html', 'Integration and distribution'],
     ]],
