@@ -35,6 +35,12 @@ export interface QuarantineOptions {
   timestampMs: number;
   /** Host proof run while K's single-writer lock is held. */
   assertActiveHandoff?: () => Promise<void>;
+  /**
+   * Move the directory aside even when its operation record cannot be read.
+   * The lock is still taken and nothing is deleted; an installer reinstalling
+   * over records a later K cannot parse needs exactly this.
+   */
+  allowUnreadable?: boolean;
 }
 
 function assertDestination(stateDir: string, destination: string): void {
@@ -111,7 +117,7 @@ export async function quarantineState(stateDir: string, options: QuarantineOptio
   try {
     lock = await acquireUpgradeLock(sourcePath, timestampMs);
     const operation = await loadOperation(sourcePath);
-    if (operation.kind === "unreadable") {
+    if (operation.kind === "unreadable" && !options.allowUnreadable) {
       throw new QuarantineError("QUARANTINE_STATE_UNREADABLE", operation.reason);
     }
     if (operation.kind === "observed" && operation.operation.outcome === null) {
