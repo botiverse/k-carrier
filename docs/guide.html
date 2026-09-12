@@ -83,7 +83,7 @@
 <p>Power loss, reboot, or the whole invocation killed. The state directory survives, and the next installer invocation settles the unfinished operation before it accepts new work. K does not install a watchdog, so something has to run the installer again: your product's OS startup hook, or a person.</p>
 
 <h3 id="beyond-recovery">Beyond recovery</h3>
-<p>Recovery settles K's own work. A machine it cannot settle is broken, and there K refuses rather than guesses. The installer may then repair it on explicit consent; what that looks like is in the <a href="installer.html#repair">installer contract</a>, and what it must keep is the <a href="design.html#repair-boundary">repair boundary</a>.</p>
+<p>Recovery settles K's own work. A machine it cannot settle, or whose records it cannot read, is broken, and there K refuses rather than guesses. The installer then reinstalls it in the same run, keeping the old state aside; what that looks like is in the <a href="installer.html#repair">installer contract</a>, and what it must keep is the <a href="design.html#repair-boundary">repair boundary</a>.</p>
 
 <h2 id="result">Reading the result</h2>
 <p>Every run prints one JSON response on stdout and returns an exit code. Inspect both.</p>
@@ -93,7 +93,7 @@
     <tr><td class="n">0</td><td>Promoted or up-to-date; status readable; recovery that found nothing to settle</td><td>Check the action and receipt</td></tr>
     <tr><td class="n">1</td><td>Rolled back, or failed before any change</td><td>Read <code>operation.operation.outcome</code> and the reason</td></tr>
     <tr><td class="n">2</td><td>Held: not consented, owned elsewhere, incompatible, or no exact version</td><td>Nothing changed; a new attempt needs a new id</td></tr>
-    <tr><td class="n">3</td><td>Unresolved</td><td>Keep the recovery file and run recovery</td></tr>
+    <tr><td class="n">3</td><td>Unresolved</td><td>K's honest answer, never the user's: an installer built on K reinstalls; a caller of K alone keeps the recovery file</td></tr>
   </tbody>
 </table>
 <div class="note"><p><strong>Two things surprise people.</strong> A <code>recover</code> that successfully restored stable after a bad candidate exits <strong>1</strong>, because the recorded outcome is a rolled-back upgrade. That is the honest answer. And <code>status</code> reads the last receipt, not the live service; it can say <code>genesis</code> on a machine that is running fine.</p></div>

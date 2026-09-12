@@ -85,14 +85,14 @@
 <div class="note stop"><p>K's refusals forbid silent bypass: no part of K clears a live owner's lock, overwrites an incomplete stable slot, reconstructs missing history, or terminates a process by recorded pid.</p></div>
 <p>They do not forbid a product installer from repairing a machine K cannot, provided the repair stays outside K's transaction and keeps these obligations:</p>
 <dl class="defs">
-  <div><dt>Settle first</dt><dd>Run recovery to its terminal or unresolved result before repairing. Repair is never the automatic response to a failed upgrade.</dd></div>
+  <div><dt>Settle first</dt><dd>Run recovery to its terminal or unresolved result before repairing. Repair is never the response to a rolled-back or failed upgrade; it is the response to records that cannot be settled or read.</dd></div>
   <div><dt>Never under a live lock</dt><dd>Liveness is decided by the lock protocol, not by age.</dd></div>
-  <div><dt>Quarantine, do not delete</dt><dd>Slots, journal, lock, receipts and recovery logs move aside intact in one atomic rename. Data outside the slots is left alone.</dd></div>
-  <div><dt>Consent and receipt</dt><dd>Repair runs only on explicit, attributable consent for that machine and operation, and records what it displaced, what it installed and who approved it.</dd></div>
+  <div><dt>Quarantine, do not delete</dt><dd>Slots, journal, lock, receipts and recovery logs move aside intact in one atomic rename, under K's lock, including records K itself cannot read (<code>quarantineState</code> with <code>allowUnreadable</code>). Data outside the slots is left alone.</dd></div>
+  <div><dt>Attribution and receipt</dt><dd>Repair runs as its own request or on a broken machine, never on a machine that can be upgraded, and its receipt records what it displaced, what it installed and who ran it.</dd></div>
   <div><dt>Re-enter K</dt><dd>Repair ends with <code>bootstrapStable</code> on the installed bytes and a live probe. Until then no upgrade may be admitted.</dd></div>
   <div><dt>No rollback claim</dt><dd>Repair is reported as a repair, never as a promoted upgrade.</dd></div>
 </dl>
-<p>K supplies <code>bootstrapStable</code> and the lock protocol; whether to offer repair is a product decision.</p>
+<p>K supplies <code>bootstrapStable</code>, <code>quarantineState</code> and the lock protocol; the installer decides when to repair.</p>
 
 <h2 id="host-control-contract">Host control contract</h2>
 <p><code>createRunner</code> requires a HostAdapter. Its operations and the controller's obligations:</p>

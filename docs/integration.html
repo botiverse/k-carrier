@@ -97,18 +97,18 @@ node scripts/build-runner.mjs examples/external-service/adapter.ts /tmp/k-runner
 <h2 id="4-implement-the-entries">4. Implement the entries</h2>
 <p>Step 3 submits one request by hand. A product has three entries that do it for the user, and the <a href="installer.html">installer contract</a> says what each should do on each machine, attended or not. It is advisory; what to build from it:</p>
 <ul>
-  <li><strong>Decide presence once.</strong> An explicit <code>CI</code> or <code>*_NON_INTERACTIVE=1</code> wins; otherwise a tty. Everything that asks, retries or prints keys off it.</li>
-  <li><strong>Make every entry produce the same request.</strong> An id, an exact version and recorded consent. The bootstrap and <code>self upgrade</code> may resolve a channel and ask; an unattended run must already carry both, and refuses otherwise. Nothing selects code, commands or URLs.</li>
-  <li><strong>Settle before anything else.</strong> Every entry runs recovery first and reports what it settled. Only then does it read the world it is in: fresh and adopted are <code>bootstrapStable</code>, start and probe; managed is the upgrade; broken is refused unless a person asked for repair.</li>
-  <li><strong>Give repair its own entry.</strong> Its own request shape, its own id, explicit consent for this machine. A request that only names a version cannot reach it, and it is never started unattended. What it must keep is the <a href="design.html#repair-boundary">repair boundary</a>.</li>
-  <li><strong>Print one line and one exit code per outcome.</strong> What happened, what did not change, what to do next. The <a href="installer.html#obligations">outcomes table</a> gives the line, and what attended and unattended runs add.</li>
+  <li><strong>Decide presence once.</strong> An explicit <code>CI</code> or <code>*_NON_INTERACTIVE=1</code> wins; otherwise a terminal. Everything that asks keys off it; an unattended run never asks, and running it is the consent.</li>
+  <li><strong>Make every entry produce the same request.</strong> An id, an exact version and recorded consent. A channel is resolved to a version before anything changes; attended, the person sees it and answers. Nothing selects code, commands or URLs.</li>
+  <li><strong>Settle before anything else.</strong> Every entry runs recovery first and reports what it settled. Only then does it read the world it is in: fresh and adopted are <code>bootstrapStable</code> and a self-check; managed is the upgrade; broken, records that cannot be settled or read, is reinstalled over in the same run, with the old state quarantined.</li>
+  <li><strong>Ask the product two things</strong> after reading the world and before stopping anything: is a service running, and what must the user still do. What was running comes back; what was not is not started. Not set up and attended, a fresh install runs the product's first setup on the terminal.</li>
+  <li><strong>Print one line and one exit code per outcome.</strong> What happened, what did not change, what to do next, in the user's words. The <a href="installer.html#obligations">outcomes table</a> gives the line, and what attended and unattended runs add.</li>
 </ul>
 <div class="note"><p>The reference implementation of this step is <a href="https://github.com/botiverse/raft-computer-installer">raft-computer-installer</a>: a bootstrap, a <code>self upgrade</code> command and a remote entry on top of one K runner. There is not yet a product-neutral template.</p></div>
 
 <h2 id="5-observe-and-recover">5. Observe and recover</h2>
 <p>Inspect both the operation outcome and the exit code; the <a href="reference.html#protocol-v1">reference</a> lists every code. Retry the same id and target to replay a terminal result; use a new id for a new attempt. Recovery itself is described in the guide under <a href="guide.html#failures">when something goes wrong</a>. What the integration has to provide:</p>
 <ul>
-  <li>Exit 3 from the supervisor leaves a verified runner and <code>recovery.json</code>. Keep that directory and call <code>resumeRunner(path)</code> to retry offline.</li>
+  <li>Exit 3 from the supervisor leaves a verified runner and <code>recovery.json</code>. An installer built to the contract treats this as broken and reinstalls; a caller of K alone can keep that directory and call <code>resumeRunner(path)</code> to retry offline.</li>
   <li>If the whole invocation dies, something must run a compatible installer against the same state again: your product's OS startup hook or an operator. K does not install a watchdog.</li>
   <li>If a request died before its operation was recorded, recovery refuses rather than guessing. Inspect <code>status</code> and explicitly run <code>recover</code> on the retained runner.</li>
   <li>Never clear a lock or receipt merely to bypass unresolved work.</li>
