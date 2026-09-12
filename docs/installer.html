@@ -107,7 +107,7 @@ irm https://example.com/install.ps1 | iex                                     # 
 <h3 id="lock-settle">Lock and settle</h3>
 <ol class="steps">
   <li><div>One installer per state directory, under K's lock. Another live owner is held, exit 2. Liveness is decided by the lock protocol, never by age.</div></li>
-  <li><div>Every run finishes unfinished K work first, whatever was asked, and reports what it settled alongside its own outcome. This is recovery, not repair; it needs no network and no consent. Recovery that cannot settle is unresolved, exit 3, and no new work is admitted until it is: running the installer again is the retry, so there is no separate recovery command and nothing for the user to keep.</div></li>
+  <li><div>Every run finishes unfinished K work first, whatever was asked, and reports what it settled alongside its own outcome. This is recovery, not repair; it needs no network and no consent. Recovery that cannot settle is unresolved, exit 3, and no new work is admitted until it is: running the installer again is the retry, so there is no separate recovery command and nothing for the user to keep. Records that cannot be settled twice, by two runs, are a broken machine, and broken is repaired: a K that once wrote something a later K cannot read must not strand the machine.</div></li>
 </ol>
 <h3 id="worlds">Worlds</h3>
 <ol class="steps">
