@@ -33,7 +33,7 @@ import type { Release } from "./source.ts";
 import { collectStream } from "./collectStream.ts";
 import { partialPathFor } from "./partialPath.ts";
 import { decodeGzipArtifact } from "./gzip.ts";
-import type { DownloadOptions } from "./transferPolicy.ts";
+import { resolveDownloadBudgets, type DownloadOptions } from "./transferPolicy.ts";
 export { partialPathFor } from "./partialPath.ts";
 export type { DownloadOptions } from "./transferPolicy.ts";
 
@@ -65,7 +65,8 @@ export async function downloadVerified(
   }
   const url = release.url;
   const clock = opts.clock ?? systemClock;
-  const timeoutMs = opts.timeoutMs ?? 10000;
+  const budget = resolveDownloadBudgets(release.size, opts);
+  const timeoutMs = budget.timeoutMs;
 
   const partialPath = opts.resumeDir ? partialPathFor(opts.resumeDir, url) : null;
 
@@ -81,8 +82,8 @@ export async function downloadVerified(
 
   const bytes = await fetchAndAppend(
     url, partialPath, partialSize, clock, timeoutMs, opts.onProgress, release.size,
-    opts.responseTimeoutMs ?? opts.stallTimeoutMs ?? 0,
-    opts.idleTimeoutMs ?? opts.stallTimeoutMs ?? 0,
+    budget.responseTimeoutMs,
+    budget.idleTimeoutMs,
     opts.fetchImpl ?? fetch,
   );
 

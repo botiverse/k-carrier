@@ -80,3 +80,28 @@ export function artifactTransferTimeouts(
     ),
   };
 }
+
+/**
+ * The budgets a download runs under. A caller that names any budget gets
+ * exactly what it named, as before. A caller that names none gets the
+ * budgets K's own engine uses for an artifact of this size: a response
+ * deadline, an idle deadline, and an overall deadline that grows with the
+ * size. A flat default cannot be right for both a manifest and a 150 MB
+ * binary.
+ */
+export function resolveDownloadBudgets(
+  size: number,
+  opts: Pick<DownloadOptions, "timeoutMs" | "responseTimeoutMs" | "idleTimeoutMs" | "stallTimeoutMs">,
+): { timeoutMs: number; responseTimeoutMs: number; idleTimeoutMs: number } {
+  const named = opts.timeoutMs !== undefined || opts.responseTimeoutMs !== undefined
+    || opts.idleTimeoutMs !== undefined || opts.stallTimeoutMs !== undefined;
+  if (!named && Number.isSafeInteger(size) && size > 0) {
+    const t = artifactTransferTimeouts(size);
+    return { timeoutMs: t.overallTimeoutMs, responseTimeoutMs: t.responseTimeoutMs, idleTimeoutMs: t.idleTimeoutMs };
+  }
+  return {
+    timeoutMs: opts.timeoutMs ?? 10000,
+    responseTimeoutMs: opts.responseTimeoutMs ?? opts.stallTimeoutMs ?? 0,
+    idleTimeoutMs: opts.idleTimeoutMs ?? opts.stallTimeoutMs ?? 0,
+  };
+}

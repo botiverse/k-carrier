@@ -2,7 +2,7 @@
 // response budget, a no-progress budget, and a size-derived overall ceiling.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { artifactTransferTimeouts } from "./transferPolicy.ts";
+import { artifactTransferTimeouts, resolveDownloadBudgets } from "./transferPolicy.ts";
 
 const POLICY = {
   responseTimeoutMs: 2_000,
@@ -38,4 +38,17 @@ test("invalid or unbounded transfer policies fail closed", () => {
     () => artifactTransferTimeouts(1, { ...POLICY, maximumOverallTimeoutMs: 1_000 }),
     /ARTIFACT_TRANSFER_POLICY_INVALID/u,
   );
+});
+
+test("a download that names no budget gets the size-derived ones, not a flat ten seconds", async () => {
+  const size = 150 * 1024 * 1024;
+  const derived = artifactTransferTimeouts(size);
+  assert.deepEqual(resolveDownloadBudgets(size, {}), {
+    timeoutMs: derived.overallTimeoutMs,
+    responseTimeoutMs: derived.responseTimeoutMs,
+    idleTimeoutMs: derived.idleTimeoutMs,
+  });
+  assert.ok(resolveDownloadBudgets(size, {}).timeoutMs > 10 * 60_000, "a 150 MB artifact gets minutes, not seconds");
+  assert.deepEqual(resolveDownloadBudgets(size, { timeoutMs: 150 }), { timeoutMs: 150, responseTimeoutMs: 0, idleTimeoutMs: 0 });
+  assert.deepEqual(resolveDownloadBudgets(size, { stallTimeoutMs: 40 }), { timeoutMs: 10000, responseTimeoutMs: 40, idleTimeoutMs: 40 });
 });

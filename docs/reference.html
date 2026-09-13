@@ -109,7 +109,7 @@
     <tr><td>Exit observation after termination</td><td>1 second</td><td>fixed</td></tr>
   </tbody>
 </table>
-<p>All budgets are positive integers. Artifact acquisition has separate transfer budgets derived from the artifact size (<code>artifactTransferPolicy</code>). An unconfirmed worker exit forbids takeover. Exhaustion preserves state and returns exit 3 with a recovery file; it never reports success.</p>
+<p>All budgets are positive integers. Artifact acquisition has separate transfer budgets derived from the artifact size (<code>artifactTransferPolicy</code>); <code>downloadVerified</code> called without any budget uses the same size-derived ones. An unconfirmed worker exit forbids takeover. Exhaustion preserves state and returns exit 3 with a recovery file; it never reports success.</p>
 
 <h2 id="engine-host-call-budget">Engine host-call budget</h2>
 <p>Every host call, including fence, readback, resume and recovery, has a positive budget, default 120 seconds (<code>hostCallBudgetMs</code>). A call whose effect is uncertain raises <code>HostCallUncertain</code>; the worker retains its lock until it exits. Bundled workers exit after flushing their response. An in-process caller that receives <code>HostCallUncertain</code> must also exit rather than reuse that worker.</p>
