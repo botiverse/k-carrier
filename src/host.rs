@@ -20,6 +20,37 @@ use tokio::{
     time::{Instant, sleep, timeout},
 };
 
+/// Call at a native controller/worker entry point, before spawning anything.
+/// On Windows an inherited protocol pipe remains inheritable even when a new
+/// child's standard streams are redirected to NUL. Clearing that flag prevents
+/// a resident grandchild from keeping the controller's response pipe open.
+/// Explicit `Stdio::inherit()` still works because Command duplicates the handle.
+pub fn isolate_standard_handles() -> Result<()> {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::{
+            Foundation::{HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE, SetHandleInformation},
+            System::Console::{
+                GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE,
+            },
+        };
+        for stream in [STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE] {
+            // We only change the current process's inherited handles; never
+            // close them, and never change an unrelated process's handle table.
+            unsafe {
+                let handle = GetStdHandle(stream);
+                if !handle.is_null()
+                    && handle != INVALID_HANDLE_VALUE
+                    && SetHandleInformation(handle, HANDLE_FLAG_INHERIT, 0) == 0
+                {
+                    return Err(std::io::Error::last_os_error().into());
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 #[async_trait]
 pub trait Host: Send + Sync {
     async fn fence(&self) -> Result<()> {

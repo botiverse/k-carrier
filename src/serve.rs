@@ -9,6 +9,7 @@ where
     F: FnOnce() -> Fut,
     Fut: Future<Output = Result<Runner>>,
 {
+    crate::host::isolate_standard_handles()?;
     let response = async {
         let mut bytes = Vec::new();
         tokio::time::timeout(

@@ -21,6 +21,9 @@ temporary and cleaned in a `finally` block.
 For a product runner, replace the example environment configuration with trusted
 product configuration. Compile the runner and controller, package both outside
 the resident slots, and keep the release source out of untrusted JSON requests.
+Native Windows controllers call `host::isolate_standard_handles` before spawning
+children, so resident processes cannot inherit and keep protocol pipes open.
+`serve_runner` does this automatically for workers.
 The example controller is not a production service manager: it has no workload
 parking or launchd/systemd integration. Implement those in the application adapter.
 

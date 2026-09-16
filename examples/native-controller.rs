@@ -29,6 +29,7 @@ fn exchange(action: &str) -> Result<String, Box<dyn std::error::Error>> {
     Ok(text)
 }
 fn run() -> Result<Value, Box<dyn std::error::Error>> {
+    k_carrier::host::isolate_standard_handles()?;
     let mut bytes = vec![];
     std::io::stdin().take(16385).read_to_end(&mut bytes)?;
     let request: Value = serde_json::from_slice(&bytes)?;

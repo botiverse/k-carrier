@@ -32,8 +32,13 @@ with tempfile.TemporaryDirectory(prefix="k-controller-diagnostic-") as directory
         if child.poll() is None:
             child.kill()
         child.wait(timeout=5)
-        print("controller stdout:", child.stdout.read(65536).decode(), flush=True)
-        print("controller stderr:", child.stderr.read(65536).decode(), flush=True)
+        child.stdin = None
+        try:
+            stdout, stderr = child.communicate(timeout=5)
+            print("controller stdout:", stdout[:65536].decode(), flush=True)
+            print("controller stderr:", stderr[:65536].decode(), flush=True)
+        except subprocess.TimeoutExpired:
+            print("controller exited but an inherited pipe remains open", flush=True)
         # Wait only for this owned cooperative service to remove its ready file.
         until = time.monotonic() + 5
         while ready.exists() and time.monotonic() < until:
