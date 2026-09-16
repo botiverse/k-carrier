@@ -351,3 +351,33 @@ async fn candidate_preparation_failure_keeps_service_and_replays_without_downloa
     assert_eq!(f.source.calls.load(Ordering::SeqCst), 1);
     Ok(())
 }
+
+#[tokio::test]
+async fn completed_rollback_does_not_restart_a_subsequently_stopped_service() -> Result<()> {
+    let mut f = setup().await?;
+    f.runner.surfaces.push(Arc::new(Surface {
+        value: "wrong-artifact".into(),
+    }));
+    let result = f
+        .runner
+        .execute(&request("live-refused", "2", true))
+        .await?;
+    assert_eq!(result.exit_code, 1);
+    let OperationRead::Observed { operation } = result.operation else {
+        panic!("missing receipt")
+    };
+    assert_eq!(operation.outcome, Some(Outcome::RolledBack));
+    f.host.stop(Slot::Stable).await?;
+    let starts = f.host.incarnation.load(Ordering::SeqCst);
+    f.runner.recover(None).await?;
+    assert!(f.host.slot.lock().unwrap().is_none());
+    f.runner.policy = Policy::Confirm;
+    let held = f
+        .runner
+        .execute(&request("unconfirmed-next", "2", false))
+        .await?;
+    assert_eq!(held.exit_code, 2);
+    assert!(f.host.slot.lock().unwrap().is_none());
+    assert_eq!(f.host.incarnation.load(Ordering::SeqCst), starts);
+    Ok(())
+}

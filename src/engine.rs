@@ -78,6 +78,20 @@ impl<'a> Engine<'a> {
         self.seq += 1;
         Ok(())
     }
+    /// Continue the sequence after a durably settled operation. The caller must
+    /// verify its terminal receipt and stable version under the transaction lock.
+    /// A user's later service stop is not an interrupted lifecycle effect.
+    pub(crate) async fn observe_settled(&mut self) -> Result<()> {
+        let entries = self.effects.read_journal().await?;
+        for entry in &entries {
+            entry.validate()?;
+        }
+        if entries.last().is_some_and(|entry| !entry.intent.at_rest()) {
+            return Err(invalid("SETTLED_OPERATION_HAS_UNFINISHED_JOURNAL"));
+        }
+        self.seq = entries.last().map_or(0, |entry| entry.seq + 1);
+        Ok(())
+    }
     pub async fn recover(&mut self) -> Result<()> {
         // Validate persistent input before invoking any host effect, including fence.
         let entries = self.effects.read_journal().await?;

@@ -223,6 +223,23 @@ impl Runner {
             Ok(())
         }
     }
+    async fn recover_engine(&self, engine: &mut Engine<'_>) -> Result<()> {
+        if let Some(operation) = self.read_required()?
+            && let Some(outcome) = operation.outcome
+        {
+            let state = self.store.transaction_state().await?;
+            let expected = if outcome == Outcome::Promoted {
+                &operation.target_version
+            } else {
+                &operation.from_version
+            };
+            if !state.phase().at_rest() || state.stable() != expected {
+                return Err(invalid("SETTLED_OPERATION_STATE_MISMATCH"));
+            }
+            return engine.observe_settled().await;
+        }
+        engine.recover().await
+    }
     pub async fn recover(&self, expected: Option<&Expected>) -> Result<()> {
         let mut lock = UpgradeLock::acquire_at(&self.store.root, (self.clock)())?;
         let result = async {
@@ -238,7 +255,7 @@ impl Runner {
                 self.clock.as_ref(),
                 self.host_budget_ms,
             )?;
-            engine.recover().await?;
+            self.recover_engine(&mut engine).await?;
             self.settle().await
         }
         .await;
@@ -315,7 +332,7 @@ impl Runner {
             self.clock.as_ref(),
             self.host_budget_ms,
         )?;
-        engine.recover().await?;
+        self.recover_engine(&mut engine).await?;
         self.settle().await?;
         let previous = self.read_required()?;
         if let (Some(desc), Some(prior)) = (&options.operation, &previous) {
