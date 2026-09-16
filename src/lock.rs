@@ -1,5 +1,5 @@
-//! Same contender directory and legacy lock file as TypeScript K. This is
-//! intentionally not just flock: old and new workers must exclude each other.
+//! V1 contender directory and owner record. All compatible workers share this
+//! protocol; a process-local or unrelated OS lock cannot replace it.
 use crate::{
     Error, Result,
     error::invalid,

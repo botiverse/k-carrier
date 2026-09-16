@@ -11,7 +11,6 @@
 <script defer src="assets/site.js?v=2"></script>
 </head>
 <body>
-<p class="note">K now uses Rust. <a href="https://github.com/botiverse/k-carrier/blob/main/README.md">Current API and commands</a>. TypeScript/Node examples on this design site describe the archived v0.2 implementation.</p>
 <a class="skip" href="#main">Skip to content</a>
 <header class="topbar">
   <a class="brand" href="index.html"><span class="mark">K</span>k-carrier <small>docs</small></a>
@@ -20,94 +19,20 @@
 <nav id="nav" class="sidebar" aria-label="Documentation"></nav>
 
 <main id="main" class="page">
-<header class="page-head">
-  <h1>Harness design</h1>
-  <p class="lede">The harness tests K's transaction mechanisms. The external runner tests exercise application integration. Neither replaces acceptance tests for a product's actual service manager, installer packaging and data.</p>
-</header>
-
-<h2 id="test-layers">Test layers</h2>
-<figure class="fig">
-<svg viewBox="0 0 960 400" role="img" aria-labelledby="figlayers">
-  <title id="figlayers">Four stacked test layers: mechanisms, execution boundary, real processes, product acceptance</title>
-  <!-- bracket for pnpm test -->
-  <path d="M30 40 L18 40 L18 288 L30 288" class="k-hair"/>
-  <text x="14" y="164" text-anchor="middle" transform="rotate(-90 14 164)" class="k-mono">pnpm test</text>
-  <!-- layer 4: product acceptance (top, outside) -->
-  <g transform="translate(40,20)"><rect x="4" y="4" width="900" height="70" class="k-shadow"/><rect width="900" height="70" class="k-inset"/>
-    <text x="16" y="28" class="k-title">Product acceptance</text>
-    <text x="16" y="52" class="k-text">Product repository and target machines. Proves real service isolation, packaging, workload restoration and data compatibility.</text>
-  </g>
-  <!-- layer 3 -->
-  <g transform="translate(40,104)"><rect x="4" y="4" width="900" height="70" class="k-shadow"/><rect width="900" height="70" class="k-box"/>
-    <text x="16" y="28" class="k-title">Real processes</text>
-    <text x="16" y="52" class="k-text">A separate runner upgrades an application with no K dependency; another worker recovers after a crash.</text>
-    <text x="884" y="28" text-anchor="end" class="k-mono">core/src/runner/process.test.ts</text>
-  </g>
-  <!-- layer 2 -->
-  <g transform="translate(40,188)"><rect x="4" y="4" width="900" height="70" class="k-shadow"/><rect width="900" height="70" class="k-box"/>
-    <text x="16" y="28" class="k-title">Execution boundary</text>
-    <text x="16" y="52" class="k-text">Input rejection, verified runner execution, bounded calls, receipt and exit-code binding.</text>
-    <text x="884" y="28" text-anchor="end" class="k-mono">protocol, launcher, runner, command-controller tests</text>
-  </g>
-  <!-- layer 1 -->
-  <g transform="translate(40,272)"><rect x="4" y="4" width="900" height="70" class="k-shadow"/><rect width="900" height="70" class="k-hi"/>
-    <text x="16" y="28" class="k-title">Mechanisms</text>
-    <text x="16" y="52" class="k-text">Locking, journal ordering, slots, policy, rollback and convergence.</text>
-    <text x="884" y="28" text-anchor="end" class="k-mono">core unit tests, harness checks, injected effects</text>
-  </g>
-  <text x="490" y="378" text-anchor="middle" class="k-muted">The top layer lives outside this repository. The bracket marks what one pnpm test run covers.</text>
-</svg>
-<figcaption>Each layer produces different evidence. The harness starts at the bottom; the product finishes at the top.</figcaption>
-</figure>
-<p><code>pnpm test</code> runs the first three layers: mechanisms, the execution boundary and real processes. <code>pnpm test:runner</code> selects the runner boundary and integration tests. Direct Node tests are not all registered harness checks, so <code>--list</code> is not the complete test inventory.</p>
-
-<h2 id="components">Components</h2>
-<p>All paths below are under <a href="https://github.com/botiverse/k-carrier/tree/main/harness/src"><code>harness/src/</code></a>.</p>
-<dl class="defs">
-  <div><dt><code>fake-host/</code></dt><dd>In-process hosts and spawned service processes with controllable faults</dd></div>
-  <div><dt><code>fake-server/</code></dt><dd>Local artifact delivery, range requests and corrupted responses</dd></div>
-  <div><dt><code>artifact-factory/</code></dt><dd>Runnable, version-stamped fixture artifacts with selectable failures</dd></div>
-  <div><dt><code>fixtures/</code></dt><dd>Internal byte-replacement, service and workload-ledger fixtures</dd></div>
-  <div><dt><code>scenario/</code></dt><dd>Isolated sandboxes and virtual time</dd></div>
-  <div><dt><code>crash/</code></dt><dd>Transition-derived fault matrix and recovery assertions</dd></div>
-  <div><dt><code>sim/</code></dt><dd>Seeded fault scheduling, invariant checks and replayable failure records</dd></div>
-  <div><dt><code>teeth/</code></dt><dd>Named checks, selection and known-green/known-red tests</dd></div>
-</dl>
-<div class="note stop"><p>Core receives host, source, clock and effects through normal interfaces. It must not detect tests or gain test-only bypasses. Logical tests use virtual time; process/network tests use bounded waits and clean up their resources.</p></div>
-
-<h2 id="registered-checks">Registered checks</h2>
-<p>A registered check (called a <em>tooth</em> in the code) declares its id, tested layers, profile, invariant or baseline failure condition, and a mutation that must fail. The registry rejects invalid declarations and duplicate ids. Known-green cases establish that correct behavior passes; known-red and adversarial cases establish that the check catches its intended failure. A declared mutation is not evidence that a separate mutation campaign has run.</p>
-<p>The harness profiles <code>swap</code> and <code>service</code> select mechanism checks. Internal fixtures invoke the engine directly; product examples use the external runner.</p>
-<dl class="defs">
-  <div><dt><code>--adapter</code></dt><dd>Runs the subset supported by a harness adapter's declared contract; it expects the harness driver interface, not an arbitrary product HostAdapter.</dd></div>
-  <div><dt><code>--bin</code></dt><dd>Drives a fixture or binary through explicitly declared commands in <code>k.target.ts</code> (or <code>--target</code>). Missing command declarations fail; the harness does not infer CLI names.</dd></div>
-</dl>
-<p>See <code>node harness/src/cli.ts --help</code> for current options.</p>
-
-<h2 id="fault-coverage-and-limits">Fault coverage and limits</h2>
-<figure class="fig">
-<svg viewBox="0 0 960 200" role="img" aria-labelledby="figcrash">
-  <title id="figcrash">The crash enumerator injects a crash at three points around every transition: before the journal write, after it, and after the action</title>
-  <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--line-strong)"/></marker></defs>
-  <g transform="translate(40,70)"><rect x="4" y="4" width="180" height="50" class="k-shadow"/><rect width="180" height="50" class="k-box"/><text x="90" y="31" text-anchor="middle" class="k-mono">phase N</text></g>
-  <g transform="translate(390,70)"><rect x="4" y="4" width="180" height="50" class="k-shadow"/><rect width="180" height="50" class="k-soft"/><text x="90" y="31" text-anchor="middle" class="k-mono">journal write</text></g>
-  <g transform="translate(740,70)"><rect x="4" y="4" width="180" height="50" class="k-shadow"/><rect width="180" height="50" class="k-box"/><text x="90" y="31" text-anchor="middle" class="k-mono">action, phase N+1</text></g>
-  <line x1="224" y1="95" x2="388" y2="95" class="k-line" marker-end="url(#ah2)"/>
-  <line x1="574" y1="95" x2="738" y2="95" class="k-line" marker-end="url(#ah2)"/>
-  <!-- crash points -->
-  <g transform="translate(306,95)"><rect x="-8" y="-8" width="16" height="16" class="k-danger" transform="rotate(45)"/></g>
-  <text x="306" y="60" text-anchor="middle" class="k-muted">before journal write</text>
-  <g transform="translate(656,95)"><rect x="-8" y="-8" width="16" height="16" class="k-danger" transform="rotate(45)"/></g>
-  <text x="656" y="60" text-anchor="middle" class="k-muted">after journal write</text>
-  <g transform="translate(830,140)"><rect x="-8" y="-8" width="16" height="16" class="k-danger" transform="rotate(45)"/></g>
-  <text x="830" y="168" text-anchor="middle" class="k-muted">after the action</text>
-  <text x="40" y="190" class="k-muted">Crossed with every transition. Injected effects and simulated crashes; not OS kills or power loss.</text>
-</svg>
-</figure>
-<p>Seeded simulation explores additional effect interleavings. Its receipts preserve the seed and transcript hash; failing seeds are saved for replay. Regressions should become fixed cases. Simulation does not establish filesystem durability, service-manager isolation or platform-specific executable replacement.</p>
-<p>See the <a href="test-plan.html">test plan</a> for commands and acceptance criteria, and the <a href="design.html">design</a> for the transaction and wire contracts.</p>
-
-<footer class="page-foot"><a href="test-plan.html">Back: Test plan</a><a href="formal.html">Next: Formal model</a></footer>
+<header class="page-head"><h1>Harness design</h1><p class="lede">Native Rust verification with explicit boundaries between deterministic models, real processes and product platform acceptance.</p></header>
+<h2 id="layers">Three layers</h2><table class="grid"><tr><th>Layer</th><th>Implementation and evidence</th></tr><tr><td>Transaction mechanisms</td><td><code>src/harness.rs</code> drives the production engine with FakeHost and an effect-aware store. <code>tests/engine.rs</code> and <code>tests/simulation.rs</code> check crash boundaries, predicates and recovery.</td></tr><tr><td>Real I/O and processes</td><td>Download, durable storage, command controller, independent worker and acceptance integration suites. These use actual sockets, files and subprocesses.</td></tr><tr><td>Product acceptance</td><td>Publisher tests for the real service manager, packaging, ownership, data and workload promises. A model pass cannot establish these facts.</td></tr></table>
+<h2 id="cli">Native CLI</h2><pre><code>cargo run --locked --bin k-harness -- --help
+cargo run --locked --bin k-harness -- --list --profile service --json
+cargo run --locked --bin k-harness -- --profile service --json
+cargo run --locked --bin k-harness -- sim --seed 42 --json
+cargo run --locked --bin k-harness -- sim --seeds 256 --start-seed 1 --json</code></pre><p>Profiles invoke named Rust integration suites through Cargo and require the crate source. They reject missing or zero-test suites and bound the overall run. Swap selects acquisition, durable storage, source, protocol, quarantine and serving; service additionally selects engine, runner, process, invariants, simulation and acceptance suites. <code>--list</code> describes this selection; it is not an inventory of every repository check.</p>
+<h2 id="external-targets">External targets</h2><p>Simulation and external acceptance execute inside the native CLI without invoking Cargo. Build the CLI once with <code>cargo build --locked --release --bin k-harness</code>.</p>
+<pre><code>k-harness --bin ./app --target ./k.target.json --target-version 2.0.0 --json</code></pre><pre><code>{"version":["--version"],"selfUpgrade":["upgrade"],"artifact":"app-2.0.0"}</code></pre><p>The verifier copies the executable into an isolated directory, serves the supplied candidate over HTTP and sets <code>K_RELEASE_BASE</code>. Acceptance requires changed bytes and an exact next-run version. Commands are declared explicitly, never guessed. The service profile additionally requires a status command returning ProcessEvidence, TxnState and ConvergenceReport. Artifact paths are relative to the declaration.</p>
+<pre><code>k-harness --adapter ./controller --target ./adapter.json --json</code></pre><pre><code>{"stableArtifact":"service-1.0.0","candidateArtifact":"service-2.0.0",
+ "brokenArtifact":"service-broken","stableVersion":"1.0.0",
+ "targetVersion":"2.0.0","args":[]}</code></pre><p>The controller speaks the v1 protocol. The verifier checks promotion, rollback with a genuinely broken candidate, recovery, live probe identity and rejection after stop. Cleanup failure fails acceptance. JSON declares data and native commands; it cannot load executable configuration modules. Use Rust ReadbackSurface and invariant integrations for custom workloads and lifecycle surfaces.</p>
+<h2 id="simulation">Seeds and mutation checks</h2><p>Simulation exercises the production engine with deterministic effects and failures. Its output includes the seed and transcript hash. Failing seeds are merged atomically into <code>.k-harness/sim-failures.json</code>; <code>--record-failures PATH</code> changes the path. Replay the recorded seed before making a regression case. Nightly CI runs 50,000 seeds.</p><p>Mutation self-checks confirm that broken dual-run, stable-preservation, write-ahead, workload-preservation and resume behavior is detected. Real stalls, worker death, partial files and platform image replacement are separate tests. Simulation is not a power-loss or service-manager guarantee.</p>
+<h2 id="invariants">Invariants and scope</h2><p><code>src/invariants.rs</code> provides safety, liveness and workload checks. Receipts name the checks actually executed. A product must declare which service and workload properties apply; unspecified capabilities are never counted as passed. See the <a href="test-plan.html">test plan</a> for commands and platform gates.</p>
 </main>
 </body>
 </html>

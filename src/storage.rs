@@ -1,4 +1,4 @@
-//! Durable v1 layout shared with the previous TypeScript implementation.
+//! Durable v1 state layout.
 use crate::{Result, error::invalid, state::*};
 use async_trait::async_trait;
 use serde::Serialize;
@@ -154,7 +154,7 @@ pub fn write_json(path: &Path, value: &impl Serialize) -> Result<()> {
     write_durable(path, &serde_json::to_vec(value)?, false)
 }
 /// One-time adoption of trusted bytes. The lock excludes both native and
-/// legacy workers; existing complete stable slots are never downgraded.
+/// other compatible workers; existing complete stable slots are never downgraded.
 pub fn bootstrap_stable(root: &Path, version: &str, source: &Path) -> Result<bool> {
     let mut lock = crate::lock::UpgradeLock::acquire(root)?;
     let result = FileStore::new(root).bootstrap_locked(version, source);

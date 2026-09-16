@@ -8,7 +8,7 @@ license = "Apache-2.0"
 description = "Recoverable two-slot application upgrades with an independent installer"
 repository = "https://github.com/botiverse/k-carrier"
 homepage = "https://botiverse.github.io/k-carrier/"
-include = ["/src/**", "/tests/**", "/Cargo.toml", "/Cargo.lock", "/README.md", "/RUST-MIGRATION.md", "/LICENSE", "/NOTICE", "/examples/*.rs", "/legacy/core/**/*.ts"]
+include = ["/src/**", "/tests/**", "/Cargo.toml", "/Cargo.lock", "/README.md", "/RUST-MIGRATION.md", "/LICENSE", "/NOTICE", "/examples/**", "/docs/**", "/formal/**", "/scripts/*.py", "/rust-toolchain.toml", "/lean-toolchain"]
 
 [dependencies]
 tempfile = "3"
@@ -56,14 +56,6 @@ path = "examples/native-service.rs"
 [[example]]
 name = "native-swap"
 path = "examples/native-swap.rs"
-
-[features]
-legacy-interop = []
-
-[[test]]
-name = "legacy"
-path = "tests/legacy.rs"
-required-features = ["legacy-interop"]
 
 [[example]]
 name = "native-installer"

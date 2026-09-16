@@ -11,7 +11,6 @@
 <script defer src="assets/site.js?v=2"></script>
 </head>
 <body>
-<p class="note">K now uses Rust. <a href="https://github.com/botiverse/k-carrier/blob/main/README.md">Current API and commands</a>. TypeScript/Node examples on this design site describe the archived v0.2 implementation.</p>
 <a class="skip" href="#main">Skip to content</a>
 <header class="topbar">
   <a class="brand" href="index.html"><span class="mark">K</span>k-carrier <small>docs</small></a>
@@ -41,7 +40,7 @@
   <text x="395" y="184" text-anchor="middle" class="k-muted">stderr: logs</text>
   <text x="240" y="222" text-anchor="middle" class="k-mono">actions: upgrade, recover, status</text>
   <!-- controller protocol -->
-  <g transform="translate(520,90)"><rect x="4" y="4" width="130" height="64" class="k-shadow"/><rect width="130" height="64" class="k-box"/><text x="65" y="28" text-anchor="middle" class="k-bold">Host</text><text x="65" y="50" text-anchor="middle" class="k-mono">createCommandHost</text></g>
+  <g transform="translate(520,90)"><rect x="4" y="4" width="130" height="64" class="k-shadow"/><rect width="130" height="64" class="k-box"/><text x="65" y="28" text-anchor="middle" class="k-bold">Host</text><text x="65" y="50" text-anchor="middle" class="k-mono">CommandHost</text></g>
   <g transform="translate(830,90)"><rect x="4" y="4" width="120" height="64" class="k-shadow"/><rect width="120" height="64" class="k-box"/><text x="60" y="28" text-anchor="middle" class="k-bold">Controller</text><text x="60" y="50" text-anchor="middle" class="k-mono">your program</text></g>
   <line x1="652" y1="108" x2="828" y2="108" class="k-line" marker-end="url(#ah)"/><text x="740" y="98" text-anchor="middle" class="k-mono">stdin: one JSON request</text>
   <line x1="828" y1="138" x2="652" y2="138" class="k-line" marker-end="url(#ah)"/><text x="740" y="158" text-anchor="middle" class="k-mono">stdout: ok + evidence</text>
@@ -103,20 +102,20 @@
 <table class="grid">
   <thead><tr><th>Budget</th><th>Default</th><th>Option</th></tr></thead>
   <tbody>
-    <tr><td>Worker execution</td><td>10 minutes</td><td><code>executionTimeoutMs</code></td></tr>
-    <tr><td>Each recovery attempt</td><td>2 minutes</td><td><code>recoveryTimeoutMs</code></td></tr>
-    <tr><td>Recovery attempts</td><td>2</td><td><code>recoveryAttempts</code> (0 to 10)</td></tr>
-    <tr><td>Total</td><td>execution + 2 × recovery (14 minutes)</td><td><code>totalTimeoutMs</code></td></tr>
+    <tr><td>Worker execution</td><td>10 minutes</td><td><code>execution_ms</code></td></tr>
+    <tr><td>Each recovery attempt</td><td>2 minutes</td><td><code>recovery_ms</code></td></tr>
+    <tr><td>Recovery attempts</td><td>2</td><td><code>recovery_attempts</code> (0 to 10)</td></tr>
+    <tr><td>Total</td><td>14 minutes (independent of other overrides)</td><td><code>total_ms</code></td></tr>
     <tr><td>Exit observation after termination</td><td>1 second</td><td>fixed</td></tr>
   </tbody>
 </table>
-<p>All budgets are positive integers. Artifact acquisition has separate transfer budgets derived from the artifact size (<code>artifactTransferPolicy</code>); <code>downloadVerified</code> called without any budget uses the same size-derived ones. An unconfirmed worker exit forbids takeover. Exhaustion preserves state and returns exit 3 with a recovery file; it never reports success.</p>
+<p>All budgets are positive integers. Artifact acquisition has separate transfer budgets derived from the artifact size (<code>TransferPolicy::budgets</code>); <code>Downloader::download</code> called without any budget uses the same size-derived ones. An unconfirmed worker exit forbids takeover. Exhaustion preserves state and returns exit 3 with a recovery file; it never reports success.</p>
 
 <h2 id="engine-host-call-budget">Engine host-call budget</h2>
-<p>Every host call, including fence, readback, resume and recovery, has a positive budget, default 120 seconds (<code>hostCallBudgetMs</code>). A call whose effect is uncertain raises <code>HostCallUncertain</code>; the worker retains its lock until it exits. Bundled workers exit after flushing their response. An in-process caller that receives <code>HostCallUncertain</code> must also exit rather than reuse that worker.</p>
+<p>Every host call, including fence, readback, resume and recovery, has a positive budget, default 120 seconds (<code>host_budget_ms</code>). A call whose effect is uncertain raises <code>Error::Uncertain</code>; the worker retains its lock until it exits. Bundled workers exit after flushing their response. An in-process caller that receives <code>Error::Uncertain</code> must also exit rather than reuse that worker.</p>
 
 <h2 id="command-controller-protocol">Command controller protocol</h2>
-<p><code>createCommandHost({stateDir, command, timeoutMs?})</code> runs an external controller via argv, without a shell.</p>
+<p><code>CommandHost::new(command, state_dir, timeout_ms)</code> runs an external controller via argv, without a shell.</p>
 <p>Request on stdin:</p>
 <pre><code>{"protocolVersion":1,"action":"fence"}
 {"protocolVersion":1,"action":"quiesce"}
@@ -128,7 +127,7 @@
 <pre><code>{"protocolVersion":1,"ok":true}
 {"protocolVersion":1,"ok":true,"evidence":{"version":"2.0.0","pid":4242,"startId":"..."}}</code></pre>
 <ul>
-  <li>Output is bounded to 64 KiB. Each call has a positive timeout, default 30 seconds.</li>
+  <li>Output is bounded to 64 KiB. Each call has a positive timeout, supplied explicitly to the constructor (1–120,000 ms).</li>
   <li>A controller must do nothing without a complete request.</li>
   <li><code>probe</code> evidence must come from one live service instance. The controller process's own pid is invalid evidence.</li>
   <li>Reported errors exclude arbitrary stderr.</li>
@@ -157,9 +156,9 @@
 
 <h2 id="supervisor-scratch-layout">Supervisor scratch layout</h2>
 <pre class="tree">&lt;scratchDir&gt;/k-runner-&lt;random&gt;/
-  runner.mjs | runner.bin   <i>verified runner (mode 0700)</i>
-  recovery.json             <i>invocation descriptor: file, interpreter, sha256, size, recover request</i></pre>
-<p><code>recovery.json</code> is an invocation descriptor, not a transaction log. It is removed after settlement and retained on an unresolved result. <code>resumeRunner(path)</code> re-verifies the runner against the recorded hash before executing it.</p>
+  runner.bin (runner.exe on Windows)   <i>verified runner (mode 0700)</i>
+  recovery.json             <i>invocation descriptor: file, sha256, size, recover request</i></pre>
+<p><code>recovery.json</code> is an invocation descriptor, not a transaction log. It is removed after settlement and retained on an unresolved result. <code>supervisor::resume_runner(path)</code> re-verifies the runner against the recorded hash before executing it.</p>
 
 <h2 id="release-metadata">Release metadata</h2>
 <pre><code>{"version":"2.0.0","url":"https://.../service","sha256":"&lt;hex&gt;","size":123456,

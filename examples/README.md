@@ -45,7 +45,7 @@ explicit, and a success requires changed bytes and an exact next-run version.
 Add a `status` argument array for `--profile service`; it must return the v1
 `ProcessEvidence`, `TxnState` and `ConvergenceReport` objects. Optional `env`
 contains application-specific configuration. Artifact paths are relative to the
-JSON declaration. This replaces executable `k.target.ts` modules.
+JSON declaration.
 
 `k-harness --adapter ./controller --target adapter.json` exercises a controller
 through the v1 protocol in a temporary cwd, with slot artifacts below `state/`.

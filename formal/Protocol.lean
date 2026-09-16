@@ -1,17 +1,17 @@
 /- Lean 4 model of K's two-slot upgrade transaction.
 
-Projection of the TypeScript engine:
-  * `Phase` mirrors core/src/txn/state.ts::TxnPhase, all seven phases.
-  * Intent steps mirror core/src/txn/transitions.ts::TRANSITIONS, including
+Projection of the Rust engine:
+  * `Phase` mirrors src/state.rs::Phase, all seven phases.
+  * Intent steps mirror src/engine.rs::Engine::journal, including
     the rollback edges from every in-flight phase.
   * Effect steps mirror the host/slot calls the engine issues after each
-    journaled intent (core/src/txn/engine.ts), one step per call, so a crash
+    journaled intent (src/engine.rs), one step per call, so a crash
     can fall between any two of them.
   * Crash and recovery: a crash loses nothing durable. Recovery only ever
     (a) journals a rollback intent from an in-flight phase, or (b) replays the
     effects of the last durable intent. Both are ordinary steps of the
     relation, so every crash-matrix instant (before-journal, after-journal,
-    after-action; see harness/src/crash/enumerate.ts) is a reachable state and
+    after-action; see src/harness.rs) is a reachable state and
     the theorems below hold there.
 
 Proved for every reachable machine (`protocol_guarantees`):
@@ -26,7 +26,7 @@ Proved for every reachable machine (`protocol_guarantees`):
                      handing-over intent, and experiment bytes exist only after
                      a durable staged intent.
 
-Assumptions, shared with the HostAdapter contract (assume-guarantee): stop()
+Assumptions, shared with the host::Host contract (assume-guarantee): stop()
 returning means the process is gone; start() starts only the requested slot;
 the probe answers for one live incarnation. The model does not resolve the
 filesystem window inside promote (rename aside, rename over), which is below

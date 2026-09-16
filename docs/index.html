@@ -11,7 +11,6 @@
 <script defer src="assets/site.js?v=2"></script>
 </head>
 <body>
-<p class="note">K now uses Rust. <a href="https://github.com/botiverse/k-carrier/blob/main/README.md">Current API and commands</a>. TypeScript/Node examples on this design site describe the archived v0.2 implementation.</p>
 <a class="skip" href="#main">Skip to content</a>
 <header class="topbar">
   <a class="brand" href="index.html"><span class="mark">K</span>k-carrier <small>docs</small></a>
@@ -59,12 +58,12 @@
 <h2 id="status">Status</h2>
 <div class="status">
   <div class="done"><b>Two-slot transaction, journal, lock, receipts</b>Done. Generated crash matrix, seeded simulation, Lean model of every phase and crash interleaving (host honesty assumed).</div>
-  <div class="done"><b>External runner, supervisor, bounded recovery</b>Done. Linux and macOS process tests.</div>
+  <div class="done"><b>External runner, supervisor, bounded recovery</b>Done. Required Linux, macOS and Windows process tests.</div>
   <div class="done"><b>Verified download, resume, gzip</b>Done.</div>
   <div class="part"><b>Command controller boundary</b>Done; demo controller only.</div>
-  <div class="part"><b>Single-executable runner</b>Verified by hand; build flag provided, no CI.</div>
-  <div class="part"><b>Windows</b>Core is platform-seamed; harness port incomplete, CI informational.</div>
-  <div class="part"><b>Repair beyond K's transaction</b>Boundary documented; implementation belongs to the product installer.</div>
+  <div class="part"><b>Single-executable runner</b>Native Rust worker, supervisor and controller; compiled and executed in CI.</div>
+  <div class="part"><b>Windows</b>Required CI, real native process and executable-replacement tests.</div>
+  <div class="part"><b>Repair beyond K's transaction</b>Safe quarantine primitive supplied; repair policy belongs to the product installer.</div>
   <div class="none"><b>Product-ready install.sh template</b>Not yet.</div>
   <div class="none"><b>Publisher signing</b>Not provided; hash and size only.</div>
   <div class="none"><b>Restart after reboot</b>Not provided; product OS hook.</div>

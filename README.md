@@ -61,12 +61,11 @@ cargo run --locked --bin k-harness -- sim --seeds 256 --start-seed 1 --json
 elan run leanprover/lean4:v4.34.0 lean formal/Protocol.lean
 ```
 
-Rust 1.89 is pinned by `rust-toolchain.toml`. `legacy-interop` additionally
-requires Node 24+ to run actual old/new lock and file-format interoperability.
-Ordinary Rust builds and runtime execution have no Node dependency. The frozen
-TypeScript reference lives in `legacy/`; it is not a second runtime implementation
-or an npm release. Default `cargo test` runs the native suites; CI also requires
-the explicit legacy gate above.
+Rust 1.89 is pinned by `rust-toolchain.toml`. Build, tests and runtime execution
+have no Node dependency. The previous implementation has been removed; fixed v1
+format samples and native process tests protect compatibility. Python 3 runs
+the example walkthrough and documentation checks. Run `python3 scripts/check-docs.py`
+to validate local documentation links and source references.
 
 The harness provides:
 
@@ -93,7 +92,13 @@ service manager works; those gates use actual target-platform processes.
 | `tests/` | Native integration, crash, transfer, compatibility and mutation checks |
 | `examples/` | Native application, controller, self-swap CLI and supervised installer |
 | `formal/` | Lean 4 two-slot model and machine-checked proofs |
-| `legacy/` | Frozen TypeScript v0.2 reference for migration verification |
-| `docs/` | Design background; old language-specific examples are historical |
+| `docs/` | Current integration guide, wire reference, design and verification documentation |
 
 Incubating · Rust · Apache-2.0.
+
+## Publishing
+
+The version tag must match `Cargo.toml`. The publishing workflow first requires
+all three native CI platforms and Lean, then checks `cargo publish --dry-run --locked`
+and uses crates.io Trusted Publishing. Configure the repository and workflow in
+the registry before tagging a release. CI packaging does not publish a crate.

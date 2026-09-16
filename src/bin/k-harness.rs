@@ -11,6 +11,7 @@ use tokio::{io::AsyncReadExt, process::Command};
 const SWAP: &[&str] = &[
     "download",
     "durable",
+    "compatibility",
     "source",
     "protocol",
     "quarantine",
@@ -19,6 +20,7 @@ const SWAP: &[&str] = &[
 const SERVICE: &[&str] = &[
     "download",
     "durable",
+    "compatibility",
     "source",
     "protocol",
     "quarantine",
@@ -102,7 +104,7 @@ async fn run() -> Result<u8> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args == ["--help"] {
         println!(
-            "k-harness --list [--profile swap|service] [--json]\nk-harness --profile swap|service [--json]\nk-harness sim [--seed N | --seeds N --start-seed N] [--json]\nk-harness --bin PATH [--target k.target.json] [--target-version V] [--profile swap|service] [--json]\nk-harness --adapter CONTROLLER --target adapter.json [--profile service] [--json]\nSimulation accepts --record-failures PATH. Profiles require Cargo and crate source. Legacy Node interoperability is a separate cargo test --features legacy-interop --test legacy gate."
+            "k-harness --list [--profile swap|service] [--json]\nk-harness --profile swap|service [--json]\nk-harness sim [--seed N | --seeds N --start-seed N] [--json]\nk-harness --bin PATH [--target k.target.json] [--target-version V] [--profile swap|service] [--json]\nk-harness --adapter CONTROLLER --target adapter.json [--profile service] [--json]\nSimulation accepts --record-failures PATH. Profiles require Cargo and crate source."
         );
         return Ok(0);
     }

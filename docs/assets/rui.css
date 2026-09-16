@@ -1,4 +1,4 @@
-/* raft-ui 0.5.11 token layer, flattened for static HTML by scripts/vendor-rui-css.mjs. Do not edit by hand. */
+/* raft-ui 0.5.11 token layer, flattened for static HTML by scripts/vendor-rui-css.py. Do not edit by hand. */
 /* ─── Token grammar ──────────────────────────────────────────────────────────
    Neutrals:  {role}(-{purpose})(-{intensity})
      role      = foreground | layer | line | fill

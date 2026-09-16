@@ -11,7 +11,6 @@
 <script defer src="assets/site.js?v=2"></script>
 </head>
 <body>
-<p class="note">K now uses Rust. <a href="https://github.com/botiverse/k-carrier/blob/main/README.md">Current API and commands</a>. TypeScript/Node examples on this design site describe the archived v0.2 implementation.</p>
 <a class="skip" href="#main">Skip to content</a>
 <header class="topbar">
   <a class="brand" href="index.html"><span class="mark">K</span>k-carrier <small>docs</small></a>
@@ -39,8 +38,8 @@
   <div><dt>Bootstrap</dt><dd>Your <code>install.sh</code>, or the <code>self upgrade</code> command inside your application. Downloads and verifies the installer, launches it, relays the exit code. Contains no upgrade logic.</dd></div>
   <div><dt>Installer</dt><dd>What you ship, in two parts. The <strong>supervisor</strong> is a temporary process that acquires and verifies the runner, executes it and, if it dies, runs bounded recovery. The <strong>runner</strong> is K plus your adapter bundled into one executable; it serves one request and exits. A running runner is a <strong>worker</strong>.</dd></div>
   <div><dt>Adapter</dt><dd>Your trusted code, fixed at build time: where releases come from, whether an upgrade may proceed, how to reach the controller.</dd></div>
-  <div><dt>Controller</dt><dd>Your program that actually stops, starts and probes the application. The adapter calls it directly or through <code>createCommandHost</code>.</dd></div>
-  <div><dt>State directory</dt><dd>The lock, the journal, two <strong>slots</strong> and the receipts. Recovery needs this state, a compatible runner, its runtime and the controller. It does not need release distribution.</dd></div>
+  <div><dt>Controller</dt><dd>Your program that actually stops, starts and probes the application. The adapter calls it directly or through <code>CommandHost</code>.</dd></div>
+  <div><dt>State directory</dt><dd>The lock, the journal, two <strong>slots</strong> and the receipts. Recovery needs this state, a compatible native runner and the controller. It does not need release distribution.</dd></div>
 </dl>
 <p>The slots are <strong>stable</strong> and <strong>experiment</strong>. They are positions on disk, not release channels; a product channel also called "stable" is unrelated.</p>
 
@@ -78,7 +77,7 @@
 <div class="stage"><iframe src="figures/recovery.html" title="Where the crash lands on the phase strip decides whether recovery restores stable or replays the commit" loading="lazy" scrolling="no"></iframe></div>
 <figcaption>Before promote intent, restore stable. After it, replay the commit. Both are idempotent, so a crash during recovery is handled the same way next time.</figcaption>
 </figure>
-<p>Attempts and elapsed time are bounded. If recovery does not settle within them, the supervisor exits 3, leaves the verified runner and a <code>recovery.json</code> in scratch space, and prints where. <code>resumeRunner</code> on that file retries the same recovery offline.</p>
+<p>Attempts and elapsed time are bounded. If recovery does not settle within them, the supervisor exits 3, leaves the verified runner and a <code>recovery.json</code> in scratch space, and prints where. <code>supervisor::resume_runner</code> on that file retries the same recovery offline.</p>
 
 <h3 id="everything-dies">Everything dies</h3>
 <p>Power loss, reboot, or the whole invocation killed. The state directory survives, and the next installer invocation settles the unfinished operation before it accepts new work. K does not install a watchdog, so something has to run the installer again: your product's OS startup hook, or a person.</p>

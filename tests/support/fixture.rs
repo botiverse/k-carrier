@@ -17,6 +17,15 @@ fn main() {
     }
 }
 fn run() -> Result<(), Box<dyn std::error::Error>> {
+    if std::env::args().nth(1).as_deref() == Some("--hold-lock") {
+        let root = PathBuf::from(std::env::var_os("K_FIXTURE_ROOT").ok_or("missing root")?);
+        let _lock = k_carrier::lock::UpgradeLock::acquire(&root)?;
+        println!("acquired");
+        std::io::stdout().flush()?;
+        let mut byte = [0];
+        std::io::stdin().read_exact(&mut byte)?;
+        return Ok(());
+    }
     if let Some(url) = std::env::args()
         .nth(1)
         .filter(|v| v == "--proxy-download")
