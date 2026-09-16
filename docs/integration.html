@@ -21,7 +21,7 @@
 <main id="main" class="page">
 <header class="page-head"><h1>Integration and distribution</h1><p class="lede">Compile K and a trusted product adapter into an independent Rust installer. The application can use any language.</p></header>
 <h2 id="deliverables">Publish three deliverables</h2><p>A small platform bootstrap verifies and launches the installer; the installer contains K plus product policy; the product is the executable installed into the two slots. Installer and product versions are independent. Publish immutable artifacts and authenticated metadata for both. A SHA-256 check verifies bytes against metadata, not publisher identity.</p>
-<h2 id="adapter">Construct the runner</h2><p>Depend on a pinned K Git revision until the matching crate version is published. Commit Cargo.lock for application builds. Start with <code>examples/native-installer.rs</code>, which CI compiles and executes:</p>
+<h2 id="adapter">Construct the runner</h2><p>Depend on the published <code>k-carrier = "=0.3.1"</code> and commit <code>Cargo.lock</code> for application builds. Use a pinned Git revision only to test unpublished changes. Start with <code>examples/native-installer.rs</code>, which CI compiles and executes:</p>
 <pre><code>use k_carrier::{host::CommandHost, runner::Runner,
     source::StaticManifestSource, storage::FileStore};
 use std::sync::Arc;

@@ -23,9 +23,16 @@ installation, that manager owns upgrades too; you probably do not need K.
 The installer is a native Rust executable. The application it controls can be
 written in any language and has no K dependency.
 
-Build from a pinned Git revision until the 0.3 crate is published; the manifest
-version alone is not evidence that crates.io has that release. Pin the chosen K
-commit in the installer's Cargo manifest and lockfile.
+The published crate is `k-carrier` 0.3.1. Pin the version in the installer's
+Cargo manifest and commit `Cargo.lock` for reproducible application builds:
+
+```toml
+k-carrier = "=0.3.1"
+```
+
+Use a pinned Git revision only when intentionally testing changes that have not
+been published. A repository's manifest version alone does not prove that a
+matching crate release exists.
 
 Construct `runner::Runner` with a `storage::FileStore`, an `Arc<dyn host::Host>`
 and an `Arc<dyn artifact::ReleaseSource>`. `host::CommandHost` implements the
