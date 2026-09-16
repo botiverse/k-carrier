@@ -27,11 +27,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: leanprover/lean-action@v1
-        with:
-          auto-config: false
-          use-mathlib-cache: false
-          build: false
-          test: false
+      - name: Install pinned elan (standalone Lean model)
+        shell: bash
+        run: |
+          curl -fsSL https://github.com/leanprover/elan/releases/download/v4.2.4/elan-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C "$RUNNER_TEMP"
+          "$RUNNER_TEMP/elan-init" -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
       - run: elan toolchain install leanprover/lean4:v4.34.0
       - run: elan run leanprover/lean4:v4.34.0 lean formal/Protocol.lean
