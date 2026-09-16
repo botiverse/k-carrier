@@ -48,7 +48,7 @@
 </figure>
 
 <h2 id="interface">The interface</h2>
-<p>What a person or a script sees. Commands below are illustrative product interfaces, not commands built into the K crate.</p>
+<p>What a person or a script sees. Commands and environment names below illustrate product bindings, not interfaces built into the K crate. A product supplies working defaults and documents the options it exposes; it need not expose every installation path or release endpoint as a setting. Fixed product bindings must obey the same rules below, including consent, immutable release selection, verification and recovery.</p>
 <pre><code>curl -fsSL https://example.com/install.sh | sh                                # attended: resolve, show, ask
 curl -fsSL https://example.com/install.sh | sh -s -- --channel alpha          # attended, another channel
 curl -fsSL https://example.com/install.sh | CI=1 sh                           # unattended: the channel's current release, no questions
