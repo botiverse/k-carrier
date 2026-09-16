@@ -101,8 +101,13 @@ pub fn quarantine_state(
             operation.outcome.is_none()
         }
         OperationRead::Genesis => fs::metadata(source.join("journal.jsonl"))
-            .map(|meta| meta.len() > 0).or_else(|error| {
-                if error.kind() == std::io::ErrorKind::NotFound { Ok(false) } else { Err(error) }
+            .map(|meta| meta.len() > 0)
+            .or_else(|error| {
+                if error.kind() == std::io::ErrorKind::NotFound {
+                    Ok(false)
+                } else {
+                    Err(error)
+                }
             })?,
     };
     if requires_handoff || handoff.is_some() {

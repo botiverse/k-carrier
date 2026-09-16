@@ -142,7 +142,9 @@ impl CommandHost {
                 && value.get("ok") == Some(&json!(false))
                 && value.get("uncertain") == Some(&json!(true))
             {
-                return Err(Error::Uncertain(format!("HOST_EFFECT_UNRESOLVED: {action}")));
+                return Err(Error::Uncertain(format!(
+                    "HOST_EFFECT_UNRESOLVED: {action}"
+                )));
             }
             if !status.success() {
                 return Err(invalid(format!("HOST_COMMAND_FAILED: {action}")));
@@ -153,7 +155,9 @@ impl CommandHost {
                 return Err(invalid(format!("HOST_PROTOCOL_INVALID: {action}")));
             }
             if action == "probe" && value["evidence"]["pid"].as_u64() == Some(u64::from(pid)) {
-                return Err(invalid("HOST_EVIDENCE_INVALID: controller cannot attest itself"));
+                return Err(invalid(
+                    "HOST_EVIDENCE_INVALID: controller cannot attest itself",
+                ));
             }
             Ok(value)
         })
@@ -169,7 +173,9 @@ impl CommandHost {
             Ok(Ok(_))
         );
         if !exited {
-            return Err(Error::Uncertain(format!("HOST_PROCESS_UNRESOLVED: {action}")));
+            return Err(Error::Uncertain(format!(
+                "HOST_PROCESS_UNRESOLVED: {action}"
+            )));
         }
         if exited {
             fs::remove_file(&record).or_else(|e| {

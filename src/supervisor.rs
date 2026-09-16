@@ -138,8 +138,11 @@ fn settled(response: &Response, request: &Request) -> bool {
     // own. Its confirmed worker response is enough to report held; do not run
     // recovery against somebody else's transaction. A recovery worker's busy
     // response cannot settle an already interrupted original request.
-    if matches!(request, Request::Upgrade { .. }) && response.action == "upgrade"
-        && response.result == "busy" && response.exit_code == 2 {
+    if matches!(request, Request::Upgrade { .. })
+        && response.action == "upgrade"
+        && response.result == "busy"
+        && response.exit_code == 2
+    {
         return true;
     }
     if response.error.is_some() {

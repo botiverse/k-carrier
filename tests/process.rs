@@ -163,14 +163,29 @@ async fn hung_workers_are_reaped_before_retry_and_total_work_is_bounded() -> Res
 #[tokio::test]
 async fn native_controller_preserves_uncertainty_and_cannot_attest_itself() -> Result<()> {
     let root = tempdir()?;
-    let mut host = CommandHost::new(vec![fixture().into(), "--controller".into()], root.path().join("state"), 3000)?;
+    let mut host = CommandHost::new(
+        vec![fixture().into(), "--controller".into()],
+        root.path().join("state"),
+        3000,
+    )?;
     host.cwd = Some(root.path().into());
     fs::write(root.path().join("effect-uncertain"), b"fixture")?;
     assert!(host.probe().await.unwrap_err().is_uncertain());
-    assert!(host.stop(k_carrier::state::Slot::Stable).await.unwrap_err().is_uncertain());
+    assert!(
+        host.stop(k_carrier::state::Slot::Stable)
+            .await
+            .unwrap_err()
+            .is_uncertain()
+    );
     fs::remove_file(root.path().join("effect-uncertain"))?;
     fs::write(root.path().join("controller-self-evidence"), b"fixture")?;
-    assert!(host.probe().await.unwrap_err().to_string().contains("HOST_EVIDENCE_INVALID"));
+    assert!(
+        host.probe()
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("HOST_EVIDENCE_INVALID")
+    );
     Ok(())
 }
 
@@ -178,22 +193,46 @@ async fn native_controller_preserves_uncertainty_and_cannot_attest_itself() -> R
 async fn rejected_upgrade_is_held_without_recovering_another_writers_transaction() -> Result<()> {
     let root = tempdir()?;
     let options = LaunchOptions {
-        execution_ms: 5000, recovery_ms: 5000, total_ms: 12000, recovery_attempts: 2,
+        execution_ms: 5000,
+        recovery_ms: 5000,
+        total_ms: 12000,
+        recovery_attempts: 2,
         env: BTreeMap::from([
-            ("K_FIXTURE_ROOT".into(), root.path().to_string_lossy().into_owned()),
+            (
+                "K_FIXTURE_ROOT".into(),
+                root.path().to_string_lossy().into_owned(),
+            ),
             ("K_FIXTURE_MODE".into(), "busy".into()),
         ]),
     };
-    let result = supervise_bytes(&fs::read(fixture())?, &Request::Upgrade {
-        protocol_version: 1, id: "held".into(), target_version: "2".into(), consented: true,
-    }, &root.path().join("scratch"), &options).await?;
+    let result = supervise_bytes(
+        &fs::read(fixture())?,
+        &Request::Upgrade {
+            protocol_version: 1,
+            id: "held".into(),
+            target_version: "2".into(),
+            consented: true,
+        },
+        &root.path().join("scratch"),
+        &options,
+    )
+    .await?;
     assert_eq!(result.exit_code, 2);
     assert_eq!(result.attempts, 1);
     assert!(result.recovery_file.is_none());
-    let recovery = supervise_bytes(&fs::read(fixture())?, &Request::Recover {
-        protocol_version: 1,
-        expected: Some(k_carrier::protocol::Expected { id: "interrupted".into(), target_version: "2".into() }),
-    }, &root.path().join("scratch"), &options).await?;
+    let recovery = supervise_bytes(
+        &fs::read(fixture())?,
+        &Request::Recover {
+            protocol_version: 1,
+            expected: Some(k_carrier::protocol::Expected {
+                id: "interrupted".into(),
+                target_version: "2".into(),
+            }),
+        },
+        &root.path().join("scratch"),
+        &options,
+    )
+    .await?;
     assert_eq!(recovery.exit_code, 3);
     assert!(recovery.recovery_file.is_some());
     Ok(())
