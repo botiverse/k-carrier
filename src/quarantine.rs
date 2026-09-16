@@ -91,18 +91,23 @@ pub fn quarantine_state(
         crate::Error::Locked(_) => invalid("QUARANTINE_ACTIVE_LOCK"),
         other => other,
     })?;
-    match FileStore::new(&source).read_operation() {
+    let requires_handoff = match FileStore::new(&source).read_operation() {
         OperationRead::Unreadable { .. } if !allow_unreadable => {
             return Err(invalid("QUARANTINE_STATE_UNREADABLE"));
         }
+        OperationRead::Unreadable { .. } => true,
         OperationRead::Observed { operation } => {
             receipt.operation_id = operation.id;
-            if operation.outcome.is_none() {
-                handoff.ok_or_else(|| invalid("QUARANTINE_ACTIVE_OPERATION"))?()
-                    .map_err(|_| invalid("QUARANTINE_ACTIVE_OPERATION"))?;
-            }
+            operation.outcome.is_none()
         }
-        _ => {}
+        OperationRead::Genesis => fs::metadata(source.join("journal.jsonl"))
+            .map(|meta| meta.len() > 0).or_else(|error| {
+                if error.kind() == std::io::ErrorKind::NotFound { Ok(false) } else { Err(error) }
+            })?,
+    };
+    if requires_handoff || handoff.is_some() {
+        handoff.ok_or_else(|| invalid("QUARANTINE_ACTIVE_OPERATION"))?()
+            .map_err(|_| invalid("QUARANTINE_ACTIVE_OPERATION"))?;
     }
     ensure_dir(
         destination

@@ -655,15 +655,18 @@ impl Runner {
                 operation = OperationRead::Observed { operation: *record };
                 ("replayed", operation.exit_code(), None)
             }
+            Err(e @ Error::Locked(_)) => ("busy", 2, Some(e.to_string())),
             Err(e) => {
                 let active = matches!(&operation,OperationRead::Observed{operation} if operation.outcome.is_none());
+                let unresolved = active || e.is_uncertain()
+                    || matches!(&operation, OperationRead::Unreadable { .. });
                 (
-                    if active {
+                    if unresolved {
                         "recovery-required"
                     } else {
                         "failed"
                     },
-                    if active { 3 } else { 1 },
+                    if unresolved { 3 } else { 1 },
                     Some(e.to_string()),
                 )
             }
@@ -685,8 +688,8 @@ impl Runner {
         if !matches!(request, Request::Status { .. }) && code == 0 {
             code = operation.exit_code();
         }
-        if matches!(operation, OperationRead::Unreadable { .. }) {
-            code = 1;
+        if matches!(operation, OperationRead::Unreadable { .. }) && code != 2 {
+            code = if matches!(request, Request::Status { .. }) { 1 } else { 3 };
         }
         Ok(Response {
             protocol_version: 1,

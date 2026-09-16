@@ -137,14 +137,23 @@ impl CommandHost {
                 return Err(Error::Uncertain("HOST_RESPONSE_TOO_LARGE".into()));
             }
             let status = child.wait().await?;
+            let value: Value = serde_json::from_slice(&bytes)?;
+            if value.get("protocolVersion") == Some(&json!(1))
+                && value.get("ok") == Some(&json!(false))
+                && value.get("uncertain") == Some(&json!(true))
+            {
+                return Err(Error::Uncertain(format!("HOST_EFFECT_UNRESOLVED: {action}")));
+            }
             if !status.success() {
                 return Err(invalid(format!("HOST_COMMAND_FAILED: {action}")));
             }
-            let value: Value = serde_json::from_slice(&bytes)?;
             if value.get("protocolVersion") != Some(&json!(1))
                 || value.get("ok") != Some(&json!(true))
             {
                 return Err(invalid(format!("HOST_PROTOCOL_INVALID: {action}")));
+            }
+            if action == "probe" && value["evidence"]["pid"].as_u64() == Some(u64::from(pid)) {
+                return Err(invalid("HOST_EVIDENCE_INVALID: controller cannot attest itself"));
             }
             Ok(value)
         })
@@ -159,6 +168,9 @@ impl CommandHost {
             timeout(Duration::from_secs(1), child.wait()).await,
             Ok(Ok(_))
         );
+        if !exited {
+            return Err(Error::Uncertain(format!("HOST_PROCESS_UNRESOLVED: {action}")));
+        }
         if exited {
             fs::remove_file(&record).or_else(|e| {
                 if e.kind() == std::io::ErrorKind::NotFound {

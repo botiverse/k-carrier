@@ -134,6 +134,14 @@ async fn run(
     }
 }
 fn settled(response: &Response, request: &Request) -> bool {
+    // A first upgrade rejected at lock acquisition created no operation of its
+    // own. Its confirmed worker response is enough to report held; do not run
+    // recovery against somebody else's transaction. A recovery worker's busy
+    // response cannot settle an already interrupted original request.
+    if matches!(request, Request::Upgrade { .. }) && response.action == "upgrade"
+        && response.result == "busy" && response.exit_code == 2 {
+        return true;
+    }
     if response.error.is_some() {
         return false;
     }

@@ -381,3 +381,38 @@ async fn completed_rollback_does_not_restart_a_subsequently_stopped_service() ->
     assert_eq!(f.host.incarnation.load(Ordering::SeqCst), starts);
     Ok(())
 }
+
+#[tokio::test]
+async fn lock_contention_is_held_without_creating_a_receipt_or_calling_the_host() -> Result<()> {
+    let f = setup().await?;
+    let mut lock = k_carrier::lock::UpgradeLock::acquire(&f.runner.store.root)?;
+    for request in [request("contender", "2", true), Request::Recover { protocol_version: 1, expected: None }] {
+        let response = f.runner.execute(&request).await?;
+        assert_eq!(response.exit_code, 2);
+        assert_eq!(response.result, "busy");
+        assert!(matches!(response.operation, OperationRead::Genesis));
+    }
+    fs::write(f.runner.store.root.join("operation.json"), b"{corrupt")?;
+    assert_eq!(f.runner.execute(&request("blocked", "2", true)).await?.exit_code, 2);
+    assert_eq!(f.source.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(f.host.calls.load(Ordering::SeqCst), 0);
+    lock.release()?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn unreadable_recovery_is_unresolved_but_raw_status_is_a_read_error() -> Result<()> {
+    let f = setup().await?;
+    let corrupt = b"{corrupt";
+    fs::write(f.runner.store.root.join("operation.json"), corrupt)?;
+    for request in [request("broken", "2", true), Request::Recover { protocol_version: 1, expected: None }] {
+        let response = f.runner.execute(&request).await?;
+        assert_eq!(response.exit_code, 3);
+        assert!(matches!(response.operation, OperationRead::Unreadable { .. }));
+    }
+    assert_eq!(f.runner.execute(&Request::Status { protocol_version: 1 }).await?.exit_code, 1);
+    assert_eq!(fs::read(f.runner.store.root.join("operation.json"))?, corrupt);
+    assert_eq!(f.source.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(f.host.calls.load(Ordering::SeqCst), 0);
+    Ok(())
+}

@@ -98,7 +98,26 @@ fn unreadable_opt_in_preserves_corruption_and_rejects_descendant_aliases() -> Re
         assert!(quarantine_state(&root, &alias.join("audit"), 1, true, None).is_err());
     }
     let dest = temp.path().join("audit");
-    quarantine_state(&root, &dest, 1, true, None)?;
+    assert!(quarantine_state(&root, &dest, 1, true, None).is_err());
+    assert!(quarantine_state(&root, &dest, 1, true,
+        Some(&|| Err(k_carrier::error::invalid("host unsafe")))).is_err());
+    quarantine_state(&root, &dest, 1, true, Some(&|| {
+        assert!(UpgradeLock::acquire(&root).is_err());
+        Ok(())
+    }))?;
     assert_eq!(fs::read(dest.join("operation.json"))?, b"{corrupt");
+    Ok(())
+}
+
+#[test]
+fn missing_operation_does_not_hide_existing_handover_evidence() -> Result<()> {
+    let temp = tempdir()?;
+    let root = temp.path().join("state");
+    let dest = temp.path().join("audit");
+    fs::create_dir(&root)?;
+    fs::write(root.join("journal.jsonl"), b"unreadable handover evidence")?;
+    assert!(quarantine_state(&root, &dest, 1, true, None).is_err());
+    quarantine_state(&root, &dest, 1, true, Some(&|| Ok(())))?;
+    assert_eq!(fs::read(dest.join("journal.jsonl"))?, b"unreadable handover evidence");
     Ok(())
 }

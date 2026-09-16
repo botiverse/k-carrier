@@ -69,7 +69,7 @@
   <thead><tr><th>Action</th><th>Effect</th><th class="n">0</th><th class="n">1</th><th class="n">2</th><th class="n">3</th></tr></thead>
   <tbody>
     <tr><td><code>upgrade</code></td><td>Install the exact requested version; a mismatched source result is rejected</td><td>promoted or up-to-date</td><td>failure or rollback</td><td>held</td><td>unresolved</td></tr>
-    <tr><td><code>recover</code></td><td>Settle persisted work under the same lock; never starts a new upgrade</td><td>successful or no recorded outcome</td><td>recorded failure or rollback</td><td>held receipt</td><td>unresolved</td></tr>
+    <tr><td><code>recover</code></td><td>Settle persisted work under the same lock; never starts a new upgrade</td><td>successful or no recorded outcome</td><td>recorded failure or rollback</td><td>held receipt or live lock owner</td><td>unresolved, including unreadable recovery state</td></tr>
     <tr><td><code>status</code></td><td>Read the current receipt without lifecycle calls</td><td>readable, including <code>genesis</code></td><td>unreadable</td><td></td><td></td></tr>
   </tbody>
 </table>
@@ -78,6 +78,7 @@
 <h3 id="responses">Responses</h3>
 <p>Execution replies carry <code>protocolVersion</code>, <code>action</code>, <code>result</code>, <code>exitCode</code>, <code>operation</code> and <code>error</code>. Input rejection or adapter-construction failure may return only <code>protocolVersion</code>, <code>result</code>, <code>exitCode</code> and <code>error</code>. Termination can leave no complete response; inspect persistent state and recover.</p>
 <p><code>operation.kind</code> is <code>observed</code> (with the operation record), <code>genesis</code> (no operation recorded) or <code>unreadable</code>.</p>
+<p>Lock acquisition failure returns <code>result: "busy"</code>, exit 2, and the observed state without creating a receipt for the rejected request. A supervisor may finish an initial upgrade as held after confirming that worker exited. A busy recovery worker does not settle the original interrupted request; supervision retains its recovery files and returns 3. Unreadable state returns 3 for upgrade/recover, while raw status reports the read error as 1.</p>
 <ul>
   <li>A successful upgrade completion must match the request id and target.</li>
   <li>Exceptions cannot manufacture a rollback receipt.</li>
@@ -125,11 +126,13 @@
 {"protocolVersion":1,"action":"resume"}</code></pre>
 <p>Response on stdout:</p>
 <pre><code>{"protocolVersion":1,"ok":true}
-{"protocolVersion":1,"ok":true,"evidence":{"version":"2.0.0","pid":4242,"startId":"..."}}</code></pre>
+{"protocolVersion":1,"ok":true,"evidence":{"version":"2.0.0","pid":4242,"startId":"..."}}
+{"protocolVersion":1,"ok":false,"uncertain":true}</code></pre>
 <ul>
   <li>Output is bounded to 64 KiB. Each call has a positive timeout, supplied explicitly to the constructor (1–120,000 ms).</li>
   <li>A controller must do nothing without a complete request.</li>
-  <li><code>probe</code> evidence must come from one live service instance. The controller process's own pid is invalid evidence.</li>
+  <li><code>probe</code> evidence identifies one live service instance, or a fresh completed candidate self-check when the product contract calls for a stopped installation. The controller process's own pid is invalid evidence.</li>
+  <li>When a controller cannot prove that a product action has finished, it returns <code>ok: false, uncertain: true</code>. K preserves this as unresolved, including on a nonzero controller exit. An ordinary failed probe may cause rollback; an uncertain probe cannot authorize further lifecycle effects. Controllers must never convert an unobserved child exit into an ordinary failure.</li>
   <li>Reported errors exclude arbitrary stderr.</li>
   <li>Before delivering a command, the host durably records the controller pid in a unique file under <code>controllers/</code>. Recovery waits for recorded controllers to exit, then calls <code>fence</code>. Failure or timeout there prevents lifecycle replay. The recorded pid is never used to kill an arbitrary process; pid reuse or inaccessible identity yields a conservative unresolved result.</li>
   <li><code>fence</code> acknowledgement is a product contract. K cannot infer it from process exit. A fire-and-forget <code>stop</code> cannot establish termination.</li>

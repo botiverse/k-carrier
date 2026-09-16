@@ -17,6 +17,10 @@ fn main() {
     }
 }
 fn run() -> Result<(), Box<dyn std::error::Error>> {
+    if std::env::args().nth(1).as_deref() == Some("--cold-evidence") {
+        println!("{}", serde_json::json!({"version":"2","pid":std::process::id(),"startId":uuid::Uuid::new_v4().to_string()}));
+        return Ok(());
+    }
     if std::env::args().nth(1).as_deref() == Some("--hold-lock") {
         let root = PathBuf::from(std::env::var_os("K_FIXTURE_ROOT").ok_or("missing root")?);
         let _lock = k_carrier::lock::UpgradeLock::acquire(&root)?;
@@ -62,8 +66,19 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             std::io::stdout().write_all(&vec![b'x'; 70000])?;
             return Ok(());
         }
+        if root.join("effect-uncertain").exists() {
+            println!("{}", serde_json::json!({"protocolVersion":1,"ok":false,"uncertain":true}));
+            std::process::exit(1);
+        }
         let output = if action == "probe" {
-            serde_json::json!({"protocolVersion":1,"ok":true,"evidence":{"version":"2","pid":std::process::id(),"startId":format!("fixture-{}",std::process::id())}})
+            let evidence = if root.join("controller-self-evidence").exists() {
+                serde_json::json!({"version":"2","pid":std::process::id(),"startId":"invalid-self"})
+            } else {
+                let output = std::process::Command::new(std::env::current_exe()?).arg("--cold-evidence").output()?;
+                if !output.status.success() { return Err("cold evidence failed".into()); }
+                serde_json::from_slice::<serde_json::Value>(&output.stdout)?
+            };
+            serde_json::json!({"protocolVersion":1,"ok":true,"evidence":evidence})
         } else {
             serde_json::json!({"protocolVersion":1,"ok":true})
         };
@@ -85,6 +100,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         + 1;
     fs::write(count_file, count.to_string())?;
     let mode = std::env::var("K_FIXTURE_MODE").unwrap_or_default();
+    if mode == "busy" {
+        println!("{}", serde_json::json!({"protocolVersion":1,"action":request.action(),"exitCode":2,
+            "result":"busy","operation":{"kind":"genesis"},"error":"UPGRADE_IN_PROGRESS: holder pid 42"}));
+        std::process::exit(2);
+    }
     let store = FileStore::new(root.join("state"));
     let outcome = if matches!(request, Request::Recover { .. }) {
         Outcome::RolledBack
