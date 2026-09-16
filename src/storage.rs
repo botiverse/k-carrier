@@ -5,7 +5,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
-    fs::{self, File, OpenOptions},
+    fs::{self, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
 };
@@ -25,7 +25,7 @@ pub fn exists(path: &Path) -> Result<bool> {
 }
 pub fn sync_dir(path: &Path) -> Result<()> {
     #[cfg(unix)]
-    File::open(path)?.sync_all()?;
+    fs::File::open(path)?.sync_all()?;
     #[cfg(windows)]
     {
         // Windows has no supported unprivileged directory-fsync equivalent.
@@ -199,7 +199,16 @@ impl FileStore {
             use std::os::unix::fs::PermissionsExt;
             fs::set_permissions(&target, fs::Permissions::from_mode(0o755))?;
         }
-        File::open(target)?.sync_all()?;
+        // FlushFileBuffers requires a writable handle on Windows. Opening a
+        // copied slot read-only works on Unix but rejects Windows bootstrap.
+        #[cfg(windows)]
+        OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(target)?
+            .sync_all()?;
+        #[cfg(unix)]
+        fs::File::open(target)?.sync_all()?;
         write_durable(&staging.join("VERSION"), version.as_bytes(), false)?;
         sync_dir(staging)
     }
