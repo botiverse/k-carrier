@@ -36,10 +36,9 @@ state, receipts or recovery records.
   are copied outside slots; retired replacement images are cleaned when allowed.
 - The current workflow requires all three platforms. See its run on the exact
   delivered commit for validation after documentation and archive removal.
-- Elephant separately verified real launchd/systemd installation and upgrades
-  across its four release targets. Its browser/enrollment integration and final
-  dependency pin are separate product gates, not prerequisites for K's generic
-  process protocol and not implied by the K test result.
+- Service-manager installation and upgrades, enrollment and cloud reconnection
+  require verification by each product on its supported targets. K's generic
+  process protocol tests do not establish those product-level results.
 
 The Lean model proves the stated transaction projection under host assumptions,
 not the Rust binary, service manager or filesystem. Windows directory sync is a

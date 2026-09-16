@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Installer contract · K</title>
-<meta name="description" content="What an installer built on K should do in every situation: by entry, by what is on the machine, and by whether anyone is present. Advisory; K's transaction is the part that is fixed.">
+<meta name="description" content="The contract for product installers built on K: installation, upgrades, recovery and repair across attended and unattended requests. K supplies the transaction; products supply the adapters.">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;700&family=Geist+Mono:wght@400;700&display=swap">
 <link rel="stylesheet" href="assets/rui.css">
 <link rel="stylesheet" href="assets/site.css">
@@ -24,7 +24,7 @@
   <p class="lede">What an installer built on K does for every way a request can arrive, every machine it can land on, and every way it can end. It reads three things, presence, the world and the product's answer, and everything else follows from them. K's transaction is code and is fixed. This contract wraps it; product installers that adopt it share these observable behaviors.</p>
 </header>
 
-<div class="note"><p>This is the shared product installer contract used by Elephant and Raft Computer. K implements the transaction, bootstrap, lock, receipts and quarantine primitives. Each product supplies its release source, paths, lifecycle commands, health evidence and setup flow; those adapters do not change the outcomes required here. The runnable Rust example demonstrates the K boundary, not a complete installer. Implementation and verification status must be reported separately from this contract.</p></div>
+<div class="note"><p>This contract defines the shared behavior of product installers built on K. K implements the transaction, bootstrap, lock, receipts and quarantine primitives. Each product supplies its release source, paths, lifecycle commands, health evidence and setup flow; those adapters do not change the outcomes required here. The runnable Rust example demonstrates the K boundary, not a complete installer. Implementation and verification status must be reported separately from this contract.</p></div>
 
 <h2 id="problem">The problem</h2>
 <p>A request comes from the shell, from the application, or from a remote authority. Someone is there to answer a question, or nobody is. The machine has nothing installed, or an installation K manages, or one mid-upgrade, or one that predates K, or one that cannot start. Only the shell can reach a machine whose application is down, and a repair, unlike an upgrade, cannot be rolled back. Most installers answer the common cells of that space and improvise the rest, and the improvised cells are where machines get stuck.</p>

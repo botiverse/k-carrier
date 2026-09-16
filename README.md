@@ -24,8 +24,8 @@ The installer is a native Rust executable. The application it controls can be
 written in any language and has no K dependency.
 
 Build from a pinned Git revision until the 0.3 crate is published; the manifest
-version alone is not evidence that crates.io has that release. Elephant pins the
-verified K commit in its Cargo manifest and lockfile.
+version alone is not evidence that crates.io has that release. Pin the chosen K
+commit in the installer's Cargo manifest and lockfile.
 
 Construct `runner::Runner` with a `storage::FileStore`, an `Arc<dyn host::Host>`
 and an `Arc<dyn artifact::ReleaseSource>`. `host::CommandHost` implements the
@@ -48,7 +48,8 @@ resident application's upgrade slots.
 
 Run `cargo doc --no-deps --open` for the typed API. The complete native example
 is in [examples/README.md](examples/README.md). Its controller demonstrates a
-loopback service; Elephant supplies a real launchd/systemd controller.
+loopback service. Integrations with launchd, systemd or another service manager
+belong in the product's controller.
 
 ## Verification
 

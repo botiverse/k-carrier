@@ -1,4 +1,4 @@
-//! Native test process; never linked into or shipped with Elephant installer.
+//! Native test process; never linked into or shipped with a product installer.
 use k_carrier::{
     protocol::Request,
     state::*,
