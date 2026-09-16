@@ -11,6 +11,7 @@
 <script defer src="assets/site.js?v=2"></script>
 </head>
 <body>
+<p class="note">K now uses Rust. <a href="https://github.com/botiverse/k-carrier/blob/main/README.md">Current API and commands</a>. TypeScript/Node examples on this design site describe the archived v0.2 implementation.</p>
 <a class="skip" href="#main">Skip to content</a>
 <header class="topbar">
   <a class="brand" href="index.html"><span class="mark">K</span>k-carrier <small>docs</small></a>
@@ -53,7 +54,7 @@
 <div class="stage"><iframe src="figures/deliverables.html" title="Three independently versioned deliverables that can share one CDN" loading="lazy" scrolling="no"></iframe></div>
 <figcaption>The bootstrap verifies the installer; the installer verifies the product. Paths are illustrative, not a K schema.</figcaption>
 </figure>
-<p>You supply the release source and the service lifecycle operations; K supplies the transaction machinery. Releases can come from a static manifest on any CDN or from a release platform such as K's sibling project <a href="https://hands.build">Hands</a>. The runner uses Node 24, external or bundled into a single executable.</p>
+<p>You supply the release source and the service lifecycle operations; K supplies the transaction machinery. Releases can come from a static manifest on any CDN or from a release platform such as K's sibling project <a href="https://hands.build">Hands</a>. The runner is a native Rust executable, with no Node runtime dependency.</p>
 
 <h2 id="status">Status</h2>
 <div class="status">
@@ -81,7 +82,7 @@
   <div><dt><a href="test-plan.html">Test plan</a>, <a href="harness-design.html">harness</a>, <a href="formal.html">formal model</a></dt><dd>What is tested, how, and what the Lean proofs cover.</dd></div>
   <div><dt><a href="prior-art.html">Prior art</a></dt><dd>Rustup, Tailscale and Datadog, and what K took from each.</dd></div>
 </dl>
-<p>Incubating. TypeScript on Node 24. Apache-2.0. Contributions welcome.</p>
+<p>Incubating. Rust. Apache-2.0. Contributions welcome.</p>
 
 <footer class="page-foot"><span></span><a href="guide.html">Next: How an upgrade works</a></footer>
 </main>

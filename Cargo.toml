@@ -1,0 +1,70 @@
+[package]
+autoexamples = false
+name = "k-carrier"
+version = "0.3.0"
+edition = "2024"
+rust-version = "1.89"
+license = "Apache-2.0"
+description = "Recoverable two-slot application upgrades with an independent installer"
+repository = "https://github.com/botiverse/k-carrier"
+homepage = "https://botiverse.github.io/k-carrier/"
+include = ["/src/**", "/tests/**", "/Cargo.toml", "/Cargo.lock", "/README.md", "/RUST-MIGRATION.md", "/LICENSE", "/NOTICE", "/examples/*.rs", "/legacy/core/**/*.ts"]
+
+[dependencies]
+tempfile = "3"
+base64 = "0.22"
+percent-encoding = "2"
+async-trait = "0.1"
+flate2 = "1"
+libc = "0.2"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "io-std", "time", "sync", "net"] }
+uuid = { version = "1", features = ["v4"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_Storage_FileSystem"] }
+
+[dev-dependencies]
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+opt-level = "s"
+
+# Process fault tests copy the fixture executable. Embedded DWARF must not
+# dominate that transfer on ELF platforms; ordinary dev builds keep symbols.
+[profile.test]
+debug = 0
+
+[[bin]]
+name = "k-test-fixture"
+path = "tests/support/fixture.rs"
+
+[[bin]]
+name = "k-example-controller"
+path = "examples/native-controller.rs"
+
+[[example]]
+name = "native-service"
+path = "examples/native-service.rs"
+
+[[example]]
+name = "native-swap"
+path = "examples/native-swap.rs"
+
+[features]
+legacy-interop = []
+
+[[test]]
+name = "legacy"
+path = "tests/legacy.rs"
+required-features = ["legacy-interop"]
+
+[[example]]
+name = "native-installer"
+path = "examples/native-installer.rs"

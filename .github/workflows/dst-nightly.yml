@@ -23,11 +23,10 @@ jobs:
       SEED_COUNT: ${{ inputs.seed_count || '50000' }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: "24" }
-      - run: corepack enable pnpm && pnpm install --frozen-lockfile
+      - run: rustup show active-toolchain
+      - run: cargo build --locked --release --bin k-harness
       - name: Run seeded deterministic simulator
-        run: node harness/src/cli.ts sim --start-seed "$START_SEED" --seeds "$SEED_COUNT"
+        run: target/release/k-harness sim --start-seed "$((START_SEED % 4294967296))" --seeds "$SEED_COUNT"
       - name: Preserve exact failing-seed corpus
         if: failure()
         uses: actions/upload-artifact@v4

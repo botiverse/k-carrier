@@ -1,42 +1,37 @@
 name: CI
 on:
-  push: { branches: ["main"] }
+  push: { branches: ["**"] }
   pull_request:
 permissions: { contents: read }
 jobs:
   check:
-    # Multi-platform from day 1: a POSIX assumption that leaks into core
-    # should turn CI red the day it lands, not months later when the
-    # abstraction has already grown around it.
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            required: true
-            label: ubuntu (gating)
-          - os: macos-latest
-            required: true
-            label: macos (gating)
-          # Windows platform ops are implemented (move-aside swap + process
-          # ops), but the acceptance harness is not yet ported to Windows
-          # (POSIX-only assertions, ps/signal-based sandbox, shebang demo
-          # artifacts). This job therefore reports honestly but does not
-          # gate: a permanently red required check teaches everyone to
-          # ignore red, which costs more than the signal is worth. It flips
-          # to required when the harness port lands.
-          - os: windows-latest
-            required: false
-            label: "windows (informational — harness not ported to Windows yet)"
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ !matrix.required }}
-    name: check ${{ matrix.label }}
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: "24" }
-      - run: corepack enable pnpm && pnpm install --frozen-lockfile
-      - run: pnpm typecheck
-      - run: pnpm lint
-      - run: pnpm ratchet
-      - run: pnpm test
+      - name: Pinned Rust toolchain
+        run: rustup show active-toolchain
+      - run: cargo fmt --all --check
+      - run: cargo clippy --locked --all-targets --all-features -- -D warnings
+      - run: cargo test --locked --all-targets --all-features
+      - run: python scripts/verify-native-examples.py
+      - run: cargo run --locked --bin k-harness -- sim --seeds 256 --start-seed 1 --json
+      - run: cargo package --locked
+  formal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+          use-mathlib-cache: false
+          build: false
+          test: false
+      - run: elan toolchain install leanprover/lean4:v4.34.0
+      - run: elan run leanprover/lean4:v4.34.0 lean formal/Protocol.lean
