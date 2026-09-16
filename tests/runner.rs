@@ -298,3 +298,56 @@ async fn lifecycle_metadata_cannot_promote_or_authorize_retirement() -> Result<(
     assert!(f.root.path().exists());
     Ok(())
 }
+
+#[tokio::test]
+async fn candidate_preparation_failure_keeps_service_and_replays_without_download() -> Result<()> {
+    use k_carrier::{error::invalid, storage::Effects};
+    struct RejectCandidate(AtomicUsize);
+    #[async_trait]
+    impl Hooks for RejectCandidate {
+        async fn prepare_candidate(
+            &self,
+            artifact: &std::path::Path,
+            release: &Release,
+        ) -> Result<()> {
+            assert_eq!(fs::read(artifact)?, b"new");
+            assert_eq!(release.version, "2");
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Err(invalid("candidate self-check failed"))
+        }
+    }
+    let mut f = setup().await?;
+    let hooks = Arc::new(RejectCandidate(AtomicUsize::new(0)));
+    f.runner.hooks = hooks.clone();
+    let before = f.host.probe().await?;
+    let result = f
+        .runner
+        .execute(&request("rejected-candidate", "2", true))
+        .await?;
+    assert_eq!(result.exit_code, 1);
+    let OperationRead::Observed { operation } = result.operation else {
+        panic!("missing receipt")
+    };
+    assert_eq!(operation.outcome, Some(Outcome::Failed));
+    assert_eq!(f.host.probe().await?, before);
+    assert_eq!(f.host.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(f.runner.store.version(Slot::Stable)?.as_deref(), Some("1"));
+    assert!(f.runner.store.version(Slot::Experiment)?.is_none());
+    assert!(
+        f.runner
+            .store
+            .read_journal()
+            .await?
+            .iter()
+            .all(|e| e.intent == Phase::Idle)
+    );
+    let replay = f
+        .runner
+        .execute(&request("rejected-candidate", "2", true))
+        .await?;
+    assert_eq!(replay.exit_code, 1);
+    assert_eq!(replay.result, "replayed");
+    assert_eq!(hooks.0.load(Ordering::SeqCst), 1);
+    assert_eq!(f.source.calls.load(Ordering::SeqCst), 1);
+    Ok(())
+}

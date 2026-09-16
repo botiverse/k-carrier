@@ -69,10 +69,12 @@
   <div><dt>Never under a live lock</dt><dd>Liveness is decided by the lock protocol, not by age.</dd></div>
   <div><dt>Quarantine, do not delete</dt><dd>Slots, journal, lock, receipts and recovery logs move aside intact in one atomic rename, under K's lock, including records K itself cannot read (<code>quarantine::quarantine_state</code> with <code>allow_unreadable</code>). Data outside the slots is left alone.</dd></div>
   <div><dt>Attribution and receipt</dt><dd>Repair runs as its own request or on a broken machine, never on a machine that can be upgraded, and its receipt records what it displaced, what it installed and who ran it.</dd></div>
-  <div><dt>Re-enter K</dt><dd>Repair ends with <code>storage::bootstrap_stable</code> on the installed bytes and a live probe. Until then no upgrade may be admitted.</dd></div>
+  <div><dt>Re-enter K</dt><dd>Repair ends with <code>storage::bootstrap_stable</code> on the installed bytes and verified process evidence: a live service when one was running, or a fresh candidate self-check when it was stopped. Until then no upgrade may be admitted.</dd></div>
   <div><dt>No rollback claim</dt><dd>Repair is reported as a repair, never as a promoted upgrade.</dd></div>
 </dl>
 <p>K supplies <code>storage::bootstrap_stable</code>, <code>quarantine::quarantine_state</code> and the lock protocol; the installer decides when to repair.</p>
+
+<p><code>Hooks::prepare_candidate(artifact, release)</code> runs under the transaction lock after verified acquisition and before the first handover intent. Product installers use this bounded hook to check the executable's platform and self-reported version and persist operation-bound service/setup state. It must not stop, publish or start the installed service. Failure produces a settled failed receipt without handover; replay and offline recovery do not repeat the hook.</p>
 
 <h2 id="host-control-contract">Host control contract</h2>
 <p><code>Runner::new</code> requires a host::Host. Its operations and the controller's obligations:</p>
@@ -83,13 +85,13 @@
     <tr><td><code>quiesce</code></td><td>Stop admission and durably park promised workloads; repeated calls safe</td></tr>
     <tr><td><code>stop</code></td><td>Stop the specified slot's service and confirm termination</td></tr>
     <tr><td><code>start</code></td><td>Start the selected artifact idempotently, without creating duplicate residents</td></tr>
-    <tr><td><code>probe</code></td><td>Return version, pid and startId from one ready live instance</td></tr>
+    <tr><td><code>probe</code></td><td>Return version, pid and startId from one ready live service, or one fresh self-check process when the installer has durably selected stopped-service mode</td></tr>
     <tr><td><code>resume</code></td><td>Restore parked work on either candidate or rolled-back stable</td></tr>
   </tbody>
 </table>
 <ul>
   <li>The controller must work while the old application is down.</li>
-  <li><code>start</code> returning does not establish readiness; the probe does.</li>
+  <li><code>start</code> returning does not establish readiness; the probe does. In stopped-service mode the adapter publishes the selected bytes without starting a resident. Its probe launches those bytes for a bounded self-check; the receipt distinguishes this evidence from a running service.</li>
   <li>K probes once before handover and records that incarnation's <code>startId</code> with the handing-over intent. Readback evidence carrying the same <code>startId</code> is refused and rolls back: the old service was not replaced.</li>
   <li><code>start</code> must not execute the artifact in place inside the slot on Windows; promotion renames slot directories and a running executable locks its directory. Copy or hard-link to a runtime path outside the slots.</li>
   <li>A stateless service satisfies <code>quiesce</code> and <code>resume</code> by acknowledging. The obligations apply to workloads the product promises to preserve.</li>

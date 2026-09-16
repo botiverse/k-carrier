@@ -1,6 +1,6 @@
 use crate::{
     Error, Result,
-    artifact::{Downloader, ReleaseContext, ReleaseSource},
+    artifact::{Downloader, Release, ReleaseContext, ReleaseSource},
     engine::{Engine, EngineOutcome},
     error::invalid,
     host::Host,
@@ -13,7 +13,7 @@ use crate::{
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, path::Path, sync::Arc};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -29,6 +29,12 @@ pub trait Hooks: Send + Sync {
     }
     async fn compatibility(&self, _from: &str, _to: &str) -> Result<Option<String>> {
         Ok(None)
+    }
+    /// Validate the acquired executable and durably capture product state before
+    /// the first handover intent. This may run a bounded self-check, but must not
+    /// stop, publish, or start the installed service. Recovery never calls it.
+    async fn prepare_candidate(&self, _artifact: &Path, _release: &Release) -> Result<()> {
+        Ok(())
     }
     async fn notify(&self, _kind: &str, _detail: BTreeMap<String, String>) -> Result<()> {
         Ok(())
@@ -422,6 +428,21 @@ impl Runner {
         self.emit("staging", Some(&release.version), None);
         let artifact = self.store.root.join("incoming/artifact.bin");
         write_durable(&artifact, &bytes, true)?;
+        let preparation = tokio::time::timeout(
+            std::time::Duration::from_millis(self.host_budget_ms),
+            self.hooks.prepare_candidate(&artifact, &release),
+        )
+        .await
+        .unwrap_or_else(|_| Err(invalid("CANDIDATE_PREPARATION_TIMEOUT")));
+        if let Err(error) = preparation {
+            self.transition(
+                &mut operation,
+                OperationPhase::Failed,
+                Some(Outcome::Failed),
+                Some(error.to_string()),
+            )?;
+            return Err(error);
+        }
         if self.provenance_enabled {
             self.store.append_provenance_at(
                 options

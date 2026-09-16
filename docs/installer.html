@@ -21,10 +21,10 @@
 <main id="main" class="page">
 <header class="page-head">
   <h1>Installer contract</h1>
-  <p class="lede">What an installer built on K does for every way a request can arrive, every machine it can land on, and every way it can end. It reads three things, presence, the world and the product's answer, and everything else follows from them. K's transaction is code and is fixed. This contract wraps it, and is advisory.</p>
+  <p class="lede">What an installer built on K does for every way a request can arrive, every machine it can land on, and every way it can end. It reads three things, presence, the world and the product's answer, and everything else follows from them. K's transaction is code and is fixed. This contract wraps it; product installers that adopt it share these observable behaviors.</p>
 </header>
 
-<div class="note"><p>This is advisory product UX guidance. K implements the transaction, bootstrap, lock, receipts and safe quarantine primitives; product installers choose their commands, consent policy and setup flow. The runnable Rust example demonstrates the K boundary, not every policy on this page.</p></div>
+<div class="note"><p>This is the shared product installer contract used by Elephant and Raft Computer. K implements the transaction, bootstrap, lock, receipts and quarantine primitives. Each product supplies its release source, paths, lifecycle commands, health evidence and setup flow; those adapters do not change the outcomes required here. The runnable Rust example demonstrates the K boundary, not a complete installer. Implementation and verification status must be reported separately from this contract.</p></div>
 
 <h2 id="problem">The problem</h2>
 <p>A request comes from the shell, from the application, or from a remote authority. Someone is there to answer a question, or nobody is. The machine has nothing installed, or an installation K manages, or one mid-upgrade, or one that predates K, or one that cannot start. Only the shell can reach a machine whose application is down, and a repair, unlike an upgrade, cannot be rolled back. Most installers answer the common cells of that space and improvise the rest, and the improvised cells are where machines get stuck.</p>
@@ -59,7 +59,7 @@ irm https://example.com/install.ps1 | iex                                     # 
 <table class="grid">
   <thead><tr><th>Command</th><th>Meaning</th></tr></thead>
   <tbody>
-    <tr><td><code>install</code>, <code>upgrade</code> (default)</td><td>Bring this machine to one exact version. What that means is decided by the world: install, adopt then upgrade, or upgrade. Broken is refused, or offered repair when attended.</td></tr>
+    <tr><td><code>install</code>, <code>upgrade</code> (default)</td><td>Bring this machine to one exact version. What that means is decided by the world: install, adopt then upgrade, or upgrade. Broken follows the repair consent rule below; a healthy machine never receives repair.</td></tr>
     <tr><td><code>repair</code></td><td>Ask for repair explicitly. Held unless the machine is broken.</td></tr>
     <tr><td><code>status</code></td><td>The world and the live service. The last receipt is not a live observation.</td></tr>
   </tbody>
@@ -85,11 +85,11 @@ irm https://example.com/install.ps1 | iex                                     # 
     <tr><td><code>&lt;PRODUCT&gt;_INSTALL_DIR</code></td><td>Where the binary on <code>PATH</code> is published.</td></tr>
     <tr><td><code>&lt;PRODUCT&gt;_RELEASE_BASE</code></td><td>The byte store: <code>&lt;version&gt;/manifest.json</code> and the artifacts it names.</td></tr>
     <tr><td><code>&lt;PRODUCT&gt;_HANDS_ORIGIN</code></td><td>The release authority a channel is resolved through.</td></tr>
-    <tr><td><code>&lt;PRODUCT&gt;_INSTALLER_VERSION</code>, <code>&lt;PRODUCT&gt;_INSTALLER_RELEASE_BASE</code></td><td>Which installer the bootstrap fetches, and from where. The bootstrap pins one; it never resolves "latest".</td></tr>
+    <tr><td><code>&lt;PRODUCT&gt;_INSTALLER_VERSION</code>, <code>&lt;PRODUCT&gt;_INSTALLER_RELEASE_BASE</code></td><td>Which installer the bootstrap fetches, and from where. The bootstrap freezes one immutable installer release before downloading checksums or binaries. It may resolve a channel once, but every subsequent fetch uses that frozen release.</td></tr>
   </tbody>
 </table>
 </div>
-<p>Every run prints one line on stdout and exits 0, 1 or 2. What was settled first, if anything, goes to stderr. Details go to the receipt file, not the terminal.</p>
+<p>The human CLI prints one outcome line on stdout and exits 0, 1, 2 or 3 as defined below. Prompts, progress and what was settled first go to stderr. Details go to the receipt file. An explicit machine interface may emit structured output carrying the same outcome and operation exit code; a service supervisor transport must not turn an unresolved operation into success.</p>
 
 <h2 id="rules">The rules</h2>
 <h3 id="request">Request</h3>
@@ -107,12 +107,12 @@ irm https://example.com/install.ps1 | iex                                     # 
 <h3 id="lock-settle">Lock and settle</h3>
 <ol class="steps">
   <li><div>One installer per state directory, under K's lock. Another live owner is held, exit 2. Liveness is decided by the lock protocol, never by age.</div></li>
-  <li><div>Every run finishes unfinished K work first, whatever was asked, and reports what it settled alongside its own outcome. This is recovery, not repair; it needs no network and no consent.</div></li>
-  <li><div>K's journal and receipts are its working memory for one transaction. Nothing outside that transaction depends on them, so they are never the user's problem: records K cannot read, or cannot settle, make the machine broken, and broken is repaired in the same run. A K that once wrote something a later K cannot read must not strand the machine, and a product may offer a separately authorized repair. K itself returns exit 3 when recovery remains unresolved; an installer must preserve that distinction until a real repair succeeds.</div></li>
+  <li><div>Every invocation settles unfinished K work before selecting a new action, including status. Recovery needs no network and no consent. A completed request replay returns its recorded outcome without lifecycle effects; use status for a fresh observation.</div></li>
+  <li><div>Records K cannot read or settle make the machine broken. Install, upgrade and repair may continue to repair under the repair consent rule; status reports the condition without reinstalling. Recovery that remains unresolved has exit 3 until a real repair succeeds. A failed repair, missing network or declined repair must not hide that unresolved state behind exit 0, 1 or 2. A normally failed or rolled-back upgrade is already settled and never escalates to repair.</div></li>
 </ol>
 <h3 id="worlds">Worlds</h3>
 <ol class="steps">
-  <li><div>After settling, the installer reads the machine once: a readable stable slot is <strong>managed</strong>; a service installed before K is <strong>adopted</strong> by seeding stable from its running executable; unresolved recovery, a corrupt slot or a dead lock owner is <strong>broken</strong>; nothing is <strong>fresh</strong>.</div></li>
+  <li><div>After settling, the installer reads the machine once: a readable stable slot is <strong>managed</strong>; a usable binary installed before K is <strong>adopted</strong> by verifying and seeding its existing bytes, whether running or stopped; unresolved recovery or corrupt installation state is <strong>broken</strong>; nothing is <strong>fresh</strong>. A dead lock owner alone is not corruption: reclaim the lock using K's protocol, settle, then inspect the installation.</div></li>
   <li><div>Managed and adopted are K's transaction, with rollback. Fresh is verify, seed stable, publish, self-check, then the product's <strong>first setup</strong> when attended: no transaction, no rollback, nothing to restore. Broken is repaired the same way, and the run says so.</div></li>
   <li><div>An installation owned by another manager, such as a package manager, is held, exit 2. The line says where it is and how to remove it. The installer never removes it.</div></li>
   <li><div>A target older than what is installed is held, exit 2, unless the request says the downgrade is intended. Refusing to downgrade is not success.</div></li>
@@ -143,7 +143,7 @@ irm https://example.com/install.ps1 | iex                                     # 
   <li><div>Success is read back from a process of the new bytes, never inferred. An accepted request, a finished download, a replaced file: none of these is success.</div></li>
   <li><div>What the readback reaches depends on what was running. A service that was running is stopped and must come back as a live service reporting the requested version, a pid and a new start id. Where nothing runs, because nobody has set the product up yet, the candidate itself is run and must answer as the requested version; every run is a new process, so the start id is new. The line says which: <code>Upgraded 2.2.1 → 2.3.0. It is running.</code> against <code>Upgraded 2.2.1 → 2.3.0. Next: run app login.</code></div></li>
   <li><div>Installed means usable, not running: the bytes are in place and answer as the version. Running is claimed only when the service was started and read back, after first setup or because it was running before. The product names the next step when there is one, and the line repeats it.</div></li>
-  <li><div>Every run ends in one printed line and one exit code: 0 upgraded, installed or up to date, 1 failed or rolled back, 2 not done. The line says what happened, what did not change, and what to do next, in the user's words.</div></li>
+  <li><div>Every run has one operation exit code: 0 upgraded, installed, repaired or up to date; 1 failed or rolled back with recovery settled; 2 held before a new action; 3 recovery unresolved. The line says what happened, what did not change, and what to do next, in the user's words.</div></li>
   <li><div>The line is the same attended and unattended. Only who acts on it differs: a person, or the caller. The installer never retries the same target on its own.</div></li>
 </ol>
 
@@ -161,6 +161,7 @@ irm https://example.com/install.ps1 | iex                                     # 
     <tr><td>Rolled back <span class="tag cond">1</span></td><td><code>2.3.0 did not start correctly, so 2.2.1 was put back and is running.</code> Where nothing was running: <code>2.3.0 did not check out correctly, so 2.2.1 was put back.</code></td><td></td><td>Never retry the same target on its own.</td></tr>
     <tr><td>Held <span class="tag cond">2</span></td><td><code>Not done: &lt;reason&gt;. Nothing changed.</code> plus what to do, when there is something</td><td>Reasons in the user's words: installed by another manager, older than what is installed, declined, another installer running.</td><td>The caller decides. No retry.</td></tr>
     <tr><td>Broken: records K cannot read or settle</td><td><code>Reinstalled 2.3.0. The previous installation was kept at &lt;path&gt;.</code> then as Installed</td><td>Ask first: <code>The current installation cannot be recovered (&lt;reason&gt;). Reinstall 2.3.0 fresh? The old installation is kept aside, but this cannot be undone. [y/N]</code></td><td>Reinstall, and say where the old installation went.</td></tr>
+    <tr><td>Recovery unresolved <span class="tag cond">3</span></td><td><code>The interrupted upgrade could not be recovered. Run repair to restore a usable installation.</code></td><td>Repair may proceed with informed consent; keep exit 3 if it does not succeed.</td><td>Repair may proceed under invocation consent; keep exit 3 if it does not succeed.</td></tr>
     <tr><td>Same id again</td><td><code>Upgraded 2.2.1 → 2.3.0 earlier. Current service health was not checked.</code></td><td>No lifecycle effects.</td><td>Same.</td></tr>
   </tbody>
 </table>
