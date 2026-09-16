@@ -86,6 +86,7 @@ impl CommandHost {
         })
     }
     async fn call(&self, action: &str, slot: Option<Slot>) -> Result<Value> {
+        isolate_standard_handles()?;
         let mut input = json!({"protocolVersion":1,"action":action});
         if let Some(slot) = slot {
             input["slot"] = json!(slot);

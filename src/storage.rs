@@ -126,7 +126,21 @@ pub fn write_durable(path: &Path, bytes: &[u8], executable: bool) -> Result<()> 
                 fs::rename(&aside, path)?;
                 return Err(error);
             }
-            let _ = fs::remove_file(aside);
+            // Old running images stay until their processes exit. A later
+            // successful replacement collects those that are now deletable.
+            if let Ok(entries) = fs::read_dir(parent) {
+                for entry in entries.flatten() {
+                    let name = entry.file_name();
+                    let owned = name
+                        .to_str()
+                        .and_then(|s| s.strip_prefix(".k-image-"))
+                        .is_some_and(|s| uuid::Uuid::parse_str(s).is_ok());
+                    if owned && entry.path() != path && entry.file_type().is_ok_and(|t| t.is_file())
+                    {
+                        let _ = fs::remove_file(entry.path());
+                    }
+                }
+            }
             return Ok(());
         }
         rename_durable(&tmp, path)

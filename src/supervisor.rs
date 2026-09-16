@@ -159,6 +159,7 @@ pub async fn supervise_release(
     downloader: &Downloader,
 ) -> Result<LaunchResult> {
     request.validate()?;
+    crate::host::isolate_standard_handles()?;
     options.validate()?;
     let bytes = downloader.download(release, None, None).await?;
     supervise_bytes(&bytes, request, scratch, options).await
@@ -173,6 +174,7 @@ pub async fn supervise_bytes(
     options: &LaunchOptions,
 ) -> Result<LaunchResult> {
     request.validate()?;
+    crate::host::isolate_standard_handles()?;
     options.validate()?;
     ensure_dir(scratch)?;
     let dir = scratch.join(format!("k-runner-{}", uuid::Uuid::new_v4()));

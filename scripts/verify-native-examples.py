@@ -17,8 +17,24 @@ EXE = ".exe" if os.name == "nt" else ""
 
 
 def run(args, **kwargs):
-    return subprocess.run(args, cwd=REPO, check=True, text=True, capture_output=True,
-                          timeout=kwargs.pop("timeout", 60), **kwargs)
+    print("running", Path(args[0]).name, " ".join(args[1:3]), flush=True)
+    timeout = kwargs.pop("timeout", 60)
+    input_text = kwargs.pop("input", None)
+    child = subprocess.Popen(args, cwd=REPO, text=True, stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs)
+    try:
+        stdout, stderr = child.communicate(input=input_text, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        # Do not call unbounded communicate() after kill: a resident child with
+        # an inherited pipe is precisely one of the bugs this example catches.
+        child.kill()
+        child.wait(timeout=5)
+        raise
+    if child.returncode:
+        print(stderr[-4096:], file=sys.stderr, flush=True)
+        print(stdout[-4096:], file=sys.stderr, flush=True)
+        raise subprocess.CalledProcessError(child.returncode, args, stdout, stderr)
+    return subprocess.CompletedProcess(args, child.returncode, stdout, stderr)
 
 
 def main():
