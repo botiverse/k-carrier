@@ -26,6 +26,26 @@ jobs:
       - run: python scripts/verify-native-examples.py
       - run: cargo run --locked --bin k-harness -- sim --seeds 256 --start-seed 1 --json
       - run: cargo package --locked
+  musl-link:
+    # Real link, not cargo check: musl's libc crate exports no renameat2
+    # wrapper, so only a linked binary proves the quarantine syscall path.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install musl toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq musl-tools
+          rustup target add x86_64-unknown-linux-musl
+      - name: Link the quarantine-carrying probe for x86_64-unknown-linux-musl
+        # Real link, not cargo check: musl's libc crate exports no renameat2
+        # wrapper, and dead-code elimination drops rename_exclusive from every
+        # shipped bin, so only this probe retains the symbol and proves the
+        # syscall path. Reverting to libc::renameat2 fails this step.
+        env:
+          CC_x86_64_unknown_linux_musl: musl-gcc
+        run: cargo build --locked --release --target x86_64-unknown-linux-musl --example musl-quarantine-probe
   formal:
     runs-on: ubuntu-latest
     steps:
