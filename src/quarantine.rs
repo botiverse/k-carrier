@@ -166,7 +166,11 @@ fn rename_exclusive(from: &Path, to: &Path) -> Result<()> {
         };
         #[cfg(target_os = "linux")]
         let result = unsafe {
-            libc::renameat2(
+            // The raw syscall keeps this buildable on musl, whose libc crate
+            // does not export a renameat2 wrapper. Same RENAME_NOREPLACE
+            // semantics; errno is read the same way either path.
+            libc::syscall(
+                libc::SYS_renameat2,
                 libc::AT_FDCWD,
                 from.as_ptr(),
                 libc::AT_FDCWD,
