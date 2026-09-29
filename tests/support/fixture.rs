@@ -69,6 +69,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             std::io::stdout().write_all(&vec![b'x'; 70000])?;
             return Ok(());
         }
+        if root.join("effect-failed").exists() {
+            // A definite failure with the host's own message, a control
+            // character and a long tail (bounded by the carrier).
+            let message = format!("candidate was not started\u{1b}[31m: {}", "y".repeat(600));
+            println!(
+                "{}",
+                serde_json::json!({"protocolVersion":1,"ok":false,"uncertain":false,"error":message})
+            );
+            std::process::exit(3);
+        }
         if root.join("effect-uncertain").exists() {
             println!(
                 "{}",

@@ -237,3 +237,32 @@ async fn rejected_upgrade_is_held_without_recovering_another_writers_transaction
     assert!(recovery.recovery_file.is_some());
     Ok(())
 }
+
+#[tokio::test]
+async fn native_controller_failure_keeps_the_hosts_reason_and_exit_code() -> Result<()> {
+    let root = tempdir()?;
+    let mut host = CommandHost::new(
+        vec![fixture().into(), "--controller".into()],
+        root.path().join("state"),
+        3000,
+    )?;
+    host.cwd = Some(root.path().into());
+    fs::write(root.path().join("effect-failed"), b"fixture")?;
+    let error = host.probe().await.unwrap_err();
+    assert!(!error.is_uncertain(), "a reported failure is definite");
+    let message = error.to_string();
+    assert!(
+        message.contains("HOST_COMMAND_FAILED: probe (exit 3): candidate was not started"),
+        "{message}"
+    );
+    assert!(
+        !message.chars().any(char::is_control),
+        "control characters are stripped: {message:?}"
+    );
+    assert!(
+        message.chars().count() < 400,
+        "the host's reason is bounded: {}",
+        message.chars().count()
+    );
+    Ok(())
+}
