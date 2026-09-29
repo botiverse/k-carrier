@@ -71,7 +71,7 @@ irm https://example.com/install.ps1 | iex                                     # 
   <tbody>
     <tr><td><code>--version V</code></td><td>The exact version. Default: the channel's current release, resolved through the release authority.</td></tr>
     <tr><td><code>--channel C</code></td><td>Which channel to resolve. Attended, the resolved version is shown and asked about.</td></tr>
-    <tr><td><code>--yes</code></td><td>Skip the question when attended. Unattended runs never ask; running one is the consent, except to replace what occupies the product's path, which takes <code>--yes</code>.</td></tr>
+    <tr><td><code>--yes</code></td><td>Skip the question when attended. Unattended runs never ask; running one is the consent.</td></tr>
     <tr><td><code>--allow-downgrade</code></td><td>Intend an older target. Without it, an older target is held. This is also how a bad release is left: name the version that worked.</td></tr>
   </tbody>
 </table>
@@ -83,9 +83,8 @@ irm https://example.com/install.ps1 | iex                                     # 
     <tr><td><code>CI</code>, <code>&lt;PRODUCT&gt;_NON_INTERACTIVE=1</code></td><td>Unattended, whatever the terminal says: no questions.</td></tr>
     <tr><td><code>&lt;PRODUCT&gt;_HOME</code></td><td>The product's state root. K's state lives under it.</td></tr>
     <tr><td><code>&lt;PRODUCT&gt;_INSTALL_DIR</code></td><td>Where the binary on <code>PATH</code> is published.</td></tr>
-    <tr><td><code>&lt;PRODUCT&gt;_RELEASE_BASE</code></td><td>The byte store: <code>&lt;version&gt;/manifest.json</code> and the artifacts it names.</td></tr>
-    <tr><td><code>&lt;PRODUCT&gt;_HANDS_ORIGIN</code></td><td>The release authority a channel is resolved through.</td></tr>
-    <tr><td><code>&lt;PRODUCT&gt;_INSTALLER_VERSION</code>, <code>&lt;PRODUCT&gt;_INSTALLER_RELEASE_BASE</code></td><td>Which installer the bootstrap fetches, and from where. The bootstrap freezes one immutable installer release before downloading checksums or binaries. It may resolve a channel once, but every subsequent fetch uses that frozen release.</td></tr>
+    <tr><td><code>&lt;PRODUCT&gt;_HANDS_ORIGIN</code></td><td>The release authority: it resolves a channel and serves the bytes of every release, the product's and the installer's.</td></tr>
+    <tr><td><code>&lt;PRODUCT&gt;_INSTALLER_VERSION</code></td><td>Which installer release the bootstrap fetches. The bootstrap freezes one immutable installer release before downloading checksums or binaries. It may resolve a channel once, but every subsequent fetch uses that frozen release.</td></tr>
   </tbody>
 </table>
 </div>
@@ -94,9 +93,16 @@ irm https://example.com/install.ps1 | iex                                     # 
 <h2 id="rules">The rules</h2>
 <h3 id="voice">Voice</h3>
 <ol class="steps">
+  <li><div>People use <strong>entries</strong>: the install script (<code>install.sh</code>, <code>install.ps1</code>), the product's own commands, and the product's remote upgrade. The installer is how an entry gets its work done. It is an implementation detail: a person never needs to know it exists, no line names it, and no line asks a person to run it.</div></li>
   <li><div>A person asks for the product, never for an installer. Everything a person reads, from the bootstrap's first progress line to the outcome line and whatever the product shows for a remote upgrade, is about the product: its version, and things the person already knows, such as the command they ran, the file on their <code>PATH</code> and their service. The installer's name, K's terms, release and operation ids, a channel the person did not choose, and codes are how the work is done, not what it says.</div></li>
   <li><div>Every outcome other than success carries two things, kept apart: a <strong>reason</strong> in the user's words and a stable <strong>code</strong> for software. The receipt records both, and so does any structured output. A line never contains a code; software never parses a line.</div></li>
-  <li><div>When something stands in the way, the line says what it is in the user's terms, that nothing changed, and one next step the person can run as written. A decision that belongs to the person is asked when attended and named as a runnable command when not. It is never handed back as a chore ("remove it, or set <code>APP_INSTALL_DIR</code>").</div></li>
+  <li><div>When something stands in the way, the line says what it is in the user's terms, that nothing changed, and one next step the person can run as written, which is always an entry. A decision the person's request already implies is made by the entry (see <a href="#entries">Entries</a>); it is never handed back as a chore ("remove it, or set <code>APP_INSTALL_DIR</code>").</div></li>
+</ol>
+<h3 id="entries">Entries</h3>
+<ol class="steps">
+  <li><div>An entry turns what the person asked for into a request, with the consents that asking implies. The install script is run by a person who wants the product on this machine, so its request consents to replacing what occupies the product's path (see <a href="#worlds">Worlds</a>). The product's commands and its remote upgrade act on an installation the installer made, so they never meet an occupant.</div></li>
+  <li><div>An entry finishes what it can on its own. Unfinished work is settled before any new action, and a run that ends unresolved is recovered and tried once more before the entry reports. A product that launched a remote upgrade and finds no terminal receipt for it recovers it on its next start; a request K never started is recorded as failed before any change, because the machine still runs what it ran. A person is asked to act only when none of this settles it, and then the action is to run an entry again.</div></li>
+  <li><div>Cleanup is the installer's. After a terminal receipt it removes what it no longer needs. A failed cleanup is retried on a later run, silently, and never causes a reinstall, a restart or a question. What it keeps are receipts: recovery and cleanup are derived from them and from K's own state, not from a second record of their own.</div></li>
 </ol>
 <h3 id="request">Request</h3>
 <ol class="steps">
@@ -108,7 +114,7 @@ irm https://example.com/install.ps1 | iex                                     # 
 <ol class="steps">
   <li><div>Presence is decided once, before anything else, as defined above. Nothing later re-decides it: a run that started attended may ask at any point, a run that started unattended never does.</div></li>
   <li><div>An entry may collect consent attended and then run the installer unattended. <code>self upgrade</code> does exactly this: it asks in the application, then launches the same bootstrap non-interactively with the version and the consent in the request.</div></li>
-  <li><div>Unattended, nothing prompts. Running the installer is the consent to whatever the machine needs, repair included, and the receipt records who ran it and what was done. Replacing what occupies the product's path is not something the machine needs; it is the person's choice, and unattended it takes <code>--yes</code>. Attended, <code>--yes</code> skips the question. Putting the install directory on <code>PATH</code> is part of installing and happens either way; the line says so. Another manager's copy is never removed.</div></li>
+  <li><div>Unattended, nothing prompts. Running the installer is the consent to whatever the machine needs, repair included, and the receipt records who ran it and what was done; <code>--yes</code> only matters attended, where it skips the question. Replacing what occupies the product's path takes the request's own consent, which the install script's request carries. Putting the install directory on <code>PATH</code> is part of installing and happens either way; the line says so. Another manager's copy is never removed.</div></li>
 </ol>
 <h3 id="lock-settle">Lock and settle</h3>
 <ol class="steps">
@@ -121,7 +127,7 @@ irm https://example.com/install.ps1 | iex                                     # 
   <li><div>After settling, the installer reads the machine once: a readable stable slot is <strong>managed</strong>; a usable binary installed before K is <strong>adopted</strong> by verifying and seeding its existing bytes, whether running or stopped; unresolved recovery or corrupt installation state is <strong>broken</strong>; nothing is <strong>fresh</strong>. A dead lock owner alone is not corruption: reclaim the lock using K's protocol, settle, then inspect the installation.</div></li>
   <li><div>Managed and adopted are K's transaction, with rollback. Fresh is verify, seed stable, publish, self-check, then the product's <strong>first setup</strong> when attended: no transaction, no rollback, nothing to restore. Broken is repaired the same way, and the run says so.</div></li>
   <li><div>An installation owned by another manager, such as a package manager, is held, exit 2. The line says where it is and how to remove it. The installer never removes it.</div></li>
-  <li><div>A fresh install can find the product's path <strong>occupied</strong>: something the installer did not put there and no manager owns, such as a launcher script, a link, or a program that is not this product. It belongs to the person. Attended, the line says what it is and asks to replace it, defaulting to no. Replacing moves it aside under a name the line gives, installs as fresh, and says how to put it back; it is never deleted. Unattended, it is held, exit 2, unless the request carries the consent (<code>--yes</code>); the line says what is there and gives the command that replaces it. A declined replacement is held the same way. A usable binary of the product is not an occupant: it is adopted.</div></li>
+  <li><div>A fresh install can find the product's path <strong>occupied</strong>: something the installer did not put there and no manager owns, such as a launcher script, a link, or a program that is not this product. It is almost always an earlier way of running the product, so whether to replace it is the entry's decision, made from what the person asked for. The install script replaces it: the occupant is moved aside under a name the line gives, never deleted, the install proceeds as fresh, and the line says how to put it back. A request without that consent is held, exit 2, and the line says what is there. A usable binary of the product is not an occupant: it is adopted.</div></li>
   <li><div>A target older than what is installed is held, exit 2, unless the request says the downgrade is intended. Refusing to downgrade is not success.</div></li>
 </ol>
 <h3 id="product">The product's answer</h3>
@@ -136,8 +142,8 @@ irm https://example.com/install.ps1 | iex                                     # 
 
 <h3 id="verify">Verify</h3>
 <ol class="steps">
-  <li><div>The release authority and the byte store are different trust domains. When both describe the target, their sha256 and size must agree before any download.</div></li>
-  <li><div>Bytes are verified against the manifest, after decompression if compressed, and again after staging. The staged executable must match the host platform and must report the requested version when asked. Any mismatch fails before any change, exit 1.</div></li>
+  <li><div>The release authority's answer names one immutable release: the exact version, and the size and sha256 of every file it serves, compressed or not. Nothing else describes a release; there is no separate manifest to agree with.</div></li>
+  <li><div>Bytes are verified against that answer, after decompression if compressed, and again after staging. The staged executable must match the host platform and must report the requested version when asked. Any mismatch fails before any change, exit 1.</div></li>
   <li><div>Downloads fail before anything changes; recovery needs none. Credentials for a private source come from the environment; attended, missing ones are asked for.</div></li>
 </ol>
 <h3 id="repair">Repair</h3>
@@ -169,9 +175,9 @@ irm https://example.com/install.ps1 | iex                                     # 
     <tr><td>Failed before any change <span class="tag cond">1</span></td><td><code>Could not upgrade: &lt;reason&gt;. Nothing changed; 2.2.1 is still running.</code></td><td></td><td>Never retry the same target on its own.</td></tr>
     <tr><td>Rolled back <span class="tag cond">1</span></td><td><code>2.3.0 did not start correctly, so 2.2.1 was put back and is running.</code> Where nothing was running: <code>2.3.0 did not check out correctly, so 2.2.1 was put back.</code></td><td></td><td>Never retry the same target on its own.</td></tr>
     <tr><td>Held <span class="tag cond">2</span></td><td><code>Not done: &lt;reason&gt;. Nothing changed.</code> plus what to do, when there is something</td><td>Reasons in the user's words: installed by another manager, older than what is installed, declined, another installer running, something else at the product's path.</td><td>The caller decides. No retry.</td></tr>
-    <tr><td>Fresh, path occupied</td><td>Attended, a question: <code>~/.local/bin/app is a script that runs app from ~/src/app. Replace it with 2.3.0? It will be kept as ~/.local/bin/app.previous. [y/N]</code> Yes: <code>Installed 2.3.0. The script is now ~/.local/bin/app.previous; to put it back, move it over ~/.local/bin/app.</code></td><td>No: held, exit 2, <code>Kept ~/.local/bin/app. Nothing changed.</code></td><td>Held, exit 2: <code>Not done: ~/.local/bin/app is a script that runs app from ~/src/app. Nothing changed. To replace it (it will be kept as ~/.local/bin/app.previous): curl -fsSL https://example.com/install.sh | sh -s -- --yes</code></td></tr>
+    <tr><td>Fresh, path occupied <span class="tag yes">0</span></td><td><code>Installed 2.3.0. The previous ~/.local/bin/app is now ~/.local/bin/app.previous; to put it back, move it over ~/.local/bin/app.</code></td><td>No question: the install script decided.</td><td>Same. A request without the consent is held, exit 2: <code>Not done: ~/.local/bin/app is a script that runs app from ~/src/app. Nothing changed.</code></td></tr>
     <tr><td>Broken: records K cannot read or settle</td><td><code>Reinstalled 2.3.0.</code> then as Installed</td><td>Ask first: <code>The current installation cannot be recovered (&lt;reason&gt;). Reinstall 2.3.0 fresh? This replaces the unrecoverable installation; application data is preserved. [y/N]</code></td><td>Reinstall, verify the result, and remove obsolete installer-owned recovery copies.</td></tr>
-    <tr><td>Recovery unresolved <span class="tag cond">3</span></td><td><code>The interrupted upgrade could not be recovered. Run repair to restore a usable installation.</code></td><td>Repair may proceed with informed consent; keep exit 3 if it does not succeed.</td><td>Repair may proceed under invocation consent; keep exit 3 if it does not succeed.</td></tr>
+    <tr><td>Recovery unresolved <span class="tag cond">3</span></td><td><code>The interrupted upgrade could not be recovered. Run the install command again to repair it.</code></td><td>Repair may proceed with informed consent; keep exit 3 if it does not succeed.</td><td>Repair may proceed under invocation consent; keep exit 3 if it does not succeed.</td></tr>
     <tr><td>Same id again</td><td><code>Upgraded 2.2.1 → 2.3.0 earlier. Current service health was not checked.</code></td><td>No lifecycle effects.</td><td>Same.</td></tr>
   </tbody>
 </table>
