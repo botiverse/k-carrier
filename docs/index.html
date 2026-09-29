@@ -53,7 +53,7 @@
 <div class="stage"><iframe src="figures/deliverables.html" title="Three independently versioned deliverables that can share one CDN" loading="lazy" scrolling="no"></iframe></div>
 <figcaption>The bootstrap verifies the installer; the installer verifies the product. Paths are illustrative, not a K schema.</figcaption>
 </figure>
-<p>You supply the release source and the service lifecycle operations; K supplies the transaction machinery. Releases can come from a static manifest on any CDN or from a release platform such as K's sibling project <a href="https://hands.build">Hands</a>. The runner is a native Rust executable, with no Node runtime dependency.</p>
+<p>You supply the release source and the service lifecycle operations; K supplies the transaction machinery. Releases come from one release authority, such as K's sibling project <a href="https://hands.build">Hands</a>, which resolves channels and serves immutable, hashed bytes; the crate's static manifest source is for examples and tests. The runner is a native Rust executable, with no Node runtime dependency.</p>
 
 <h2 id="status">Status</h2>
 <div class="status">
