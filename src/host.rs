@@ -137,7 +137,18 @@ impl CommandHost {
                 return Err(Error::Uncertain("HOST_RESPONSE_TOO_LARGE".into()));
             }
             let status = child.wait().await?;
-            let value: Value = serde_json::from_slice(&bytes)?;
+            // A failed host may also print malformed output. Parse leniently
+            // so its exit identity is not replaced by a JSON parse error.
+            let parsed = serde_json::from_slice::<Value>(&bytes);
+            if !status.success() && parsed.is_err() {
+                let code = status
+                    .code()
+                    .map_or_else(|| "signal".to_string(), |code| code.to_string());
+                return Err(invalid(format!(
+                    "HOST_COMMAND_FAILED: {action} (exit {code}): host response was not valid JSON"
+                )));
+            }
+            let value = parsed?;
             if value.get("protocolVersion") == Some(&json!(1))
                 && value.get("ok") == Some(&json!(false))
                 && value.get("uncertain") == Some(&json!(true))

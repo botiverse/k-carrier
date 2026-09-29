@@ -79,6 +79,18 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             );
             std::process::exit(3);
         }
+        if root.join("effect-failed-credential").exists() {
+            let message = "login failed\nAuthorization: Bearer pw123";
+            println!(
+                "{}",
+                serde_json::json!({"protocolVersion":1,"ok":false,"uncertain":false,"error":message})
+            );
+            std::process::exit(3);
+        }
+        if root.join("effect-failed-malformed").exists() {
+            println!("host crashed before writing a response {{");
+            std::process::exit(4);
+        }
         if root.join("effect-uncertain").exists() {
             println!(
                 "{}",
