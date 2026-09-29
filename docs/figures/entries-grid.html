@@ -24,7 +24,7 @@ text { font-family: inherit; fill: var(--ink); }
 </style>
 </head>
 <body>
-<div class="frame" id="frame" role="img" aria-label="A grid of three entries by five worlds. install.sh can install on a fresh machine, settle an upgrading one, adopt then upgrade a pre-K installation, upgrade a managed one, and repair a broken one. self upgrade settles, adopts and upgrades but cannot run on a fresh or broken machine. A remote authority settles and upgrades a managed machine only. Below: attended runs may ask and may offer repair; unattended runs take the channel's current release, treat the run as consent, and never ask or retry.">
+<div class="frame" id="frame" role="img" aria-label="A grid of three entries by five worlds. install.sh can install on a fresh machine, settle an upgrading one, adopt then upgrade a pre-K installation, upgrade a managed one, and repair a broken one. self upgrade settles, adopts and upgrades but cannot run on a fresh or broken machine. A remote authority settles and upgrades a managed machine only. Below: attended runs may ask and may offer repair; unattended runs take the channel's current release, treat the run as consent, never ask, and never retry a failed target.">
 <svg viewBox="0 0 1200 600">
   <g transform="translate(0,-75)">
   <text x="341.0" y="122" text-anchor="middle" class="tb">Fresh</text>
@@ -50,7 +50,7 @@ text { font-family: inherit; fill: var(--ink); }
   <rect x="622" y="158" width="174" height="88" class="shadow"/>
   <rect x="618" y="154" width="174" height="88" fill="#98e59b" class="box"/>
   <text x="705.0" y="194" text-anchor="middle" class="tb">Adopt + upgrade</text>
-  <text x="705.0" y="216" text-anchor="middle" class="d">seed from the running app</text>
+  <text x="705.0" y="216" text-anchor="middle" class="d">seed its existing bytes</text>
   <rect x="804" y="158" width="174" height="88" class="shadow"/>
   <rect x="800" y="154" width="174" height="88" fill="#98e59b" class="box"/>
   <text x="887.0" y="194" text-anchor="middle" class="tb">Upgrade</text>
@@ -70,7 +70,7 @@ text { font-family: inherit; fill: var(--ink); }
   <rect x="622" y="254" width="174" height="88" class="shadow"/>
   <rect x="618" y="250" width="174" height="88" fill="#98e59b" class="box"/>
   <text x="705.0" y="290" text-anchor="middle" class="tb">Adopt + upgrade</text>
-  <text x="705.0" y="312" text-anchor="middle" class="d">seed from the running app</text>
+  <text x="705.0" y="312" text-anchor="middle" class="d">seed its existing bytes</text>
   <rect x="804" y="254" width="174" height="88" class="shadow"/>
   <rect x="800" y="250" width="174" height="88" fill="#98e59b" class="box"/>
   <text x="887.0" y="290" text-anchor="middle" class="tb">Upgrade</text>
@@ -102,7 +102,7 @@ text { font-family: inherit; fill: var(--ink); }
   <text x="640" y="518" class="tb">Unattended</text><text x="760" y="518" class="d">CI or *_NON_INTERACTIVE=1, or no tty</text>
   <text x="640" y="548" class="t">No version named means the channel's current release.</text>
   <text x="640" y="574" class="t">Running it is the consent; the receipt records who and what.</text>
-  <text x="640" y="600" class="t">Never asks, never retries on its own.</text>
+  <text x="640" y="600" class="t">Never asks; never retries a failed target.</text>
   </g>
 </svg>
 </div>
