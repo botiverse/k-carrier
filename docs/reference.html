@@ -140,6 +140,7 @@
 
 <h2 id="lock-protocol">Lock protocol</h2>
 <p><code>upgrade.lock</code> has one live owner per state directory. Unique process-owned contender entries serialize creation and reclamation, including the partial-write window. Only entries of provably dead owners are reclaimed. Pid reuse conservatively refuses acquisition; age never proves that a live owner is dead. The protocol requires local atomic file creation and coherent directory reads. It is not a distributed or NFS lock.</p>
+<p>Quarantine moves the state directory with a no-replace rename (<code>renameat2(RENAME_NOREPLACE)</code> on Linux). Filesystems that reject that flag (Lustre, NFS, some FUSE mounts) return <code>EINVAL</code>; K then checks that the destination is absent and uses a plain <code>rename(2)</code> under the writer lock. That fallback is only exclusive when a single host uses the state directory.</p>
 
 <h2 id="state-directory-layout">State directory layout</h2>
 <pre class="tree">&lt;stateDir&gt;/
