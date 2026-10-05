@@ -147,14 +147,13 @@ fn normalize(path: &Path) -> Result<PathBuf> {
     ))
 }
 fn rename_exclusive(from: &Path, to: &Path) -> Result<()> {
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[cfg(target_os = "macos")]
     {
         use std::{ffi::CString, os::unix::ffi::OsStrExt};
         let from = CString::new(from.as_os_str().as_bytes())
             .map_err(|_| invalid("QUARANTINE_INVALID_DESTINATION"))?;
         let to = CString::new(to.as_os_str().as_bytes())
             .map_err(|_| invalid("QUARANTINE_INVALID_DESTINATION"))?;
-        #[cfg(target_os = "macos")]
         let result = unsafe {
             libc::renameatx_np(
                 libc::AT_FDCWD,
@@ -164,27 +163,154 @@ fn rename_exclusive(from: &Path, to: &Path) -> Result<()> {
                 libc::RENAME_EXCL,
             )
         };
-        #[cfg(target_os = "linux")]
-        let result = unsafe {
-            // The raw syscall keeps this buildable on musl, whose libc crate
-            // does not export a renameat2 wrapper. Same RENAME_NOREPLACE
-            // semantics; errno is read the same way either path.
-            libc::syscall(
-                libc::SYS_renameat2,
-                libc::AT_FDCWD,
-                from.as_ptr(),
-                libc::AT_FDCWD,
-                to.as_ptr(),
-                libc::RENAME_NOREPLACE,
-            )
-        };
         if result != 0 {
             return Err(std::io::Error::last_os_error().into());
         }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        use std::{ffi::CString, os::unix::ffi::OsStrExt};
+        let c_from = CString::new(from.as_os_str().as_bytes())
+            .map_err(|_| invalid("QUARANTINE_INVALID_DESTINATION"))?;
+        let c_to = CString::new(to.as_os_str().as_bytes())
+            .map_err(|_| invalid("QUARANTINE_INVALID_DESTINATION"))?;
+        rename_noreplace_linux(from, to, || renameat2_noreplace(&c_from, &c_to))?;
     }
     #[cfg(windows)]
     fs::rename(from, to)?; // Windows rename refuses an existing directory.
     #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
     return Err(invalid("QUARANTINE_PLATFORM_UNSUPPORTED"));
     Ok(())
+}
+/// `renameat2(..., RENAME_NOREPLACE)`. The raw syscall keeps this buildable
+/// on musl, whose libc crate does not export a renameat2 wrapper.
+#[cfg(target_os = "linux")]
+fn renameat2_noreplace(from: &std::ffi::CStr, to: &std::ffi::CStr) -> std::io::Result<()> {
+    let result = unsafe {
+        libc::syscall(
+            libc::SYS_renameat2,
+            libc::AT_FDCWD,
+            from.as_ptr(),
+            libc::AT_FDCWD,
+            to.as_ptr(),
+            libc::RENAME_NOREPLACE,
+        )
+    };
+    if result != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
+}
+/// Some filesystems (Lustre, NFS, some FUSE) reject RENAME_NOREPLACE with
+/// EINVAL, and pre-3.15 kernels lack renameat2 (ENOSYS). There the move falls
+/// back to "destination absent, then rename(2)". This is a weaker guarantee:
+/// the kernel no longer enforces no-replace. It is acceptable here because
+/// every caller holds K's writer lock (`UpgradeLock`) and the destination is
+/// an installer-owned, uniquely named path, so nothing else creates it between
+/// the check and the rename. That rests on the lock's own assumptions (local
+/// atomic create, coherent directory reads; not a distributed lock), so with
+/// several hosts sharing the state directory the window is not closed.
+/// Any other errno is returned unchanged.
+#[cfg(target_os = "linux")]
+fn rename_noreplace_linux(
+    from: &Path,
+    to: &Path,
+    renameat2: impl FnOnce() -> std::io::Result<()>,
+) -> Result<()> {
+    match renameat2() {
+        Ok(()) => Ok(()),
+        Err(error) if matches!(error.raw_os_error(), Some(libc::EINVAL | libc::ENOSYS)) => {
+            match fs::symlink_metadata(to) {
+                Ok(_) => Err(invalid("QUARANTINE_DESTINATION_CONFLICT")),
+                Err(probe) if probe.kind() == std::io::ErrorKind::NotFound => {
+                    fs::rename(from, to)?;
+                    Ok(())
+                }
+                Err(probe) => Err(probe.into()),
+            }
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod rename_fallback_tests {
+    use super::rename_noreplace_linux;
+    use std::{fs, io, path::Path};
+
+    fn fixture() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let from = dir.path().join("state");
+        fs::create_dir(&from).unwrap();
+        fs::write(from.join("journal.jsonl"), b"entry").unwrap();
+        let to = dir.path().join("quarantine");
+        (dir, from, to)
+    }
+    fn fails_with(errno: i32) -> impl FnOnce() -> io::Result<()> {
+        move || Err(io::Error::from_raw_os_error(errno))
+    }
+    fn assert_moved(from: &Path, to: &Path) {
+        assert!(!from.exists(), "source should be gone");
+        assert_eq!(fs::read(to.join("journal.jsonl")).unwrap(), b"entry");
+    }
+    fn assert_untouched(from: &Path) {
+        assert_eq!(fs::read(from.join("journal.jsonl")).unwrap(), b"entry");
+    }
+
+    #[test]
+    fn einval_falls_back_to_checked_rename() {
+        let (_dir, from, to) = fixture();
+        rename_noreplace_linux(&from, &to, fails_with(libc::EINVAL)).unwrap();
+        assert_moved(&from, &to);
+    }
+    #[test]
+    fn enosys_falls_back_to_checked_rename() {
+        let (_dir, from, to) = fixture();
+        rename_noreplace_linux(&from, &to, fails_with(libc::ENOSYS)).unwrap();
+        assert_moved(&from, &to);
+    }
+    #[test]
+    fn fallback_refuses_existing_destination() {
+        let (_dir, from, to) = fixture();
+        fs::create_dir(&to).unwrap();
+        let error = rename_noreplace_linux(&from, &to, fails_with(libc::EINVAL)).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("QUARANTINE_DESTINATION_CONFLICT"),
+            "{error}"
+        );
+        assert_untouched(&from);
+        assert!(fs::read_dir(&to).unwrap().next().is_none());
+    }
+    #[test]
+    fn other_errno_is_returned_without_fallback() {
+        for errno in [libc::EXDEV, libc::EACCES] {
+            let (_dir, from, to) = fixture();
+            let error = rename_noreplace_linux(&from, &to, fails_with(errno)).unwrap_err();
+            match error {
+                crate::Error::Io(io) => assert_eq!(io.raw_os_error(), Some(errno)),
+                other => panic!("errno {errno}: unexpected {other}"),
+            }
+            assert_untouched(&from);
+            assert!(!to.exists());
+        }
+    }
+    #[test]
+    fn real_renameat2_moves_directory_on_local_fs() {
+        let (_dir, from, to) = fixture();
+        use std::{ffi::CString, os::unix::ffi::OsStrExt};
+        let c_from = CString::new(from.as_os_str().as_bytes()).unwrap();
+        let c_to = CString::new(to.as_os_str().as_bytes()).unwrap();
+        let mut syscall = None;
+        rename_noreplace_linux(&from, &to, || {
+            let result = super::renameat2_noreplace(&c_from, &c_to);
+            syscall = Some(result.as_ref().map_err(|e| e.raw_os_error()).copied());
+            result
+        })
+        .unwrap();
+        // The local fs supports RENAME_NOREPLACE: the kernel did the move.
+        assert_eq!(syscall, Some(Ok(())));
+        assert_moved(&from, &to);
+    }
 }
