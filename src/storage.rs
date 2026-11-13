@@ -133,7 +133,31 @@ fn copy_dir_then_remove(from: &Path, to: &Path) -> Result<()> {
     copy_tree(from, &copy)?;
     fs::rename(&copy, to)?;
     sync_dir(parent)?;
-    remove_dir(from)
+    // Removal is not atomic. Mark the source first, so a crash part-way
+    // through leaves a slot that reads as absent, never as incomplete.
+    write_durable(&from.join(MOVED_MARKER), b"", false)?;
+    remove_moved_source(from)
+}
+/// A slot directory whose contents were copied elsewhere and which is being
+/// removed (`rename_dir_durable`'s cross-device fallback). It reads as absent.
+pub const MOVED_MARKER: &str = ".k-moved";
+fn remove_moved_source(path: &Path) -> Result<()> {
+    for entry in fs::read_dir(path)? {
+        let entry = entry?;
+        if entry.file_name() == MOVED_MARKER {
+            continue;
+        }
+        if entry.file_type()?.is_dir() {
+            fs::remove_dir_all(entry.path())?;
+        } else {
+            fs::remove_file(entry.path())?;
+        }
+    }
+    sync_dir(path)?;
+    // Only the marker is left. A crash after it goes leaves an empty
+    // directory, which promote clears for the experiment slot.
+    fs::remove_file(path.join(MOVED_MARKER))?;
+    remove_dir(path)
 }
 fn copy_tree(from: &Path, to: &Path) -> Result<()> {
     fs::create_dir(to)?;
@@ -284,6 +308,11 @@ impl FileStore {
         let meta = fs::symlink_metadata(&dir)?;
         if !meta.is_dir() || meta.file_type().is_symlink() {
             return Err(invalid("invalid slot directory"));
+        }
+        // A slot left mid-removal by a cross-device move (rename_dir_durable)
+        // is gone: its contents were already published elsewhere.
+        if exists(&dir.join(MOVED_MARKER))? {
+            return Ok(None);
         }
         let version = fs::read_to_string(dir.join("VERSION"))?.trim().to_owned();
         if version.is_empty() || !fs::symlink_metadata(self.artifact(slot))?.is_file() {
@@ -471,11 +500,23 @@ impl Effects for FileStore {
     }
     async fn promote(&self) -> Result<()> {
         let old = self.root.join("slots/stable.old");
+        // The last instant of a cross-device move's removal: the experiment's
+        // contents are already stable, only its empty directory is left.
+        let experiment = self.slot(Slot::Experiment);
+        if exists(&experiment)?
+            && fs::symlink_metadata(&experiment)?.is_dir()
+            && fs::read_dir(&experiment)?.next().is_none()
+            && self.version(Slot::Stable)?.is_some()
+        {
+            remove_dir(&experiment)?;
+        }
         if self.version(Slot::Experiment)?.is_none() {
             // After the commit rename, only the obsolete backup may remain.
             if self.version(Slot::Stable)?.is_none() {
                 return Err(invalid("promotion has no stable or experiment"));
             }
+            // A cross-device move may have left the experiment mid-removal.
+            remove_dir(&self.slot(Slot::Experiment))?;
             return remove_dir(&old);
         }
         if exists(&self.slot(Slot::Stable))? {
@@ -593,6 +634,67 @@ mod slot_move_tests {
         assert!(rename_dir_with(&from, &to, cross_device).is_err());
         assert!(exists(&from.join("artifact.bin")).unwrap());
         assert!(!exists(&to).unwrap());
+    }
+
+    #[test]
+    fn the_fallback_leaves_no_marker_in_the_published_copy() {
+        let root = tempfile::tempdir().unwrap();
+        let from = slot(root.path());
+        let to = root.path().join("slots/stable.old");
+        rename_dir_with(&from, &to, cross_device).unwrap();
+        assert!(!exists(&to.join(super::MOVED_MARKER)).unwrap());
+    }
+
+    fn store_with(root: &Path) -> crate::storage::FileStore {
+        let store = crate::storage::FileStore::new(root);
+        // stable = the new version, already published by the commit's copy.
+        let stable = store.slot(crate::state::Slot::Stable);
+        fs::create_dir_all(&stable).unwrap();
+        fs::write(stable.join("artifact.bin"), b"new").unwrap();
+        fs::write(stable.join("VERSION"), b"1.25.0").unwrap();
+        store
+    }
+
+    /// The process died while removing the experiment after its contents
+    /// were published as stable: the marker is there, VERSION is already gone.
+    #[tokio::test]
+    async fn promote_replays_over_an_experiment_left_mid_removal() {
+        use crate::storage::Effects;
+        let root = tempfile::tempdir().unwrap();
+        let store = store_with(root.path());
+        let experiment = store.slot(crate::state::Slot::Experiment);
+        fs::create_dir_all(&experiment).unwrap();
+        fs::write(experiment.join("artifact.bin"), b"new").unwrap();
+        fs::write(experiment.join(super::MOVED_MARKER), b"").unwrap();
+        assert_eq!(store.version(crate::state::Slot::Experiment).unwrap(), None);
+        store.promote().await.unwrap();
+        assert_eq!(
+            store
+                .version(crate::state::Slot::Stable)
+                .unwrap()
+                .as_deref(),
+            Some("1.25.0")
+        );
+        assert!(!exists(&experiment).unwrap(), "the leftover is removed");
+    }
+
+    /// Same, one step later: only the marker had been removed, the directory is empty.
+    #[tokio::test]
+    async fn promote_replays_over_an_empty_experiment() {
+        use crate::storage::Effects;
+        let root = tempfile::tempdir().unwrap();
+        let store = store_with(root.path());
+        let experiment = store.slot(crate::state::Slot::Experiment);
+        fs::create_dir_all(&experiment).unwrap();
+        store.promote().await.unwrap();
+        assert_eq!(
+            store
+                .version(crate::state::Slot::Stable)
+                .unwrap()
+                .as_deref(),
+            Some("1.25.0")
+        );
+        assert!(!exists(&experiment).unwrap());
     }
 
     /// A real overlayfs, where a lower-layer directory cannot be renamed.
