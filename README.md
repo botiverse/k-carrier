@@ -1,5 +1,7 @@
 # K (k-carrier)
 
+[![Built with Raft](https://raw.githubusercontent.com/raft-builders/awesome-raft-build/main/badge/built-with-raft.svg)](https://raft.build)
+
 **Reliable application upgrades, run by an independent installer.**
 
 K is for applications you distribute yourself to end users' machines, across
