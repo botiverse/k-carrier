@@ -73,6 +73,97 @@ pub fn rename_durable(from: &Path, to: &Path) -> Result<()> {
     }
     Ok(())
 }
+/// Moves a slot directory under the caller's upgrade lock.
+///
+/// Overlayfs refuses `rename(2)` of a directory that comes from a lower layer
+/// with EXDEV (unless `redirect_dir` is on): a container whose image already
+/// held the state could install a new version but never commit it, and every
+/// later upgrade failed at the same step. There the directory is copied beside
+/// its destination, the fresh copy (an upper-layer directory, which overlayfs
+/// renames) is published with one rename, and the source is removed. A crash
+/// leaves either the source alone, or source and destination with the same
+/// contents; promote and stage replay both. A stray `.k-copy-*` beside the
+/// destination is removed on the next such move.
+pub fn rename_dir_durable(from: &Path, to: &Path) -> Result<()> {
+    rename_dir_with(from, to, |from, to| fs::rename(from, to))
+}
+fn rename_dir_with(
+    from: &Path,
+    to: &Path,
+    rename: impl FnOnce(&Path, &Path) -> std::io::Result<()>,
+) -> Result<()> {
+    match rename(from, to) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::CrossesDevices => {
+            return copy_dir_then_remove(from, to);
+        }
+        Err(error) => return Err(error.into()),
+    }
+    if let Some(parent) = to.parent() {
+        sync_dir(parent)?;
+    }
+    if from.parent() != to.parent()
+        && let Some(parent) = from.parent()
+    {
+        sync_dir(parent)?;
+    }
+    Ok(())
+}
+fn copy_dir_then_remove(from: &Path, to: &Path) -> Result<()> {
+    let meta = fs::symlink_metadata(from)?;
+    if !meta.is_dir() || meta.file_type().is_symlink() {
+        return Err(invalid("refusing to copy a non-directory slot"));
+    }
+    if exists(to)? {
+        return Err(invalid("slot move destination exists"));
+    }
+    let parent = to.parent().ok_or_else(|| invalid("path has no parent"))?;
+    for entry in fs::read_dir(parent)? {
+        let entry = entry?;
+        let stray = entry
+            .file_name()
+            .to_str()
+            .and_then(|name| name.strip_prefix(".k-copy-"))
+            .is_some_and(|id| uuid::Uuid::parse_str(id).is_ok());
+        if stray {
+            remove_dir(&entry.path())?;
+        }
+    }
+    let copy = parent.join(format!(".k-copy-{}", uuid::Uuid::new_v4()));
+    copy_tree(from, &copy)?;
+    fs::rename(&copy, to)?;
+    sync_dir(parent)?;
+    remove_dir(from)
+}
+fn copy_tree(from: &Path, to: &Path) -> Result<()> {
+    fs::create_dir(to)?;
+    for entry in fs::read_dir(from)? {
+        let entry = entry?;
+        let kind = entry.file_type()?;
+        let target = to.join(entry.file_name());
+        if kind.is_dir() {
+            copy_tree(&entry.path(), &target)?;
+        } else if kind.is_file() {
+            // fs::copy keeps the permission bits (the slot's executable artifact).
+            fs::copy(entry.path(), &target)?;
+            #[cfg(unix)]
+            fs::File::open(&target)?.sync_all()?;
+            #[cfg(windows)]
+            OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&target)?
+                .sync_all()?;
+        } else {
+            return Err(invalid(
+                "refusing to copy a slot entry that is not a file or directory",
+            ));
+        }
+    }
+    #[cfg(unix)]
+    fs::set_permissions(to, fs::metadata(from)?.permissions())?;
+    sync_dir(to)
+}
 pub fn remove_dir(path: &Path) -> Result<()> {
     match fs::symlink_metadata(path) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
@@ -242,7 +333,7 @@ impl FileStore {
         }
         let staging = self.root.join("slots/stable.bootstrap");
         self.populate(&staging, version.trim(), source)?;
-        rename_durable(&staging, &self.slot(Slot::Stable))?;
+        rename_dir_durable(&staging, &self.slot(Slot::Stable))?;
         Ok(true)
     }
     pub fn read_operation(&self) -> OperationRead {
@@ -376,7 +467,7 @@ impl Effects for FileStore {
         let staging = self.root.join("slots/experiment.staging");
         self.populate(&staging, version, bytes)?;
         remove_dir(&self.slot(Slot::Experiment))?;
-        rename_durable(&staging, &self.slot(Slot::Experiment))
+        rename_dir_durable(&staging, &self.slot(Slot::Experiment))
     }
     async fn promote(&self) -> Result<()> {
         let old = self.root.join("slots/stable.old");
@@ -389,12 +480,137 @@ impl Effects for FileStore {
         }
         if exists(&self.slot(Slot::Stable))? {
             remove_dir(&old)?;
-            rename_durable(&self.slot(Slot::Stable), &old)?;
+            rename_dir_durable(&self.slot(Slot::Stable), &old)?;
         }
-        rename_durable(&self.slot(Slot::Experiment), &self.slot(Slot::Stable))?;
+        rename_dir_durable(&self.slot(Slot::Experiment), &self.slot(Slot::Stable))?;
         remove_dir(&old)
     }
     async fn clear(&self) -> Result<()> {
         remove_dir(&self.slot(Slot::Experiment))
+    }
+}
+
+#[cfg(test)]
+mod slot_move_tests {
+    use super::{exists, rename_dir_durable, rename_dir_with};
+    use std::{fs, io, path::Path};
+
+    fn cross_device(_: &Path, _: &Path) -> io::Result<()> {
+        Err(io::Error::from(io::ErrorKind::CrossesDevices))
+    }
+    fn slot(root: &Path) -> std::path::PathBuf {
+        let slot = root.join("slots/stable");
+        fs::create_dir_all(slot.join("nested")).unwrap();
+        fs::write(slot.join("artifact.bin"), b"binary").unwrap();
+        fs::write(slot.join("VERSION"), b"1.0.67").unwrap();
+        fs::write(slot.join("nested/sidecar"), b"side").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(slot.join("artifact.bin"), fs::Permissions::from_mode(0o755))
+                .unwrap();
+        }
+        slot
+    }
+    fn names(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn a_cross_device_rename_copies_publishes_and_removes_the_source() {
+        let root = tempfile::tempdir().unwrap();
+        let from = slot(root.path());
+        let to = root.path().join("slots/stable.old");
+        let stray = root
+            .path()
+            .join(format!("slots/.k-copy-{}", uuid::Uuid::new_v4()));
+        fs::create_dir(&stray).unwrap();
+        fs::write(stray.join("partial"), b"x").unwrap();
+        let foreign = root.path().join("slots/.k-copy-not-ours");
+        fs::create_dir(&foreign).unwrap();
+
+        rename_dir_with(&from, &to, cross_device).unwrap();
+
+        assert!(!exists(&from).unwrap(), "the source is removed");
+        assert_eq!(fs::read(to.join("artifact.bin")).unwrap(), b"binary");
+        assert_eq!(fs::read(to.join("VERSION")).unwrap(), b"1.0.67");
+        assert_eq!(fs::read(to.join("nested/sidecar")).unwrap(), b"side");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(to.join("artifact.bin"))
+                .unwrap()
+                .permissions()
+                .mode();
+            assert_eq!(mode & 0o777, 0o755, "the artifact stays executable");
+        }
+        assert_eq!(
+            names(&root.path().join("slots")),
+            vec![".k-copy-not-ours", "stable.old"],
+            "our stray copy is collected, a foreign name is left alone"
+        );
+    }
+
+    #[test]
+    fn other_rename_errors_are_returned_and_touch_nothing() {
+        let root = tempfile::tempdir().unwrap();
+        let from = slot(root.path());
+        let to = root.path().join("slots/stable.old");
+        let error = rename_dir_with(&from, &to, |_, _| {
+            Err(io::Error::from(io::ErrorKind::PermissionDenied))
+        })
+        .unwrap_err();
+        assert!(
+            matches!(error, crate::Error::Io(ref io) if io.kind() == io::ErrorKind::PermissionDenied),
+            "{error}"
+        );
+        assert_eq!(names(&from), vec!["VERSION", "artifact.bin", "nested"]);
+        assert!(!exists(&to).unwrap());
+    }
+
+    #[test]
+    fn a_cross_device_move_refuses_an_existing_destination() {
+        let root = tempfile::tempdir().unwrap();
+        let from = slot(root.path());
+        let to = root.path().join("slots/stable.old");
+        fs::create_dir(&to).unwrap();
+        assert!(rename_dir_with(&from, &to, cross_device).is_err());
+        assert_eq!(names(&from), vec!["VERSION", "artifact.bin", "nested"]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_cross_device_move_refuses_a_symlink_and_keeps_the_source() {
+        let root = tempfile::tempdir().unwrap();
+        let from = slot(root.path());
+        std::os::unix::fs::symlink("/etc/passwd", from.join("link")).unwrap();
+        let to = root.path().join("slots/stable.old");
+        assert!(rename_dir_with(&from, &to, cross_device).is_err());
+        assert!(exists(&from.join("artifact.bin")).unwrap());
+        assert!(!exists(&to).unwrap());
+    }
+
+    /// A real overlayfs, where a lower-layer directory cannot be renamed.
+    /// Needs root to mount, so CI skips it; run with
+    /// `K_TEST_OVERLAY_ROOT=<merged dir whose slots/stable is in the lower layer>`.
+    #[test]
+    #[ignore]
+    fn a_lower_layer_slot_moves_on_a_real_overlayfs() {
+        let Some(root) = std::env::var_os("K_TEST_OVERLAY_ROOT") else {
+            return;
+        };
+        let root = Path::new(&root);
+        let from = root.join("slots/stable");
+        let to = root.join("slots/stable.old");
+        let plain = fs::rename(&from, &to).unwrap_err();
+        assert_eq!(plain.kind(), io::ErrorKind::CrossesDevices, "{plain}");
+        rename_dir_durable(&from, &to).unwrap();
+        assert!(!exists(&from).unwrap());
+        assert!(exists(&to.join("artifact.bin")).unwrap());
     }
 }
