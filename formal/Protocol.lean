@@ -29,9 +29,10 @@ Proved for every reachable machine (`protocol_guarantees`):
 Assumptions, shared with the host::Host contract (assume-guarantee): stop()
 returning means the process is gone; start() starts only the requested slot;
 the probe answers for one live incarnation. The model does not resolve the
-filesystem window inside promote (rename aside, rename over), which is below
-one effect step; in code the durable promote intent plus idempotent replay
-covers it.
+filesystem window inside promote (rename aside, rename over; on overlayfs a
+cross-device rename becomes copy, publish, marked removal), which is below one
+effect step; in code the durable promote intent plus idempotent replay covers
+it.
 
 Non-vacuity: the `example`s at the end exhibit reachable states with a live
 experiment, a completed promotion and a completed rollback, so the guards do
