@@ -159,6 +159,10 @@ fn remove_moved_source(path: &Path) -> Result<()> {
     fs::remove_file(path.join(MOVED_MARKER))?;
     remove_dir(path)
 }
+/// Copies only files and directories and refuses anything else, symlinks
+/// included. That is enough: every caller moves a slot, and a slot is only
+/// written by `populate` (`artifact.bin` via fs::copy, which writes a regular
+/// file, plus `VERSION`), so no slot we ship holds a symlink.
 fn copy_tree(from: &Path, to: &Path) -> Result<()> {
     fs::create_dir(to)?;
     for entry in fs::read_dir(from)? {
