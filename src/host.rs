@@ -153,8 +153,18 @@ impl CommandHost {
                 && value.get("ok") == Some(&json!(false))
                 && value.get("uncertain") == Some(&json!(true))
             {
+                // Keep the host's own reason, as for a definite failure below:
+                // without it a stop the host could not confirm says only
+                // "HOST_EFFECT_UNRESOLVED: stop", and the cause (a restarted
+                // service, a fence timeout) is lost (1.25.7 macOS rollbacks).
+                let detail = value
+                    .get("error")
+                    .and_then(Value::as_str)
+                    .map(host_error_detail)
+                    .filter(|detail| !detail.is_empty())
+                    .map_or_else(String::new, |detail| format!(": {detail}"));
                 return Err(Error::Uncertain(format!(
-                    "HOST_EFFECT_UNRESOLVED: {action}"
+                    "HOST_EFFECT_UNRESOLVED: {action}{detail}"
                 )));
             }
             if !status.success() {

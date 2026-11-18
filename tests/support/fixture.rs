@@ -91,6 +91,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("host crashed before writing a response {{");
             std::process::exit(4);
         }
+        if root.join("effect-uncertain-reason").exists() {
+            let message = "product service restarted while stopping\nAuthorization: Bearer pw123";
+            println!(
+                "{}",
+                serde_json::json!({"protocolVersion":1,"ok":false,"uncertain":true,"error":message})
+            );
+            std::process::exit(1);
+        }
         if root.join("effect-uncertain").exists() {
             println!(
                 "{}",
