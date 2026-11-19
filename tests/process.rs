@@ -312,3 +312,50 @@ async fn native_controller_failure_with_malformed_output_keeps_the_exit_code() -
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn native_controller_uncertainty_keeps_the_hosts_redacted_reason() -> Result<()> {
+    let root = tempdir()?;
+    let mut host = CommandHost::new(
+        vec![fixture().into(), "--controller".into()],
+        root.path().join("state"),
+        3000,
+    )?;
+    host.cwd = Some(root.path().into());
+    fs::write(root.path().join("effect-uncertain-reason"), b"fixture")?;
+    let error = host.stop(k_carrier::state::Slot::Stable).await.unwrap_err();
+    assert!(
+        error.is_uncertain(),
+        "the host could not confirm the effect"
+    );
+    let message = error.to_string();
+    assert!(
+        message
+            .starts_with("HOST_EFFECT_UNRESOLVED: stop: product service restarted while stopping"),
+        "{message}"
+    );
+    assert!(
+        !message.contains("pw123"),
+        "the credential leaked: {message}"
+    );
+    assert!(
+        !message.chars().any(char::is_control),
+        "control characters are stripped: {message:?}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn native_controller_uncertainty_without_a_reason_is_unchanged() -> Result<()> {
+    let root = tempdir()?;
+    let mut host = CommandHost::new(
+        vec![fixture().into(), "--controller".into()],
+        root.path().join("state"),
+        3000,
+    )?;
+    host.cwd = Some(root.path().into());
+    fs::write(root.path().join("effect-uncertain"), b"fixture")?;
+    let error = host.stop(k_carrier::state::Slot::Stable).await.unwrap_err();
+    assert_eq!(error.to_string(), "HOST_EFFECT_UNRESOLVED: stop");
+    Ok(())
+}
