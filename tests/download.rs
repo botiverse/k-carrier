@@ -221,47 +221,81 @@ async fn complete_gzip_partial_is_checked_compressed_then_decoded() -> Result<()
     assert!(!part.exists());
     Ok(())
 }
+/// One full download from zero, no Range header, and the fresh bytes left in
+/// the .part.
+fn assert_one_full_download(s: &Server, part: &std::path::Path, body: &[u8]) {
+    let requests = s.requests.lock().unwrap();
+    assert_eq!(requests.len(), 1);
+    assert!(!requests[0].contains("range:"), "{}", requests[0]);
+    let meta = fs::symlink_metadata(part).unwrap();
+    assert!(meta.is_file() && !meta.file_type().is_symlink());
+    assert_eq!(fs::read(part).unwrap(), body);
+}
 #[cfg(unix)]
 #[tokio::test]
-async fn full_size_symlink_partial_is_refused() -> Result<()> {
+async fn symlink_partial_is_removed_and_downloaded_from_zero() -> Result<()> {
     let body = b"verified-new-artifact";
-    let s = server(body.to_vec(), "range").await;
-    let root = tempdir()?;
-    let target = root.path().join("elsewhere");
-    fs::write(&target, body)?;
-    let part = partial_path(root.path(), &s.url);
-    std::os::unix::fs::symlink(&target, &part)?;
-    let error = downloader()
-        .download(&release(&s.url, body), Some(root.path()), None)
-        .await
-        .unwrap_err()
-        .to_string();
-    assert!(error.contains("invalid partial file"), "{error}");
-    assert!(s.requests.lock().unwrap().is_empty());
-    assert!(fs::symlink_metadata(&part)?.file_type().is_symlink());
-    assert_eq!(fs::read(&target)?, body);
+    // Full size (would pass the digest) and short (would be resumed).
+    for linked in [&body[..], &body[..4]] {
+        let s = server(body.to_vec(), "range").await;
+        let root = tempdir()?;
+        let target = root.path().join("elsewhere");
+        fs::write(&target, linked)?;
+        let part = partial_path(root.path(), &s.url);
+        std::os::unix::fs::symlink(&target, &part)?;
+        assert_eq!(
+            downloader()
+                .download(&release(&s.url, body), Some(root.path()), None)
+                .await?,
+            body
+        );
+        assert_one_full_download(&s, &part, body);
+        assert_eq!(fs::read(&target)?, linked, "the link target was touched");
+    }
     Ok(())
 }
 #[cfg(unix)]
 #[tokio::test]
-async fn unreadable_full_size_partial_is_an_error_and_not_used() -> Result<()> {
+async fn unreadable_partial_is_removed_and_downloaded_from_zero() -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
     if unsafe { libc::geteuid() } == 0 {
         eprintln!("skipped: root can read a mode 0000 file");
         return Ok(());
     }
     let body = b"verified-new-artifact";
+    for stale in [&body[..], &body[..4]] {
+        let s = server(body.to_vec(), "range").await;
+        let root = tempdir()?;
+        let part = partial_path(root.path(), &s.url);
+        fs::write(&part, stale)?;
+        fs::set_permissions(&part, fs::Permissions::from_mode(0o000))?;
+        assert_eq!(
+            downloader()
+                .download(&release(&s.url, body), Some(root.path()), None)
+                .await?,
+            body
+        );
+        assert_one_full_download(&s, &part, body);
+    }
+    Ok(())
+}
+#[cfg(unix)]
+#[tokio::test]
+async fn non_regular_partial_that_cannot_be_removed_stops_the_download() -> Result<()> {
+    let body = b"verified-new-artifact";
     let s = server(body.to_vec(), "range").await;
     let root = tempdir()?;
     let part = partial_path(root.path(), &s.url);
-    fs::write(&part, body)?;
-    fs::set_permissions(&part, fs::Permissions::from_mode(0o000))?;
-    let result = downloader()
-        .download(&release(&s.url, body), Some(root.path()), None)
-        .await;
-    fs::set_permissions(&part, fs::Permissions::from_mode(0o600))?;
-    assert!(result.is_err(), "an unreadable partial was used");
+    fs::create_dir(&part)?;
+    fs::write(part.join("keep"), b"x")?;
+    assert!(
+        downloader()
+            .download(&release(&s.url, body), Some(root.path()), None)
+            .await
+            .is_err()
+    );
     assert!(s.requests.lock().unwrap().is_empty());
+    assert!(part.join("keep").exists());
     Ok(())
 }
 #[tokio::test]
