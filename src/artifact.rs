@@ -221,22 +221,31 @@ impl Downloader {
         }
         let partial = resume_dir.map(|dir| partial_path(dir, &release.url));
         let mut offset = 0;
+        let mut resumed: Vec<u8> = vec![];
         if let Some(path) = &partial
             && exists(path)?
         {
+            // A .part K cannot use (a symlink, not a regular file, unreadable,
+            // or failing its digest) is removed and the transfer starts from
+            // zero. Only a failed removal stops the download.
             let meta = fs::symlink_metadata(path)?;
-            if !meta.is_file() || meta.file_type().is_symlink() {
-                return Err(invalid("invalid partial file"));
-            }
-            if meta.len() < release.size {
-                offset = meta.len();
-            } else if meta.len() == release.size {
+            if !meta.is_file() || meta.file_type().is_symlink() || meta.len() > release.size {
+                remove_partial(path)?;
+            } else if meta.len() < release.size {
+                match read_partial(path, meta.len()) {
+                    Ok(bytes) => {
+                        offset = meta.len();
+                        resumed = bytes;
+                    }
+                    Err(_) => remove_partial(path)?,
+                }
+            } else {
                 // A complete partial is accepted only on K's own digest check,
                 // the same one that ends a network transfer. It is then used
-                // without any request; otherwise it is discarded like an
-                // oversized one and the transfer starts from zero.
-                let bytes = read_partial(path, release.size)?;
-                if verify(&bytes, release.size, &release.sha256).is_ok() {
+                // without any request.
+                if let Ok(bytes) = read_partial(path, release.size)
+                    && verify(&bytes, release.size, &release.sha256).is_ok()
+                {
                     if let Some(sink) = progress {
                         let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                             sink(release.size, release.size)
@@ -244,8 +253,6 @@ impl Downloader {
                     }
                     return Ok(bytes);
                 }
-                remove_partial(path)?;
-            } else {
                 remove_partial(path)?;
             }
         }
@@ -285,7 +292,7 @@ impl Downloader {
         if let Some(path) = &partial {
             ensure_dir(path.parent().unwrap())?;
             if offset > 0 {
-                bytes = read_partial(path, offset)?;
+                bytes = std::mem::take(&mut resumed);
             }
             let mut opts = OpenOptions::new();
             opts.write(true).create(true);
