@@ -230,6 +230,23 @@ impl Downloader {
             }
             if meta.len() < release.size {
                 offset = meta.len();
+            } else if meta.len() == release.size {
+                // A complete partial is accepted only on K's own digest check,
+                // the same one that ends a network transfer. It is then used
+                // without any request; otherwise it is discarded like an
+                // oversized one and the transfer starts from zero.
+                let bytes = fs::read(path)?;
+                if verify(&bytes, release.size, &release.sha256).is_ok() {
+                    if let Some(sink) = progress {
+                        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            sink(release.size, release.size)
+                        }));
+                    }
+                    return Ok(bytes);
+                }
+                remove_partial(path)?;
+            } else {
+                remove_partial(path)?;
             }
         }
         let mut request = self
