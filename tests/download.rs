@@ -223,6 +223,7 @@ async fn complete_gzip_partial_is_checked_compressed_then_decoded() -> Result<()
 }
 /// One full download from zero, no Range header, and the fresh bytes left in
 /// the .part.
+#[cfg(unix)]
 fn assert_one_full_download(s: &Server, part: &std::path::Path, body: &[u8]) {
     let requests = s.requests.lock().unwrap();
     assert_eq!(requests.len(), 1);
