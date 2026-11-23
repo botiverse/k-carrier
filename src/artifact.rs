@@ -230,6 +230,23 @@ impl Downloader {
             }
             if meta.len() < release.size {
                 offset = meta.len();
+            } else if meta.len() == release.size {
+                // A complete partial is accepted only on K's own digest check,
+                // the same one that ends a network transfer. It is then used
+                // without any request; otherwise it is discarded like an
+                // oversized one and the transfer starts from zero.
+                let bytes = read_partial(path, release.size)?;
+                if verify(&bytes, release.size, &release.sha256).is_ok() {
+                    if let Some(sink) = progress {
+                        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            sink(release.size, release.size)
+                        }));
+                    }
+                    return Ok(bytes);
+                }
+                remove_partial(path)?;
+            } else {
+                remove_partial(path)?;
             }
         }
         let mut request = self
@@ -268,7 +285,7 @@ impl Downloader {
         if let Some(path) = &partial {
             ensure_dir(path.parent().unwrap())?;
             if offset > 0 {
-                bytes = fs::read(path)?;
+                bytes = read_partial(path, offset)?;
             }
             let mut opts = OpenOptions::new();
             opts.write(true).create(true);
@@ -323,6 +340,37 @@ impl Downloader {
         }
         Ok(bytes)
     }
+}
+/// Read a partial file that was just checked to hold `expected` bytes. The
+/// open refuses a final symlink (`O_NOFOLLOW` on unix; on Windows the reparse
+/// point itself is opened and then refused), the open handle must be a
+/// regular file of that size, and the read is bounded so a file that grows or
+/// is swapped for a device cannot be read without limit.
+fn read_partial(path: &Path, expected: u64) -> Result<Vec<u8>> {
+    let mut opts = OpenOptions::new();
+    opts.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.custom_flags(libc::O_NOFOLLOW);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        opts.custom_flags(windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+    let file = opts.open(path)?;
+    let meta = file.metadata()?;
+    if !meta.is_file() || meta.file_type().is_symlink() || meta.len() != expected {
+        return Err(invalid("invalid partial file"));
+    }
+    let mut bytes = Vec::with_capacity(usize::try_from(expected).unwrap_or(0));
+    file.take(expected.saturating_add(1))
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 != expected {
+        return Err(invalid("invalid partial file"));
+    }
+    Ok(bytes)
 }
 fn remove_partial(path: &Path) -> Result<()> {
     match fs::remove_file(path) {

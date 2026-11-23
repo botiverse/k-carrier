@@ -111,6 +111,7 @@ struct Fixture {
     host: Arc<TestHost>,
     source: Arc<Source>,
     server: tokio::task::JoinHandle<()>,
+    requests: Arc<AtomicUsize>,
 }
 impl Drop for Fixture {
     fn drop(&mut self) {
@@ -124,8 +125,11 @@ async fn setup() -> Result<Fixture> {
     store.bootstrap_locked("1", &root.path().join("old"))?;
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let url = format!("http://{}/artifact", listener.local_addr()?);
+    let requests = Arc::new(AtomicUsize::new(0));
+    let seen = requests.clone();
     let server = tokio::spawn(async move {
         while let Ok((mut stream, _)) = listener.accept().await {
+            seen.fetch_add(1, Ordering::SeqCst);
             let mut b = [0; 4096];
             let _ = stream.read(&mut b).await;
             let _ = stream
@@ -152,6 +156,7 @@ async fn setup() -> Result<Fixture> {
         host,
         source,
         server,
+        requests,
     })
 }
 fn request(id: &str, version: &str, consented: bool) -> Request {
@@ -221,6 +226,34 @@ async fn receipts_replay_without_side_effects_and_archive_older_operations() -> 
     let status = f.runner.status().await?;
     assert_eq!(status["predicates"]["version"], "3");
     assert!(status["predicates"]["hostLifecycleConverged"].is_null());
+    Ok(())
+}
+#[tokio::test]
+async fn verified_complete_partial_is_promoted_without_a_request() -> Result<()> {
+    use k_carrier::artifact::partial_path;
+    let f = setup().await?;
+    let incoming = f.runner.store.root.join("incoming");
+    fs::create_dir_all(&incoming)?;
+    let part = partial_path(&incoming, &f.source.url);
+    fs::write(&part, b"new")?;
+    let response = f.runner.execute(&request("prefetched", "2", true)).await?;
+    assert_eq!(response.result, "promoted", "{:?}", response.error);
+    assert_eq!(f.requests.load(Ordering::SeqCst), 0);
+    assert_eq!(f.runner.store.version(Slot::Stable)?.as_deref(), Some("2"));
+    assert_eq!(fs::read(f.runner.store.artifact(Slot::Stable))?, b"new");
+    Ok(())
+}
+#[tokio::test]
+async fn complete_partial_with_wrong_digest_is_downloaded_again_and_promoted() -> Result<()> {
+    use k_carrier::artifact::partial_path;
+    let f = setup().await?;
+    let incoming = f.runner.store.root.join("incoming");
+    fs::create_dir_all(&incoming)?;
+    fs::write(partial_path(&incoming, &f.source.url), b"bad")?;
+    let response = f.runner.execute(&request("stale-part", "2", true)).await?;
+    assert_eq!(response.result, "promoted", "{:?}", response.error);
+    assert_eq!(f.requests.load(Ordering::SeqCst), 1);
+    assert_eq!(fs::read(f.runner.store.artifact(Slot::Stable))?, b"new");
     Ok(())
 }
 #[tokio::test]

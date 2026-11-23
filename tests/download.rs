@@ -141,6 +141,130 @@ async fn resume_accepts_exact_ranges_and_restarts_when_ignored() -> Result<()> {
     Ok(())
 }
 #[tokio::test]
+async fn complete_partial_with_expected_digest_is_used_without_a_request() -> Result<()> {
+    let body = b"verified-new-artifact";
+    let s = server(body.to_vec(), "range").await;
+    let root = tempdir()?;
+    let part = partial_path(root.path(), &s.url);
+    fs::write(&part, body)?;
+    let seen = Arc::new(Mutex::new(vec![]));
+    let sink = seen.clone();
+    let progress: k_carrier::artifact::Progress =
+        Arc::new(move |got, total| sink.lock().unwrap().push((got, total)));
+    assert_eq!(
+        downloader()
+            .download(&release(&s.url, body), Some(root.path()), Some(progress))
+            .await?,
+        body
+    );
+    assert!(s.requests.lock().unwrap().is_empty());
+    let size = body.len() as u64;
+    assert_eq!(*seen.lock().unwrap(), vec![(size, size)]);
+    Ok(())
+}
+#[tokio::test]
+async fn complete_partial_with_wrong_digest_or_oversize_is_replaced_by_one_full_download()
+-> Result<()> {
+    let body = b"verified-new-artifact";
+    let wrong = b"verified-old-artifact";
+    assert_eq!(wrong.len(), body.len());
+    let oversized = [&body[..], b"-trailing"].concat();
+    for stale in [&wrong[..], &oversized[..]] {
+        let s = server(body.to_vec(), "range").await;
+        let root = tempdir()?;
+        let part = partial_path(root.path(), &s.url);
+        fs::write(&part, stale)?;
+        assert_eq!(
+            downloader()
+                .download(&release(&s.url, body), Some(root.path()), None)
+                .await?,
+            body
+        );
+        let requests = s.requests.lock().unwrap();
+        assert_eq!(requests.len(), 1);
+        assert!(!requests[0].contains("range:"), "{}", requests[0]);
+        assert_eq!(fs::read(&part)?, body);
+    }
+    Ok(())
+}
+#[tokio::test]
+async fn complete_gzip_partial_is_checked_compressed_then_decoded() -> Result<()> {
+    let body = b"canonical executable bytes";
+    let mut gzip = flate2::write::GzEncoder::new(vec![], flate2::Compression::default());
+    gzip.write_all(body)?;
+    let gzip = gzip.finish()?;
+    let s = server(gzip.clone(), "range").await;
+    let mut r = release("https://not-fetched.invalid/canonical", body);
+    r.gzip = Some(Representation {
+        url: s.url.clone(),
+        sha256: sha256(&gzip),
+        size: gzip.len() as u64,
+    });
+    let root = tempdir()?;
+    let part = partial_path(root.path(), &s.url);
+    fs::write(&part, &gzip)?;
+    assert_eq!(
+        downloader().download(&r, Some(root.path()), None).await?,
+        body
+    );
+    assert!(s.requests.lock().unwrap().is_empty());
+    r.sha256 = sha256(b"wrong canonical");
+    assert!(
+        downloader()
+            .download(&r, Some(root.path()), None)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("SHA256_MISMATCH")
+    );
+    assert!(s.requests.lock().unwrap().is_empty());
+    assert!(!part.exists());
+    Ok(())
+}
+#[cfg(unix)]
+#[tokio::test]
+async fn full_size_symlink_partial_is_refused() -> Result<()> {
+    let body = b"verified-new-artifact";
+    let s = server(body.to_vec(), "range").await;
+    let root = tempdir()?;
+    let target = root.path().join("elsewhere");
+    fs::write(&target, body)?;
+    let part = partial_path(root.path(), &s.url);
+    std::os::unix::fs::symlink(&target, &part)?;
+    let error = downloader()
+        .download(&release(&s.url, body), Some(root.path()), None)
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("invalid partial file"), "{error}");
+    assert!(s.requests.lock().unwrap().is_empty());
+    assert!(fs::symlink_metadata(&part)?.file_type().is_symlink());
+    assert_eq!(fs::read(&target)?, body);
+    Ok(())
+}
+#[cfg(unix)]
+#[tokio::test]
+async fn unreadable_full_size_partial_is_an_error_and_not_used() -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    if unsafe { libc::geteuid() } == 0 {
+        eprintln!("skipped: root can read a mode 0000 file");
+        return Ok(());
+    }
+    let body = b"verified-new-artifact";
+    let s = server(body.to_vec(), "range").await;
+    let root = tempdir()?;
+    let part = partial_path(root.path(), &s.url);
+    fs::write(&part, body)?;
+    fs::set_permissions(&part, fs::Permissions::from_mode(0o000))?;
+    let result = downloader()
+        .download(&release(&s.url, body), Some(root.path()), None)
+        .await;
+    fs::set_permissions(&part, fs::Permissions::from_mode(0o600))?;
+    assert!(result.is_err(), "an unreadable partial was used");
+    assert!(s.requests.lock().unwrap().is_empty());
+    Ok(())
+}
+#[tokio::test]
 async fn wrong_range_corrupt_prefix_and_oversize_never_install() -> Result<()> {
     let body = b"verified-new-artifact";
     let s = server(body.to_vec(), "bad-range").await;
