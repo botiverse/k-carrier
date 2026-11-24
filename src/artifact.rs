@@ -294,19 +294,7 @@ impl Downloader {
             if offset > 0 {
                 bytes = std::mem::take(&mut resumed);
             }
-            let mut opts = OpenOptions::new();
-            opts.write(true).create(true);
-            if offset > 0 {
-                opts.append(true);
-            } else {
-                opts.truncate(true);
-            }
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::OpenOptionsExt;
-                opts.mode(0o600).custom_flags(libc::O_NOFOLLOW);
-            }
-            file = Some(opts.open(path)?);
+            file = Some(open_partial_write(path, offset > 0)?);
         }
         let emit = |n| {
             if let Some(sink) = &progress {
@@ -379,6 +367,37 @@ fn read_partial(path: &Path, expected: u64) -> Result<Vec<u8>> {
     }
     Ok(bytes)
 }
+/// Open the partial file for writing (appending when resuming). Like
+/// `read_partial`, the open refuses a final symlink: `O_NOFOLLOW` on unix; on
+/// Windows `FILE_FLAG_OPEN_REPARSE_POINT` opens the reparse point itself
+/// rather than its target. The open handle must then be a regular file that
+/// is not a link, so a link planted between the removal and this open is
+/// never written through.
+fn open_partial_write(path: &Path, append: bool) -> Result<File> {
+    let mut opts = OpenOptions::new();
+    opts.write(true).create(true);
+    if append {
+        opts.append(true);
+    } else {
+        opts.truncate(true);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        opts.custom_flags(windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+    let file = opts.open(path)?;
+    let meta = file.metadata()?;
+    if !meta.is_file() || meta.file_type().is_symlink() {
+        return Err(invalid("invalid partial file"));
+    }
+    Ok(file)
+}
 fn remove_partial(path: &Path) -> Result<()> {
     match fs::remove_file(path) {
         Ok(()) => Ok(()),
@@ -407,4 +426,94 @@ fn parse_content_range(input: &str) -> Result<(u64, u64, u64)> {
         return Err(invalid_range());
     }
     Ok((first, last, total))
+}
+
+#[cfg(test)]
+mod partial_write_tests {
+    use super::open_partial_write;
+    use std::{fs, io::Write, path::Path};
+
+    /// Plant a symlink at `link` pointing to `target`. Windows needs a
+    /// privilege (or developer mode) for this; without it the test is moot.
+    fn symlink(target: &Path, link: &Path) -> bool {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(target, link).unwrap();
+            true
+        }
+        #[cfg(windows)]
+        {
+            match std::os::windows::fs::symlink_file(target, link) {
+                Ok(()) => true,
+                Err(e) => {
+                    eprintln!("skipping: cannot create a symlink here: {e}");
+                    false
+                }
+            }
+        }
+    }
+
+    /// Whatever the open did, it never wrote through the link: the target is
+    /// untouched and, if the open succeeded, the path is now a plain file.
+    fn assert_not_followed(part: &Path, target: &Path, before: Option<&[u8]>, append: bool) {
+        let result = open_partial_write(part, append);
+        #[cfg(unix)]
+        assert!(result.is_err(), "the write open refuses a final symlink");
+        if let Ok(mut file) = result {
+            file.write_all(b"new").unwrap();
+            let meta = fs::symlink_metadata(part).unwrap();
+            assert!(meta.is_file() && !meta.file_type().is_symlink());
+        }
+        match before {
+            Some(bytes) => assert_eq!(fs::read(target).unwrap(), bytes),
+            None => assert!(!target.exists(), "a dangling link's target is not created"),
+        }
+    }
+
+    #[test]
+    fn write_open_does_not_follow_a_symlink_to_an_existing_file() {
+        for append in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let target = root.path().join("victim");
+            fs::write(&target, b"keep").unwrap();
+            let part = root.path().join("artifact.part");
+            if !symlink(&target, &part) {
+                return;
+            }
+            assert_not_followed(&part, &target, Some(b"keep"), append);
+        }
+    }
+
+    #[test]
+    fn write_open_does_not_follow_a_dangling_symlink() {
+        for append in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let target = root.path().join("elsewhere");
+            let part = root.path().join("artifact.part");
+            if !symlink(&target, &part) {
+                return;
+            }
+            assert_not_followed(&part, &target, None, append);
+        }
+    }
+
+    #[test]
+    fn write_open_creates_truncates_and_appends_a_regular_file() {
+        let root = tempfile::tempdir().unwrap();
+        let part = root.path().join("artifact.part");
+        open_partial_write(&part, false)
+            .unwrap()
+            .write_all(b"abc")
+            .unwrap();
+        open_partial_write(&part, true)
+            .unwrap()
+            .write_all(b"def")
+            .unwrap();
+        assert_eq!(fs::read(&part).unwrap(), b"abcdef");
+        open_partial_write(&part, false)
+            .unwrap()
+            .write_all(b"x")
+            .unwrap();
+        assert_eq!(fs::read(&part).unwrap(), b"x");
+    }
 }
