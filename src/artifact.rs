@@ -503,7 +503,10 @@ mod partial_write_tests {
     use std::{fs, io::Write, path::Path};
 
     /// Plant a symlink at `link` pointing to `target`. Windows needs a
-    /// privilege (or developer mode) for this; without it the test is moot.
+    /// privilege (or developer mode) for this; without it the test is moot
+    /// on a developer's machine, but on CI (`CI` set, as GitHub Actions
+    /// does) it must work, so a green Windows job means the open really met
+    /// a link.
     fn symlink(target: &Path, link: &Path) -> bool {
         #[cfg(unix)]
         {
@@ -514,6 +517,9 @@ mod partial_write_tests {
         {
             match std::os::windows::fs::symlink_file(target, link) {
                 Ok(()) => true,
+                Err(e) if std::env::var_os("CI").is_some() => {
+                    panic!("CI must be able to create symlinks: {e}")
+                }
                 Err(e) => {
                     eprintln!("skipping: cannot create a symlink here: {e}");
                     false
@@ -522,17 +528,19 @@ mod partial_write_tests {
         }
     }
 
-    /// Whatever the open did, it never wrote through the link: the target is
-    /// untouched and, if the open succeeded, the path is now a plain file.
+    /// The open refuses the link (unix: `O_NOFOLLOW`; Windows: it opens the
+    /// reparse point itself and the handle check rejects it), and nothing
+    /// was written through it: the target is untouched or never created.
     fn assert_not_followed(part: &Path, target: &Path, before: Option<&[u8]>, append: bool) {
         let result = open_partial_write(part, append);
-        #[cfg(unix)]
-        assert!(result.is_err(), "the write open refuses a final symlink");
-        if let Ok(mut file) = result {
-            file.write_all(b"new").unwrap();
-            let meta = fs::symlink_metadata(part).unwrap();
-            assert!(meta.is_file() && !meta.file_type().is_symlink());
-        }
+        assert!(
+            result.is_err(),
+            "the write open refuses a final symlink (append: {append})"
+        );
+        assert!(
+            fs::symlink_metadata(part).unwrap().file_type().is_symlink(),
+            "the link itself is left for the caller to remove"
+        );
         match before {
             Some(bytes) => assert_eq!(fs::read(target).unwrap(), bytes),
             None => assert!(!target.exists(), "a dangling link's target is not created"),
