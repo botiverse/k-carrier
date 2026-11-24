@@ -46,7 +46,9 @@ resident application's upgrade slots.
 - `Runner::{upgrade_to,recover,status,rollback}` implement policy, convergence,
   durable receipts, replay and recovery; `Runner::execute` exposes the wire API.
 - `artifact::{Downloader,ReleaseSource}` provide bounded verified transfer,
-  resume, gzip and application-defined release selection. `source::StaticManifestSource`
+  resume, gzip and application-defined release selection; an optional
+  `Downloader::report` sink receives a `TransferReport` (cf-ray, HTTP status,
+  bytes received, elapsed) per request for diagnostics. `source::StaticManifestSource`
   is an optional manifest policy, not a required distribution platform.
 - `report::ReadbackSurface` declares actual lifecycle readback. Undeclared
   surfaces remain `null`; they never imply lifecycle convergence.

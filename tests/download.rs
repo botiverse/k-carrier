@@ -1,6 +1,8 @@
 use k_carrier::{
     Result,
-    artifact::{Downloader, Release, Representation, TransferPolicy, partial_path, sha256},
+    artifact::{
+        Downloader, Release, Representation, TransferPolicy, TransferReport, partial_path, sha256,
+    },
 };
 use std::{
     fs,
@@ -74,7 +76,7 @@ async fn server(body: Vec<u8>, mode: &'static str) -> Server {
                 (200, String::new(), body.clone())
             };
             let headers = format!(
-                "HTTP/1.1 {status} OK\r\nContent-Length: {}\r\n{extra}Connection: close\r\n\r\n",
+                "HTTP/1.1 {status} OK\r\nContent-Length: {}\r\n{extra}cf-ray: {CF_RAY}\r\nConnection: close\r\n\r\n",
                 send.len()
             );
             if stream.write_all(headers.as_bytes()).await.is_err() {
@@ -112,7 +114,19 @@ fn downloader() -> Downloader {
             minimum_bytes_per_second: 1,
             maximum_overall_ms: 1000,
         },
+        report: None,
     }
+}
+const CF_RAY: &str = "8f1c2a3b4d5e6f70-SJC";
+/// A downloader whose transfer reports are collected.
+fn reporting() -> (Downloader, Arc<Mutex<Vec<TransferReport>>>) {
+    let reports = Arc::new(Mutex::new(vec![]));
+    let seen = reports.clone();
+    let mut d = downloader();
+    d.report = Some(Arc::new(move |r: &TransferReport| {
+        seen.lock().unwrap().push(r.clone())
+    }));
+    (d, reports)
 }
 fn release(url: &str, bytes: &[u8]) -> Release {
     Release {
@@ -442,5 +456,111 @@ async fn proxy_environment_is_honored_by_a_real_isolated_process() -> Result<()>
     );
     server.await.unwrap();
     assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "20");
+    Ok(())
+}
+
+#[tokio::test]
+async fn transfer_report_names_ray_status_bytes_and_elapsed() -> Result<()> {
+    // A full download.
+    let body = b"012345678901234567890123456789";
+    let s = server(body.to_vec(), "range").await;
+    let root = tempdir()?;
+    let (d, reports) = reporting();
+    d.download(&release(&s.url, body), Some(root.path()), None)
+        .await?;
+    {
+        let reports = reports.lock().unwrap();
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].cf_ray.as_deref(), Some(CF_RAY));
+        assert_eq!(reports[0].status, Some(200));
+        assert_eq!(reports[0].bytes_received, body.len() as u64);
+    }
+    // A resume counts only the bytes of this response.
+    let part = partial_path(root.path(), &s.url);
+    fs::write(&part, &body[..10])?;
+    reports.lock().unwrap().clear();
+    d.download(&release(&s.url, body), Some(root.path()), None)
+        .await?;
+    {
+        let reports = reports.lock().unwrap();
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].status, Some(206));
+        assert_eq!(reports[0].bytes_received, (body.len() - 10) as u64);
+    }
+    // A complete .part used without a request reports nothing.
+    fs::write(&part, body)?;
+    reports.lock().unwrap().clear();
+    d.download(&release(&s.url, body), Some(root.path()), None)
+        .await?;
+    assert!(reports.lock().unwrap().is_empty());
+    Ok(())
+}
+#[tokio::test]
+async fn transfer_report_is_sent_when_the_download_fails() -> Result<()> {
+    let body = b"012345678901234567890123456789";
+    // A stall mid-body: the response and the bytes before the stall.
+    let s = server(body.to_vec(), "idle-stall").await;
+    let root = tempdir()?;
+    let (d, reports) = reporting();
+    let error = d
+        .download(&release(&s.url, body), Some(root.path()), None)
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("idle timeout"), "{error}");
+    {
+        let reports = reports.lock().unwrap();
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].cf_ray.as_deref(), Some(CF_RAY));
+        assert_eq!(reports[0].status, Some(200));
+        assert_eq!(reports[0].bytes_received, (body.len() / 2) as u64);
+        assert!(reports[0].elapsed_ms >= 100, "{:?}", reports[0]);
+    }
+    // No response at all.
+    let s = server(body.to_vec(), "response-stall").await;
+    let (d, reports) = reporting();
+    let error = d
+        .download(&release(&s.url, body), Some(root.path()), None)
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("response timeout"), "{error}");
+    {
+        let reports = reports.lock().unwrap();
+        assert_eq!(reports.len(), 1);
+        assert_eq!(
+            (reports[0].status, reports[0].cf_ray.as_deref()),
+            (None, None)
+        );
+        assert_eq!(reports[0].bytes_received, 0);
+        assert!(reports[0].elapsed_ms >= 100, "{:?}", reports[0]);
+    }
+    // K's overall timeout drops the transfer mid-body; the report survives.
+    let s = server(body.to_vec(), "slow-progress").await;
+    let root = tempdir()?;
+    let (mut d, reports) = reporting();
+    d.policy.maximum_overall_ms = 250;
+    let error = d
+        .download(&release(&s.url, body), Some(root.path()), None)
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("overall timeout"), "{error}");
+    {
+        let reports = reports.lock().unwrap();
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].status, Some(200));
+        assert!(reports[0].bytes_received > 0 && reports[0].bytes_received < body.len() as u64);
+        assert!(reports[0].elapsed_ms >= 200, "{:?}", reports[0]);
+    }
+    // A refused connection.
+    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+    let url = format!("http://{}/artifact", listener.local_addr()?);
+    drop(listener);
+    let (d, reports) = reporting();
+    assert!(d.download(&release(&url, body), None, None).await.is_err());
+    let reports = reports.lock().unwrap();
+    assert_eq!(reports.len(), 1);
+    assert_eq!(reports[0].status, None);
     Ok(())
 }

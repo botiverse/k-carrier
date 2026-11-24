@@ -12,8 +12,8 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
-    sync::Arc,
-    time::Duration,
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
 };
 use tokio::time::timeout;
 
@@ -123,9 +123,51 @@ impl TransferPolicy {
     }
 }
 pub type Progress = Arc<dyn Fn(u64, u64) + Send + Sync>;
+/// What one network transfer saw, for diagnosing a failed download: the
+/// CDN's `cf-ray` response header, the HTTP status, the body bytes received
+/// in this transfer (not counting a resumed prefix) and the time from sending
+/// the request to its end. `status` is `None` when no response arrived.
+/// Reported once per `download` that sent a request, whether it succeeded
+/// or failed (including on K's own timeouts); not for a data URL or a
+/// complete `.part` used without a request.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TransferReport {
+    pub cf_ray: Option<String>,
+    pub status: Option<u16>,
+    pub bytes_received: u64,
+    pub elapsed_ms: u64,
+}
+pub type TransferSink = Arc<dyn Fn(&TransferReport) + Send + Sync>;
+#[derive(Default)]
+struct Observed {
+    sent_at: Option<Instant>,
+    cf_ray: Option<String>,
+    status: Option<u16>,
+    bytes_received: u64,
+}
+impl Observed {
+    fn update(cell: &Mutex<Self>, change: impl FnOnce(&mut Self)) {
+        if let Ok(mut observed) = cell.lock() {
+            change(&mut observed);
+        }
+    }
+}
+/// A `cf-ray` value is a short ASCII id such as `8f1c2a3b4d5e6f70-SJC`;
+/// anything else is not reported.
+fn cf_ray(headers: &reqwest::header::HeaderMap) -> Option<String> {
+    let value = headers.get("cf-ray")?.to_str().ok()?;
+    (!value.is_empty()
+        && value.len() <= 64
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-'))
+    .then(|| value.to_owned())
+}
 pub struct Downloader {
     pub client: reqwest::Client,
     pub policy: TransferPolicy,
+    /// Receives a `TransferReport` for each download that sent a request.
+    pub report: Option<TransferSink>,
 }
 impl Downloader {
     pub fn new() -> Result<Self> {
@@ -135,6 +177,7 @@ impl Downloader {
                 .redirect(reqwest::redirect::Policy::limited(10))
                 .build()?,
             policy: TransferPolicy::default(),
+            report: None,
         })
     }
     pub async fn download(
@@ -157,12 +200,16 @@ impl Downloader {
             },
         };
         let budgets = self.policy.budgets(transfer.size)?;
+        let observed = Mutex::new(Observed::default());
         let result = timeout(
             Duration::from_millis(budgets.overall_ms),
-            self.transfer(&transfer, resume_dir, progress, budgets),
+            self.transfer(&transfer, resume_dir, progress, budgets, &observed),
         )
         .await
-        .map_err(|_| invalid("DOWNLOAD_FAILED: overall timeout"))??;
+        .map_err(|_| invalid("DOWNLOAD_FAILED: overall timeout"))
+        .and_then(|result| result);
+        self.emit_report(observed);
+        let result = result?;
         if release.gzip.is_none() {
             return Ok(result);
         }
@@ -183,12 +230,28 @@ impl Downloader {
         }
         decoded
     }
+    fn emit_report(&self, observed: Mutex<Observed>) {
+        let (Some(sink), Ok(observed)) = (&self.report, observed.into_inner()) else {
+            return;
+        };
+        let Some(sent_at) = observed.sent_at else {
+            return;
+        };
+        let report = TransferReport {
+            cf_ray: observed.cf_ray,
+            status: observed.status,
+            bytes_received: observed.bytes_received,
+            elapsed_ms: u64::try_from(sent_at.elapsed().as_millis()).unwrap_or(u64::MAX),
+        };
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| sink(&report)));
+    }
     async fn transfer(
         &self,
         release: &Representation,
         resume_dir: Option<&Path>,
         progress: Option<Progress>,
         budgets: Budgets,
+        observed: &Mutex<Observed>,
     ) -> Result<Vec<u8>> {
         if let Some(data) = release.url.strip_prefix("data:") {
             use base64::Engine as _;
@@ -263,9 +326,14 @@ impl Downloader {
         if offset > 0 {
             request = request.header("Range", format!("bytes={offset}-"));
         }
+        Observed::update(observed, |o| o.sent_at = Some(Instant::now()));
         let mut response = timeout(Duration::from_millis(budgets.response_ms), request.send())
             .await
             .map_err(|_| invalid("DOWNLOAD_FAILED: response timeout"))??;
+        Observed::update(observed, |o| {
+            o.status = Some(response.status().as_u16());
+            o.cf_ray = cf_ray(response.headers());
+        });
         if response.status() != reqwest::StatusCode::OK
             && response.status() != reqwest::StatusCode::PARTIAL_CONTENT
         {
@@ -323,6 +391,7 @@ impl Downloader {
             let Some(chunk) = chunk else {
                 break;
             };
+            Observed::update(observed, |o| o.bytes_received += chunk.len() as u64);
             if bytes.len() as u64 + chunk.len() as u64 > release.size {
                 drop(file);
                 if let Some(path) = &partial {
